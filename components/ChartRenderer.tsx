@@ -8,14 +8,20 @@ import {
   CandlestickData,
   LineData,
 } from 'lightweight-charts';
-import { addRsiIndicator } from '@/lib/chart/indicators';
+import { addRsiIndicator, addDivergenceLines } from '@/lib/chart/indicators';
+import { DivergenceSignal } from '@/lib/types/index';
 
 interface ChartRendererProps {
   data: CandlestickData[];
   rsiData?: LineData[];
+  divergenceSignals?: DivergenceSignal[];
 }
 
-export default function ChartRenderer({ data, rsiData }: ChartRendererProps) {
+export default function ChartRenderer({
+  data,
+  rsiData,
+  divergenceSignals,
+}: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -56,8 +62,28 @@ export default function ChartRenderer({ data, rsiData }: ChartRendererProps) {
     candlestickSeries.setData(data);
 
     // RSI 지표 추가
+    let rsiSeries = null;
     if (rsiData && rsiData.length > 0) {
-      addRsiIndicator(chart, rsiData);
+      rsiSeries = addRsiIndicator(chart, rsiData);
+    }
+
+    // 다이버전스 선 추가
+    if (divergenceSignals && divergenceSignals.length > 0) {
+      // 캔들 데이터에서 시간, 고가, 저가 추출
+      const candleData = data.map((candle) => ({
+        time: candle.time as number,
+        high: candle.high,
+        low: candle.low,
+      }));
+
+      addDivergenceLines(
+        chart,
+        candlestickSeries,
+        rsiSeries,
+        divergenceSignals,
+        candleData,
+        rsiData || []
+      );
     }
 
     // 차트 자동 맞춤
@@ -79,7 +105,7 @@ export default function ChartRenderer({ data, rsiData }: ChartRendererProps) {
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, rsiData]);
+  }, [data, rsiData, divergenceSignals]);
 
   return (
     <div className='w-full'>

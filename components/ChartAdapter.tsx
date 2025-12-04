@@ -3,6 +3,7 @@
 import { useCandles } from '@/hooks/useCandles';
 import ChartRenderer from '@/components/ChartRenderer';
 import { CandlestickData, LineData } from 'lightweight-charts';
+import { DivergenceSignal } from '@/lib/types/index';
 
 interface ChartAdapterProps {
   symbol?: string;
@@ -77,6 +78,12 @@ export default function ChartAdapter({
     })
     .filter((item): item is LineData => item !== null);
 
+  // 다이버전스 시그널
+  const divergenceSignals: DivergenceSignal[] = data.data.signals.divergence || [];
+
+  // 디버깅: 콘솔에 다이버전스 데이터 출력
+  console.log('📊 다이버전스 시그널:', divergenceSignals);
+
   return (
     <div className='border border-(--border) rounded-lg bg-(--card) p-6'>
       <div className='flex items-center justify-between mb-4'>
@@ -84,6 +91,7 @@ export default function ChartAdapter({
           <h2 className='text-xl font-bold'>{symbol}</h2>
           <p className='text-sm text-gray-400'>
             {timeframe} · {chartData.length}개 캔들 · RSI 포함
+            {divergenceSignals.length > 0 && ` · ${divergenceSignals.length}개 다이버전스`}
           </p>
         </div>
         <button
@@ -93,7 +101,11 @@ export default function ChartAdapter({
           🔄 새로고침
         </button>
       </div>
-      <ChartRenderer data={chartData} rsiData={rsiData} />
+      <ChartRenderer
+        data={chartData}
+        rsiData={rsiData}
+        divergenceSignals={divergenceSignals}
+      />
     </div>
   );
 }
