@@ -6,16 +6,16 @@ import {
   ColorType,
   CandlestickSeries,
   CandlestickData,
-  LineSeries,
   LineData,
 } from 'lightweight-charts';
+import { addRsiIndicator } from '@/lib/chart/indicators';
 
-interface PriceChartProps {
+interface ChartRendererProps {
   data: CandlestickData[];
   rsiData?: LineData[];
 }
 
-export default function PriceChart({ data, rsiData }: PriceChartProps) {
+export default function ChartRenderer({ data, rsiData }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,54 +40,24 @@ export default function PriceChart({ data, rsiData }: PriceChartProps) {
     });
 
     // 캔들스틱 시리즈 추가 (메인 패널 - paneIndex: 0)
-    const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#22c55e',
-      downColor: '#ef4444',
-      borderUpColor: '#22c55e',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e',
-      wickDownColor: '#ef4444',
-    }, 0);
+    const candlestickSeries = chart.addSeries(
+      CandlestickSeries,
+      {
+        upColor: '#22c55e',
+        downColor: '#ef4444',
+        borderUpColor: '#22c55e',
+        borderDownColor: '#ef4444',
+        wickUpColor: '#22c55e',
+        wickDownColor: '#ef4444',
+      },
+      0,
+    );
 
     candlestickSeries.setData(data);
 
-    // RSI 시리즈 추가 (별도 패널 - paneIndex: 1)
+    // RSI 지표 추가
     if (rsiData && rsiData.length > 0) {
-      const rsiSeries = chart.addSeries(LineSeries, {
-        color: '#f59e0b',
-        lineWidth: 2,
-        priceScaleId: 'rsi',
-      }, 1);
-
-      rsiSeries.setData(rsiData);
-
-      // RSI 기준선 추가 (70, 30)
-      rsiSeries.createPriceLine({
-        price: 70,
-        color: '#ef4444',
-        lineWidth: 1,
-        lineStyle: 2, // dashed
-        axisLabelVisible: true,
-        title: 'Overbought',
-      });
-
-      rsiSeries.createPriceLine({
-        price: 30,
-        color: '#22c55e',
-        lineWidth: 1,
-        lineStyle: 2, // dashed
-        axisLabelVisible: true,
-        title: 'Oversold',
-      });
-
-      // RSI 패널 스케일 설정
-      rsiSeries.priceScale().applyOptions({
-        scaleMargins: {
-          top: 0.1,
-          bottom: 0.1,
-        },
-        borderVisible: false,
-      });
+      addRsiIndicator(chart, rsiData);
     }
 
     // 차트 자동 맞춤

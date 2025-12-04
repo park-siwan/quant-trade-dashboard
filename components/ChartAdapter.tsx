@@ -1,20 +1,20 @@
 'use client';
 
 import { useCandles } from '@/hooks/useCandles';
-import PriceChart from '@/components/PriceChart';
+import ChartRenderer from '@/components/ChartRenderer';
 import { CandlestickData, LineData } from 'lightweight-charts';
 
-interface CandleChartProps {
+interface ChartAdapterProps {
   symbol?: string;
   timeframe?: string;
   limit?: number;
 }
 
-export default function CandleChart({
+export default function ChartAdapter({
   symbol = 'BTC/USDT',
   timeframe = '5m',
   limit = 500,
-}: CandleChartProps) {
+}: ChartAdapterProps) {
   const { data, isLoading, error, refetch } = useCandles({
     symbol,
     timeframe,
@@ -93,7 +93,7 @@ export default function CandleChart({
           🔄 새로고침
         </button>
       </div>
-      <PriceChart data={chartData} rsiData={rsiData} />
+      <ChartRenderer data={chartData} rsiData={rsiData} />
     </div>
   );
 }
