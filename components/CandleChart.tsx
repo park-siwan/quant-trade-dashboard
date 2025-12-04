@@ -2,7 +2,7 @@
 
 import { useCandles } from '@/hooks/useCandles';
 import PriceChart from '@/components/PriceChart';
-import { CandlestickData } from 'lightweight-charts';
+import { CandlestickData, LineData } from 'lightweight-charts';
 
 interface CandleChartProps {
   symbol?: string;
@@ -66,13 +66,24 @@ export default function CandleChart({
     close: candle[4],
   }));
 
+  // RSI 데이터 변환 (null 값 제외)
+  const rsiData: LineData[] = data.data.indicators.rsi
+    .map((rsi, index) => {
+      if (rsi === null) return null;
+      return {
+        time: (data.data.candles[index][0] / 1000) as LineData['time'],
+        value: rsi,
+      };
+    })
+    .filter((item): item is LineData => item !== null);
+
   return (
     <div className='border border-(--border) rounded-lg bg-(--card) p-6'>
       <div className='flex items-center justify-between mb-4'>
         <div>
           <h2 className='text-xl font-bold'>{symbol}</h2>
           <p className='text-sm text-gray-400'>
-            {timeframe} · {chartData.length}개 캔들
+            {timeframe} · {chartData.length}개 캔들 · RSI 포함
           </p>
         </div>
         <button
@@ -82,7 +93,7 @@ export default function CandleChart({
           🔄 새로고침
         </button>
       </div>
-      <PriceChart data={chartData} />
+      <PriceChart data={chartData} rsiData={rsiData} />
     </div>
   );
 }
