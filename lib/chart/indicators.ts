@@ -141,7 +141,7 @@ export function addDivergenceLines(
         LineSeries,
         {
           color: color,
-          lineWidth: 1,
+          lineWidth: 2,
           lastValueVisible: false,
           priceLineVisible: false,
         },

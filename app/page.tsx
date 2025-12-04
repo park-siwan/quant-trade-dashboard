@@ -7,7 +7,7 @@ export default function Home() {
       <p className='text-gray-400 mb-8'>실시간 암호화폐 차트 대시보드</p>
 
       <div className='space-y-6'>
-        <ChartAdapter symbol='BTC/USDT' timeframe='5m' limit={500} />
+        <ChartAdapter symbol='BTC/USDT' timeframe='5m' limit={1000} />
       </div>
     </div>
   );
