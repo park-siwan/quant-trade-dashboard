@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   createChart,
   ColorType,
@@ -23,6 +23,7 @@ export default function ChartRenderer({
   divergenceSignals,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [currentRsi, setCurrentRsi] = useState<number | null>(null);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -82,12 +83,26 @@ export default function ChartRenderer({
         rsiSeries,
         divergenceSignals,
         candleData,
-        rsiData || []
+        rsiData || [],
       );
     }
 
     // 차트 자동 맞춤
     chart.timeScale().fitContent();
+
+    // RSI 값 업데이트
+    if (rsiSeries) {
+      chart.subscribeCrosshairMove((param) => {
+        if (param.time && param.seriesData.has(rsiSeries)) {
+          const rsiValue = param.seriesData.get(rsiSeries);
+          if (rsiValue && 'value' in rsiValue) {
+            setCurrentRsi(rsiValue.value);
+          }
+        } else {
+          setCurrentRsi(null);
+        }
+      });
+    }
 
     // 반응형 처리
     const handleResize = () => {
@@ -108,12 +123,34 @@ export default function ChartRenderer({
   }, [data, rsiData, divergenceSignals]);
 
   return (
-    <div className='w-full'>
+    <div className='w-full relative'>
       {/* <div className='mb-4'>
         <h2 className='text-xl font-bold text-white'>BTC/USDT 가격 차트</h2>
         <p className='text-sm text-gray-400'>5분봉 캔들스틱</p>
       </div> */}
       <div ref={chartContainerRef} className='rounded-lg overflow-hidden' />
+
+      {/* RSI 값 표시 (RSI 패널 우측 상단) */}
+      {rsiData && currentRsi !== null && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '70%',
+            right: '16px',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            color: '#a855eb',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            border: '1px solid #a855eb',
+            pointerEvents: 'none',
+            zIndex: 10,
+          }}
+        >
+          RSI: {currentRsi.toFixed(2)}
+        </div>
+      )}
     </div>
   );
 }
