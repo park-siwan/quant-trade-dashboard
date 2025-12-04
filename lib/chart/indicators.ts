@@ -25,6 +25,10 @@ export function addRsiIndicator(
       color: '#a855eb',
       lineWidth: 2,
       priceScaleId: 'rsi',
+      crosshairMarkerVisible: true, // 크로스헤어 마커 표시
+      crosshairMarkerRadius: 4, // 마커 크기
+      title: 'RSI', // 범례에 표시될 제목
+      lastValueVisible: true, // 마지막 값 표시
     },
     1, // paneIndex: 1 (별도 패널)
   );
@@ -39,6 +43,16 @@ export function addRsiIndicator(
     lineStyle: 2, // dashed
     axisLabelVisible: true,
     title: '과매수',
+  });
+
+  // 중심선 (50)
+  rsiSeries.createPriceLine({
+    price: 50,
+    color: '#6b7280',
+    lineWidth: 1,
+    lineStyle: 2, // dashed
+    axisLabelVisible: true,
+    title: '중립',
   });
 
   // 과매도 기준선 (30)
