@@ -156,21 +156,28 @@ export function addDivergenceLines(
 
     // 2. RSI 패널에 선 그리기
     if (rsiSeries && pair.start.type === 'rsi') {
-      const startRsi = rsiData.find(
-        (r) => r.time === ((pair.start.timestamp / 1000) as Time),
-      );
-      const endRsi = rsiData.find(
-        (r) => r.time === ((pair.end.timestamp / 1000) as Time),
-      );
+      const startTime = (pair.start.timestamp / 1000) as Time;
+      const endTime = (pair.end.timestamp / 1000) as Time;
+
+      const startRsi = rsiData.find((r) => r.time === startTime);
+      const endRsi = rsiData.find((r) => r.time === endTime);
+
+      console.log('🔍 RSI 선 그리기:', {
+        startTime,
+        endTime,
+        startRsi,
+        endRsi,
+      });
 
       if (startRsi && endRsi) {
         const rsiLineSeries = chart.addSeries(
           LineSeries,
           {
             color: color,
-            lineWidth: 1,
+            lineWidth: 2,
             lastValueVisible: false,
             priceLineVisible: false,
+            priceScaleId: 'rsi', // RSI 스케일 사용 (중요!)
           },
           1,
         ); // RSI 패널
@@ -179,6 +186,12 @@ export function addDivergenceLines(
           { time: startRsi.time, value: startRsi.value },
           { time: endRsi.time, value: endRsi.value },
         ]);
+      } else {
+        console.warn('⚠️ RSI 데이터를 찾을 수 없음:', {
+          startTime,
+          endTime,
+          rsiDataLength: rsiData.length,
+        });
       }
     }
   });
