@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useCandles } from '@/hooks/useCandles';
 import ChartRenderer from '@/components/chart/ChartRenderer';
 import RefreshCountdown from '@/components/chart/RefreshCountdown';
@@ -8,18 +9,29 @@ import { DivergenceSignal } from '@/lib/types/index';
 
 interface ChartAdapterProps {
   symbol?: string;
-  timeframe?: string;
+  initialTimeframe?: string;
   limit?: number;
 }
 
+const TIMEFRAMES = [
+  { value: '5m', label: '5분' },
+  { value: '15m', label: '15분' },
+  { value: '30m', label: '30분' },
+  { value: '1h', label: '1시간' },
+  { value: '4h', label: '4시간' },
+  { value: '1d', label: '1일' },
+];
+
 export default function ChartAdapter({
   symbol = 'BTC/USDT',
-  timeframe = '5m',
+  initialTimeframe = '5m',
   limit = 500,
 }: ChartAdapterProps) {
+  const [selectedTimeframe, setSelectedTimeframe] = useState(initialTimeframe);
+
   const { data, isLoading, error, refetch } = useCandles({
     symbol,
-    timeframe,
+    timeframe: selectedTimeframe,
     limit,
     enableAutoRefresh: true,
   });
@@ -91,11 +103,28 @@ export default function ChartAdapter({
 
   return (
     <div className='border border-(--border) rounded-lg bg-(--card) p-6'>
+      {/* 타임프레임 선택 버튼 */}
+      <div className='flex items-center gap-2 mb-4'>
+        {TIMEFRAMES.map((tf) => (
+          <button
+            key={tf.value}
+            onClick={() => setSelectedTimeframe(tf.value)}
+            className={`px-3 py-1.5 rounded text-sm transition-colors ${
+              selectedTimeframe === tf.value
+                ? 'bg-(--primary) text-white'
+                : 'bg-(--secondary) text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            {tf.label}
+          </button>
+        ))}
+      </div>
+
       <div className='flex items-center justify-between mb-4'>
         <div>
           <h2 className='text-xl font-bold'>{symbol}</h2>
           <p className='text-sm text-gray-400'>
-            {timeframe} · {chartData.length}개 캔들 · RSI 포함
+            {chartData.length}개 캔들 · RSI 포함
             {summary.total.total > 0 && (
               <>
                 {' · '}
@@ -117,7 +146,7 @@ export default function ChartAdapter({
         </div>
         <div className='flex items-center gap-2'>
           <RefreshCountdown
-            timeframe={timeframe}
+            timeframe={selectedTimeframe}
             lastCandleTime={
               chartData.length > 0 ? (chartData[chartData.length - 1].time as number) : 0
             }
