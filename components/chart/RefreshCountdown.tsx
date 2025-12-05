@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 interface RefreshCountdownProps {
   timeframe: string; // '5m', '1h', '1d' etc.
@@ -36,10 +36,11 @@ export default function RefreshCountdown({
   onRefresh,
 }: RefreshCountdownProps) {
   const [countdown, setCountdown] = useState<string>('00:00');
-  const [hasRefreshed, setHasRefreshed] = useState(false);
+  const hasRefreshedRef = useRef(false);
 
   useEffect(() => {
-    setHasRefreshed(false); // 새로운 캔들이 들어오면 리셋
+    // 새로운 캔들이 들어오면 리셋
+    hasRefreshedRef.current = false;
 
     const interval = setInterval(() => {
       const timeframeMs = parseTimeframe(timeframe);
@@ -49,30 +50,28 @@ export default function RefreshCountdown({
 
       if (remaining <= 0) {
         setCountdown('00:00');
-        if (!hasRefreshed) {
-          setHasRefreshed(true);
+        if (!hasRefreshedRef.current) {
+          hasRefreshedRef.current = true;
           onRefresh();
         }
       } else {
         const minutes = Math.floor(remaining / 60000);
         const seconds = Math.floor((remaining % 60000) / 1000);
         setCountdown(
-          `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`,
+          `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(
+            2,
+            '0',
+          )}`,
         );
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timeframe, lastCandleTime]); // onRefresh 제거하여 불필요한 재렌더링 방지
-
-  // onRefresh 변경 시 hasRefreshed 리셋
-  useEffect(() => {
-    setHasRefreshed(false);
-  }, [onRefresh]);
+  }, [timeframe, lastCandleTime, onRefresh]);
 
   return (
     <div className='flex items-center gap-2 px-4 py-2 bg-(--secondary) text-purple-400 rounded-lg text-sm font-mono'>
-      <span>🔄</span>
+      {/* <span>🔄</span> */}
       <span>{countdown}</span>
     </div>
   );
