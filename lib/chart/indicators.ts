@@ -1,6 +1,7 @@
 import {
   IChartApi,
   LineSeries,
+  AreaSeries,
   LineData,
   ISeriesApi,
   SeriesMarker,
@@ -19,6 +20,7 @@ export function addRsiIndicator(
   chart: IChartApi,
   rsiData: LineData[],
 ): ISeriesApi<'Line'> {
+  // RSI 라인 (메인)
   const rsiSeries = chart.addSeries(
     LineSeries,
     {
