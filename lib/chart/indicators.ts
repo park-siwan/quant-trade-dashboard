@@ -52,7 +52,7 @@ export function addRsiIndicator(
     lineWidth: 1,
     lineStyle: 2, // dashed
     axisLabelVisible: true,
-    title: '중립',
+    title: '',
   });
 
   // 과매도 기준선 (30)
@@ -142,8 +142,8 @@ export function addDivergenceLines(
     const color = pair.isFiltered
       ? '#9CA3AF' // gray-400
       : pair.direction === 'bullish'
-        ? '#22c55e' // green
-        : '#ef4444'; // red
+      ? '#22c55e' // green
+      : '#ef4444'; // red
 
     // 1. 가격 패널에 선 그리기
     const startCandle = candleData.find(

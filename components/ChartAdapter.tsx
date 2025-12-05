@@ -2,6 +2,7 @@
 
 import { useCandles } from '@/hooks/useCandles';
 import ChartRenderer from '@/components/chart/ChartRenderer';
+import RefreshCountdown from '@/components/chart/RefreshCountdown';
 import { CandlestickData, LineData } from 'lightweight-charts';
 import { DivergenceSignal } from '@/lib/types/index';
 
@@ -114,12 +115,21 @@ export default function ChartAdapter({
             )}
           </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          className='px-4 py-2 bg-(--secondary) text-gray-300 rounded-lg hover:bg-(--primary) hover:text-white transition-colors text-sm'
-        >
-          🔄 새로고침
-        </button>
+        <div className='flex items-center gap-2'>
+          <RefreshCountdown
+            timeframe={timeframe}
+            lastCandleTime={
+              chartData.length > 0 ? (chartData[chartData.length - 1].time as number) : 0
+            }
+            onRefresh={refetch}
+          />
+          <button
+            onClick={() => refetch()}
+            className='px-4 py-2 bg-(--secondary) text-gray-300 rounded-lg hover:bg-(--primary) hover:text-white transition-colors text-sm'
+          >
+            분석
+          </button>
+        </div>
       </div>
       <ChartRenderer
         data={chartData}
