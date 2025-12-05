@@ -19,6 +19,12 @@ export interface DivergenceSignal {
   reason?: string; // 필터링 사유
 }
 
+export interface DivergenceSummaryItem {
+  valid: number;
+  filtered: number;
+  total: number;
+}
+
 export interface ApiResponse {
   success: boolean;
   data: {
@@ -31,9 +37,15 @@ export interface ApiResponse {
       divergence: DivergenceSignal[];
     };
     summary: {
-      rsi: { bullish: number; bearish: number };
-      obv: { bullish: number; bearish: number };
-      total: number;
+      rsi: {
+        bullish: DivergenceSummaryItem;
+        bearish: DivergenceSummaryItem;
+      };
+      obv: {
+        bullish: DivergenceSummaryItem;
+        bearish: DivergenceSummaryItem;
+      };
+      total: DivergenceSummaryItem;
     };
   };
 }

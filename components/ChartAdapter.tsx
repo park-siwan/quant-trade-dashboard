@@ -81,8 +81,12 @@ export default function ChartAdapter({
   // 다이버전스 시그널
   const divergenceSignals: DivergenceSignal[] = data.data.signals.divergence || [];
 
+  // 다이버전스 요약 정보
+  const summary = data.data.summary;
+
   // 디버깅: 콘솔에 다이버전스 데이터 출력
   console.log('📊 다이버전스 시그널:', divergenceSignals);
+  console.log('📊 요약:', summary);
 
   return (
     <div className='border border-(--border) rounded-lg bg-(--card) p-6'>
@@ -91,7 +95,23 @@ export default function ChartAdapter({
           <h2 className='text-xl font-bold'>{symbol}</h2>
           <p className='text-sm text-gray-400'>
             {timeframe} · {chartData.length}개 캔들 · RSI 포함
-            {divergenceSignals.length > 0 && ` · ${divergenceSignals.length}개 다이버전스`}
+            {summary.total.total > 0 && (
+              <>
+                {' · '}
+                <span className='text-purple-400'>
+                  {summary.total.total}개 다이버전스
+                </span>
+                {' ('}
+                <span className='text-green-400'>유효 {summary.total.valid}</span>
+                {summary.total.filtered > 0 && (
+                  <>
+                    {', '}
+                    <span className='text-gray-500'>필터링 {summary.total.filtered}</span>
+                  </>
+                )}
+                {')'}
+              </>
+            )}
           </p>
         </div>
         <button
