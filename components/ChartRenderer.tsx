@@ -23,7 +23,12 @@ export default function ChartRenderer({
   divergenceSignals,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const [currentRsi, setCurrentRsi] = useState<number | null>(null);
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    rsi: number | null;
+    filterReason: string | null;
+  } | null>(null);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -90,16 +95,71 @@ export default function ChartRenderer({
     // 차트 자동 맞춤
     chart.timeScale().fitContent();
 
-    // RSI 값 업데이트
+    // 통합 툴팁 (RSI 값 + 필터링 사유)
     if (rsiSeries) {
       chart.subscribeCrosshairMove((param) => {
-        if (param.time && param.seriesData.has(rsiSeries)) {
-          const rsiValue = param.seriesData.get(rsiSeries);
-          if (rsiValue && 'value' in rsiValue) {
-            setCurrentRsi(rsiValue.value);
+        if (
+          !param.time ||
+          !param.point ||
+          param.point.x < 0 ||
+          param.point.y < 0
+        ) {
+          setTooltip(null);
+          return;
+        }
+
+        const currentTime = param.time as number;
+        let rsiValue: number | null = null;
+        let filterReason: string | null = null;
+
+        // RSI 값 가져오기
+        if (param.seriesData.has(rsiSeries)) {
+          const rsi = param.seriesData.get(rsiSeries);
+          if (rsi && 'value' in rsi) {
+            rsiValue = rsi.value;
           }
+        }
+
+        // 필터링된 다이버전스 신호 확인
+        if (divergenceSignals && divergenceSignals.length > 0) {
+          for (let i = 0; i < divergenceSignals.length; i++) {
+            const signal = divergenceSignals[i];
+            if (signal.phase === 'start') {
+              const endSignal = divergenceSignals.find(
+                (s, idx) =>
+                  idx > i &&
+                  s.phase === 'end' &&
+                  s.type === signal.type &&
+                  s.direction === signal.direction,
+              );
+
+              if (endSignal) {
+                const startTime = signal.timestamp / 1000;
+                const endTime = endSignal.timestamp / 1000;
+
+                if (
+                  currentTime >= startTime &&
+                  currentTime <= endTime &&
+                  (signal.isFiltered || endSignal.isFiltered)
+                ) {
+                  filterReason = signal.reason || endSignal.reason || null;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // RSI 값이나 필터링 사유가 있으면 툴팁 표시
+        if (rsiValue !== null || filterReason !== null) {
+          setTooltip({
+            x: param.point.x,
+            y: param.point.y,
+            rsi: rsiValue,
+            filterReason,
+          });
         } else {
-          setCurrentRsi(null);
+          setTooltip(null);
         }
       });
     }
@@ -130,25 +190,64 @@ export default function ChartRenderer({
       </div> */}
       <div ref={chartContainerRef} className='rounded-lg overflow-hidden' />
 
-      {/* RSI 값 표시 (RSI 패널 우측 상단) */}
-      {rsiData && currentRsi !== null && (
+      {/* 통합 툴팁 (RSI + 필터링 정보) */}
+      {tooltip && (
         <div
           style={{
             position: 'absolute',
-            bottom: '70%',
-            right: '16px',
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            color: '#a855eb',
-            padding: '8px 12px',
-            borderRadius: '4px',
-            fontSize: '14px',
-            fontWeight: 'bold',
+            left: tooltip.x + 15 + 'px',
+            top: tooltip.y + 15 + 'px',
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            color: '#ffffff',
+            padding: '12px 16px',
+            borderRadius: '6px',
+            fontSize: '13px',
             border: '1px solid #a855eb',
             pointerEvents: 'none',
-            zIndex: 10,
+            zIndex: 1000,
+            maxWidth: '300px',
+            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
           }}
         >
-          RSI: {currentRsi.toFixed(2)}
+          {/* RSI 값 */}
+          {tooltip.rsi !== null && (
+            <div
+              style={{
+                color: '#a855eb',
+                fontWeight: 'bold',
+                marginBottom: tooltip.filterReason ? '8px' : '0',
+              }}
+            >
+              RSI: {tooltip.rsi.toFixed(2)}
+            </div>
+          )}
+
+          {/* 필터링 정보 */}
+          {tooltip.filterReason && (
+            <>
+              {tooltip.rsi !== null && (
+                <div
+                  style={{
+                    borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+                    marginBottom: '8px',
+                  }}
+                />
+              )}
+              <div
+                style={{
+                  color: '#9CA3AF',
+                  fontWeight: 'bold',
+                  marginBottom: '6px',
+                  fontSize: '12px',
+                }}
+              >
+                ⚠️ 필터링됨
+              </div>
+              <div style={{ lineHeight: '1.5', color: '#d1d5db' }}>
+                {tooltip.filterReason}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

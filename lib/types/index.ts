@@ -15,6 +15,8 @@ export interface DivergenceSignal {
   phase: 'start' | 'end' | 'entry';
   timestamp: number;
   datetime: string;
+  isFiltered?: boolean; // 필터링 여부
+  reason?: string; // 필터링 사유
 }
 
 export interface ApiResponse {

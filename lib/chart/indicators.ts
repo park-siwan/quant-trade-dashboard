@@ -104,6 +104,7 @@ export function addDivergenceLines(
     start: DivergenceSignal;
     end: DivergenceSignal;
     direction: 'bullish' | 'bearish';
+    isFiltered: boolean;
   }> = [];
 
   for (let i = 0; i < signals.length; i++) {
@@ -119,10 +120,14 @@ export function addDivergenceLines(
       );
 
       if (endSignal) {
+        // start나 end 중 하나라도 필터링되었으면 전체 쌍을 필터링으로 처리
+        const isFiltered = !!(signal.isFiltered || endSignal.isFiltered);
+
         divergencePairs.push({
           start: signal,
           end: endSignal,
           direction: signal.direction,
+          isFiltered,
         });
       }
     }
@@ -133,7 +138,12 @@ export function addDivergenceLines(
 
   // 각 다이버전스 쌍에 대해 선 그리기
   divergencePairs.forEach((pair) => {
-    const color = pair.direction === 'bullish' ? '#22c55e' : '#ef4444';
+    // 필터링된 신호는 회색, 정상 신호는 기존 색상
+    const color = pair.isFiltered
+      ? '#9CA3AF' // gray-400
+      : pair.direction === 'bullish'
+        ? '#22c55e' // green
+        : '#ef4444'; // red
 
     // 1. 가격 패널에 선 그리기
     const startCandle = candleData.find(
@@ -155,9 +165,10 @@ export function addDivergenceLines(
         LineSeries,
         {
           color: color,
-          lineWidth: 2,
+          lineWidth: pair.isFiltered ? 1 : 2, // 필터링된 신호는 얇은 선
           lastValueVisible: false,
           priceLineVisible: false,
+          lineStyle: pair.isFiltered ? 2 : 0, // 필터링된 신호는 점선 (2 = dashed)
         },
         0,
       ); // 메인 패널
@@ -188,10 +199,11 @@ export function addDivergenceLines(
           LineSeries,
           {
             color: color,
-            lineWidth: 2,
+            lineWidth: pair.isFiltered ? 1 : 2, // 필터링된 신호는 얇은 선
             lastValueVisible: false,
             priceLineVisible: false,
             priceScaleId: 'rsi', // RSI 스케일 사용 (중요!)
+            lineStyle: pair.isFiltered ? 2 : 0, // 필터링된 신호는 점선 (2 = dashed)
           },
           1,
         ); // RSI 패널
