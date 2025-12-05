@@ -50,6 +50,21 @@ export default function ChartRenderer({
         timeVisible: true,
         secondsVisible: false,
       },
+      localization: {
+        timeFormatter: (time: number) => {
+          // UTC timestamp를 서울 시간(UTC+9)으로 변환
+          const date = new Date(time * 1000);
+          const seoulDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+
+          const year = seoulDate.getUTCFullYear();
+          const month = String(seoulDate.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(seoulDate.getUTCDate()).padStart(2, '0');
+          const hours = String(seoulDate.getUTCHours()).padStart(2, '0');
+          const minutes = String(seoulDate.getUTCMinutes()).padStart(2, '0');
+
+          return `${year}-${month}-${day} ${hours}:${minutes}`;
+        },
+      },
     });
 
     // 캔들스틱 시리즈 추가 (메인 패널 - paneIndex: 0)
