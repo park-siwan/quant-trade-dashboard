@@ -1,7 +1,7 @@
 'use client';
 
 import { useCandles } from '@/hooks/useCandles';
-import ChartRenderer from '@/components/ChartRenderer';
+import ChartRenderer from '@/components/chart/ChartRenderer';
 import { CandlestickData, LineData } from 'lightweight-charts';
 import { DivergenceSignal } from '@/lib/types/index';
 
