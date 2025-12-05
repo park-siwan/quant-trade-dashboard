@@ -30,6 +30,7 @@ export default function ChartRenderer({
     rsi: number | null;
     filterReason: string | null;
   } | null>(null);
+  const userInteractedRef = useRef(false); // 사용자가 차트를 조작했는지 추적
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -108,8 +109,17 @@ export default function ChartRenderer({
       );
     }
 
-    // 차트 자동 맞춤
-    chart.timeScale().fitContent();
+    // 사용자가 차트를 조작하지 않은 경우에만 자동 맞춤
+    if (!userInteractedRef.current) {
+      chart.timeScale().fitContent();
+    }
+
+    // 사용자 차트 조작 감지 (스크롤, 줌 등)
+    const timeScale = chart.timeScale();
+    const handleVisibleTimeRangeChange = () => {
+      userInteractedRef.current = true;
+    };
+    timeScale.subscribeVisibleTimeRangeChange(handleVisibleTimeRangeChange);
 
     // 통합 툴팁 (RSI 값 + 필터링 사유)
     if (rsiSeries) {
