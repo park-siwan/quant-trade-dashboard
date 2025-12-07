@@ -12,8 +12,14 @@ import {
   addRsiIndicator,
   addDivergenceLines,
   addEmaIndicators,
+  addCrossoverMarkers,
 } from '@/lib/chart/indicators';
-import { DivergenceSignal, EmaData, TrendAnalysis } from '@/lib/types/index';
+import {
+  DivergenceSignal,
+  EmaData,
+  TrendAnalysis,
+  CrossoverEvent,
+} from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
 
 interface ChartRendererProps {
@@ -22,6 +28,7 @@ interface ChartRendererProps {
   emaData?: EmaData;
   divergenceSignals?: DivergenceSignal[];
   trendAnalysis?: TrendAnalysis;
+  crossoverEvents?: CrossoverEvent[];
 }
 
 export default function ChartRenderer({
@@ -30,6 +37,7 @@ export default function ChartRenderer({
   emaData,
   divergenceSignals,
   trendAnalysis,
+  crossoverEvents,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -123,6 +131,11 @@ export default function ChartRenderer({
         candleData,
         rsiData || [],
       );
+    }
+
+    // 크로스오버 마커 추가
+    if (crossoverEvents && crossoverEvents.length > 0) {
+      addCrossoverMarkers(candlestickSeries, crossoverEvents);
     }
 
     // 사용자가 차트를 조작하지 않은 경우에만 자동 맞춤
@@ -222,7 +235,7 @@ export default function ChartRenderer({
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, rsiData, emaData, divergenceSignals, trendAnalysis]);
+  }, [data, rsiData, emaData, divergenceSignals, trendAnalysis, crossoverEvents]);
 
   return (
     <div className='w-full relative'>

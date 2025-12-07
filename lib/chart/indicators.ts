@@ -8,7 +8,11 @@ import {
   Time,
   createSeriesMarkers,
 } from 'lightweight-charts';
-import { DivergenceSignal, EmaData } from '@/lib/types/index';
+import {
+  DivergenceSignal,
+  EmaData,
+  CrossoverEvent,
+} from '@/lib/types/index';
 
 /**
  * RSI 지표를 차트에 추가합니다
@@ -330,4 +334,40 @@ export function addDivergenceLines(
       }
     }
   });
+}
+
+/**
+ * 크로스오버 마커를 차트에 추가합니다
+ * @param candlestickSeries - 캔들스틱 시리즈 인스턴스
+ * @param crossoverEvents - 크로스오버 이벤트 배열
+ * @returns 생성된 마커 배열
+ */
+export function addCrossoverMarkers(
+  candlestickSeries: ISeriesApi<'Candlestick'>,
+  crossoverEvents: CrossoverEvent[],
+): SeriesMarker<Time>[] {
+  if (crossoverEvents.length === 0) return [];
+
+  // 크로스오버 이벤트를 SeriesMarker 형식으로 변환
+  const markers: SeriesMarker<Time>[] = crossoverEvents.map((event) => {
+    const isGoldenCross = event.type === 'golden_cross';
+
+    return {
+      time: (event.timestamp / 1000) as Time,
+      position: isGoldenCross ? 'belowBar' : 'aboveBar',
+      color: isGoldenCross ? '#22c55e' : '#ef4444',
+      shape: isGoldenCross ? 'arrowUp' : 'arrowDown',
+      text: isGoldenCross ? '골든' : '데드',
+    };
+  });
+
+  // v5에서는 createSeriesMarkers 함수를 사용
+  createSeriesMarkers(candlestickSeries, markers);
+
+  console.log(
+    `✅ ${crossoverEvents.length}개의 크로스오버 마커 추가됨`,
+    markers,
+  );
+
+  return markers;
 }

@@ -5,7 +5,12 @@ import { useCandles } from '@/hooks/useCandles';
 import ChartRenderer from '@/components/chart/ChartRenderer';
 import RefreshCountdown from '@/components/chart/RefreshCountdown';
 import { CandlestickData, LineData } from 'lightweight-charts';
-import { DivergenceSignal, EmaData, TrendAnalysis } from '@/lib/types/index';
+import {
+  DivergenceSignal,
+  EmaData,
+  TrendAnalysis,
+  CrossoverEvent,
+} from '@/lib/types/index';
 
 interface ChartAdapterProps {
   symbol?: string;
@@ -97,6 +102,9 @@ export default function ChartAdapter({
   // 추세 분석
   const trendAnalysis: TrendAnalysis | undefined = data.data.trendAnalysis;
 
+  // 크로스오버 이벤트
+  const crossoverEvents: CrossoverEvent[] = data.data.crossoverEvents || [];
+
   // 다이버전스 시그널
   const divergenceSignals: DivergenceSignal[] = data.data.signals.divergence || [];
 
@@ -108,6 +116,7 @@ export default function ChartAdapter({
   console.log('📊 요약:', summary);
   console.log('📊 EMA 데이터:', emaData);
   console.log('📊 추세 분석:', trendAnalysis);
+  console.log('📊 크로스오버 이벤트:', crossoverEvents);
 
   return (
     <div className='border border-(--border) rounded-lg bg-(--card) p-6'>
@@ -174,6 +183,7 @@ export default function ChartAdapter({
         emaData={emaData}
         divergenceSignals={divergenceSignals}
         trendAnalysis={trendAnalysis}
+        crossoverEvents={crossoverEvents}
       />
     </div>
   );

@@ -59,6 +59,15 @@ export interface SignalClassification {
   leverageRecommendation: '5x' | '3x' | 'skip';
 }
 
+// 크로스오버 이벤트
+export interface CrossoverEvent {
+  index: number;
+  timestamp: number;
+  type: Crossover;
+  ema20: number;
+  ema50: number;
+}
+
 export interface ApiResponse {
   success: boolean;
   data: {
@@ -83,5 +92,6 @@ export interface ApiResponse {
       total: DivergenceSummaryItem;
     };
     trendAnalysis?: TrendAnalysis;
+    crossoverEvents?: CrossoverEvent[];
   };
 }
