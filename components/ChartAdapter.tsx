@@ -5,7 +5,7 @@ import { useCandles } from '@/hooks/useCandles';
 import ChartRenderer from '@/components/chart/ChartRenderer';
 import RefreshCountdown from '@/components/chart/RefreshCountdown';
 import { CandlestickData, LineData } from 'lightweight-charts';
-import { DivergenceSignal } from '@/lib/types/index';
+import { DivergenceSignal, EmaData, TrendAnalysis } from '@/lib/types/index';
 
 interface ChartAdapterProps {
   symbol?: string;
@@ -91,15 +91,23 @@ export default function ChartAdapter({
     })
     .filter((item): item is LineData => item !== null);
 
+  // EMA 데이터
+  const emaData: EmaData | undefined = data.data.indicators.ema;
+
+  // 추세 분석
+  const trendAnalysis: TrendAnalysis | undefined = data.data.trendAnalysis;
+
   // 다이버전스 시그널
   const divergenceSignals: DivergenceSignal[] = data.data.signals.divergence || [];
 
   // 다이버전스 요약 정보
   const summary = data.data.summary;
 
-  // 디버깅: 콘솔에 다이버전스 데이터 출력
+  // 디버깅: 콘솔에 데이터 출력
   console.log('📊 다이버전스 시그널:', divergenceSignals);
   console.log('📊 요약:', summary);
+  console.log('📊 EMA 데이터:', emaData);
+  console.log('📊 추세 분석:', trendAnalysis);
 
   return (
     <div className='border border-(--border) rounded-lg bg-(--card) p-6'>
@@ -163,7 +171,9 @@ export default function ChartAdapter({
       <ChartRenderer
         data={chartData}
         rsiData={rsiData}
+        emaData={emaData}
         divergenceSignals={divergenceSignals}
+        trendAnalysis={trendAnalysis}
       />
     </div>
   );

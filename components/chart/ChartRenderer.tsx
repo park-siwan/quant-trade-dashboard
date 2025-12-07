@@ -8,20 +8,28 @@ import {
   CandlestickData,
   LineData,
 } from 'lightweight-charts';
-import { addRsiIndicator, addDivergenceLines } from '@/lib/chart/indicators';
-import { DivergenceSignal } from '@/lib/types/index';
+import {
+  addRsiIndicator,
+  addDivergenceLines,
+  addEmaIndicators,
+} from '@/lib/chart/indicators';
+import { DivergenceSignal, EmaData, TrendAnalysis } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
 
 interface ChartRendererProps {
   data: CandlestickData[];
   rsiData?: LineData[];
+  emaData?: EmaData;
   divergenceSignals?: DivergenceSignal[];
+  trendAnalysis?: TrendAnalysis;
 }
 
 export default function ChartRenderer({
   data,
   rsiData,
+  emaData,
   divergenceSignals,
+  trendAnalysis,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -83,6 +91,14 @@ export default function ChartRenderer({
     );
 
     candlestickSeries.setData(data);
+
+    // EMA 지표 추가
+    if (emaData) {
+      const candleData = data.map((candle) => ({
+        time: candle.time as number,
+      }));
+      addEmaIndicators(chart, emaData, candleData);
+    }
 
     // RSI 지표 추가
     let rsiSeries = null;
@@ -206,14 +222,40 @@ export default function ChartRenderer({
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, rsiData, divergenceSignals]);
+  }, [data, rsiData, emaData, divergenceSignals, trendAnalysis]);
 
   return (
     <div className='w-full relative'>
-      {/* <div className='mb-4'>
-        <h2 className='text-xl font-bold text-white'>BTC/USDT 가격 차트</h2>
-        <p className='text-sm text-gray-400'>5분봉 캔들스틱</p>
-      </div> */}
+      {/* 추세 인디케이터 (좌측 상단) */}
+      {trendAnalysis && (
+        <div className='absolute top-4 left-4 z-10 flex gap-2'>
+          {trendAnalysis.trend === 'bullish' && (
+            <div className='bg-green-500/20 text-green-500 border border-green-500 px-3 py-1 rounded-md text-sm font-medium'>
+              ↑ 상승 추세
+            </div>
+          )}
+          {trendAnalysis.trend === 'bearish' && (
+            <div className='bg-red-500/20 text-red-500 border border-red-500 px-3 py-1 rounded-md text-sm font-medium'>
+              ↓ 하락 추세
+            </div>
+          )}
+          {trendAnalysis.trend === 'neutral' && (
+            <div className='bg-gray-500/20 text-gray-400 border border-gray-500 px-3 py-1 rounded-md text-sm font-medium'>
+              → 중립
+            </div>
+          )}
+          {trendAnalysis.crossover === 'golden_cross' && (
+            <div className='bg-green-500/20 text-green-500 border border-green-500 px-3 py-1 rounded-md text-sm font-medium'>
+              🟢 골든크로스
+            </div>
+          )}
+          {trendAnalysis.crossover === 'dead_cross' && (
+            <div className='bg-red-500/20 text-red-500 border border-red-500 px-3 py-1 rounded-md text-sm font-medium'>
+              🔴 데드크로스
+            </div>
+          )}
+        </div>
+      )}
       <div ref={chartContainerRef} className='rounded-lg overflow-hidden' />
 
       {/* 통합 툴팁 (RSI + 필터링 정보) */}

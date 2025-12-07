@@ -8,7 +8,7 @@ import {
   Time,
   createSeriesMarkers,
 } from 'lightweight-charts';
-import { DivergenceSignal } from '@/lib/types/index';
+import { DivergenceSignal, EmaData } from '@/lib/types/index';
 
 /**
  * RSI 지표를 차트에 추가합니다
@@ -88,6 +88,113 @@ export function addObvIndicator(
 ): ISeriesApi<'Line'> {
   // TODO: OBV 구현
   throw new Error('Not implemented yet');
+}
+
+/**
+ * EMA 지표를 차트에 추가합니다
+ * @param chart - lightweight-charts 인스턴스
+ * @param emaData - EMA 데이터 (배열 형태)
+ * @param candles - 캔들 데이터 (타임스탬프 매핑용)
+ * @returns EMA 시리즈 객체
+ */
+export function addEmaIndicators(
+  chart: IChartApi,
+  emaData: EmaData,
+  candles: Array<{ time: number }>,
+): {
+  ema20: ISeriesApi<'Line'>;
+  ema50: ISeriesApi<'Line'>;
+  ema200: ISeriesApi<'Line'>;
+} {
+  // EMA 데이터를 LineData 형식으로 변환
+  const ema20LineData: LineData[] = [];
+  const ema50LineData: LineData[] = [];
+  const ema200LineData: LineData[] = [];
+
+  candles.forEach((candle, index) => {
+    const time = candle.time as Time;
+
+    // EMA 20
+    const ema20Value = emaData.ema20?.[index];
+    if (
+      ema20Value !== null &&
+      ema20Value !== undefined &&
+      !isNaN(ema20Value) &&
+      typeof ema20Value === 'number'
+    ) {
+      ema20LineData.push({ time, value: ema20Value });
+    }
+
+    // EMA 50
+    const ema50Value = emaData.ema50?.[index];
+    if (
+      ema50Value !== null &&
+      ema50Value !== undefined &&
+      !isNaN(ema50Value) &&
+      typeof ema50Value === 'number'
+    ) {
+      ema50LineData.push({ time, value: ema50Value });
+    }
+
+    // EMA 200
+    const ema200Value = emaData.ema200?.[index];
+    if (
+      ema200Value !== null &&
+      ema200Value !== undefined &&
+      !isNaN(ema200Value) &&
+      typeof ema200Value === 'number'
+    ) {
+      ema200LineData.push({ time, value: ema200Value });
+    }
+  });
+
+  // EMA 20 시리즈 추가 (파란색)
+  const ema20Series = chart.addSeries(
+    LineSeries,
+    {
+      color: '#3B82F6',
+      lineWidth: 2,
+      title: 'EMA 20',
+      lastValueVisible: true,
+      priceLineVisible: false,
+    },
+    0, // 메인 패널
+  );
+  ema20Series.setData(ema20LineData);
+
+  // EMA 50 시리즈 추가 (주황색)
+  const ema50Series = chart.addSeries(
+    LineSeries,
+    {
+      color: '#F59E0B',
+      lineWidth: 2,
+      title: 'EMA 50',
+      lastValueVisible: true,
+      priceLineVisible: false,
+    },
+    0, // 메인 패널
+  );
+  ema50Series.setData(ema50LineData);
+
+  // EMA 200 시리즈 추가 (빨간색)
+  const ema200Series = chart.addSeries(
+    LineSeries,
+    {
+      color: '#EF4444',
+      lineWidth: 3,
+      title: 'EMA 200',
+      lastValueVisible: true,
+      priceLineVisible: false,
+    },
+    0, // 메인 패널
+  );
+  ema200Series.setData(ema200LineData);
+
+  return {
+    ema20: ema20Series,
+    ema50: ema50Series,
+    ema200: ema200Series,
+  };
 }
 
 /**

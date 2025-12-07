@@ -17,12 +17,46 @@ export interface DivergenceSignal {
   datetime: string;
   isFiltered?: boolean; // 필터링 여부
   reason?: string; // 필터링 사유
+  emaFilter?: SignalClassification; // EMA 필터 결과
 }
 
 export interface DivergenceSummaryItem {
   valid: number;
   filtered: number;
   total: number;
+}
+
+// EMA 데이터
+export interface EmaData {
+  ema20: number[];
+  ema50: number[];
+  ema200: number[];
+}
+
+// 추세 타입
+export type Trend = 'bullish' | 'bearish' | 'neutral';
+
+// 크로스오버 타입
+export type Crossover = 'golden_cross' | 'dead_cross' | 'none';
+
+// 신호 강도 타입
+export type SignalStrength = 'strong' | 'medium' | 'weak' | 'invalid';
+
+// 추세 분석 결과
+export interface TrendAnalysis {
+  trend: Trend;
+  crossover: Crossover;
+  currentPrice: number;
+  ema20: number;
+  ema50: number;
+  ema200: number;
+}
+
+// 신호 강도 분류 결과
+export interface SignalClassification {
+  strength: SignalStrength;
+  reason: string;
+  leverageRecommendation: '5x' | '3x' | 'skip';
 }
 
 export interface ApiResponse {
@@ -32,6 +66,7 @@ export interface ApiResponse {
     indicators: {
       rsi: (number | null)[];
       obv: number[];
+      ema?: EmaData;
     };
     signals: {
       divergence: DivergenceSignal[];
@@ -47,5 +82,6 @@ export interface ApiResponse {
       };
       total: DivergenceSummaryItem;
     };
+    trendAnalysis?: TrendAnalysis;
   };
 }
