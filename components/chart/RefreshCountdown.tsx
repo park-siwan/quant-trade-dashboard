@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
 
 interface RefreshCountdownProps {
   timeframe: string; // '5m', '1h', '1d' etc.
   lastCandleTime: number; // Unix timestamp in seconds
   onRefresh: () => void;
+  onManualRefresh?: () => void; // 수동 새로고침 (클릭 시)
 }
 
 // 타임프레임을 밀리초로 변환
@@ -35,6 +36,7 @@ export default function RefreshCountdown({
   timeframe,
   lastCandleTime,
   onRefresh,
+  onManualRefresh,
 }: RefreshCountdownProps) {
   const [countdown, setCountdown] = useState<string>('00:00');
   const hasRefreshedRef = useRef(false);
@@ -71,9 +73,16 @@ export default function RefreshCountdown({
   }, [timeframe, lastCandleTime, onRefresh]);
 
   return (
-    <div className='flex items-center gap-2 px-4 py-2 backdrop-blur-md bg-purple-500/20 text-purple-300 rounded-lg text-sm font-mono border border-purple-400/30 shadow-lg shadow-purple-500/10'>
-      <RefreshCw className='w-4 h-4 text-purple-400 animate-spin' style={{ animationDuration: '3s' }} />
+    <button
+      onClick={onManualRefresh}
+      className='flex items-center gap-2 px-4 py-2 backdrop-blur-md bg-orange-500/20 text-orange-300 rounded-lg text-sm font-mono border border-orange-400/30 shadow-lg shadow-orange-500/10 hover:bg-orange-500/30 hover:border-orange-400/50 hover:shadow-orange-500/20 transition-all duration-200 cursor-pointer active:scale-95'
+      title='클릭하여 수동 분석'
+    >
+      <RefreshCw
+        className='w-4 h-4 text-orange-400 animate-spin'
+        style={{ animationDuration: '3s' }}
+      />
       <span className='font-medium'>{countdown}</span>
-    </div>
+    </button>
   );
 }

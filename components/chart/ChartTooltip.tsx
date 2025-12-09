@@ -24,18 +24,18 @@ export default function ChartTooltip({
         padding: '12px 16px',
         borderRadius: '12px',
         fontSize: '13px',
-        border: '1px solid rgba(187, 134, 252, 0.3)',
+        border: '1px solid rgba(251, 146, 60, 0.3)',
         pointerEvents: 'none',
         zIndex: 1000,
         maxWidth: '300px',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(187, 134, 252, 0.1)',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(251, 146, 60, 0.1)',
       }}
     >
       {/* RSI 값 */}
       {rsi !== null && (
         <div
           style={{
-            color: '#bb86fc',
+            color: '#fb923c',
             fontWeight: 'bold',
             marginBottom: filterReason ? '8px' : '0',
           }}

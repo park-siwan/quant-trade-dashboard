@@ -59,12 +59,12 @@ export default function ChartRenderer({
       width: chartContainerRef.current.clientWidth,
       height: rsiData ? 600 : 500,
       layout: {
-        background: { type: ColorType.Solid, color: '#131722' }, // 트레이딩뷰 스타일 네이비
+        background: { type: ColorType.Solid, color: '#1a1410' }, // 황금빛 도는 다크 블랙
         textColor: '#d1d5db',
       },
       grid: {
-        vertLines: { color: 'rgba(42, 46, 57, 0.5)' }, // 투명도 있는 그리드
-        horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
+        vertLines: { color: 'rgba(58, 48, 38, 0.3)' }, // 황금빛 도는 그리드
+        horzLines: { color: 'rgba(58, 48, 38, 0.3)' },
       },
       timeScale: {
         timeVisible: true,
@@ -99,12 +99,12 @@ export default function ChartRenderer({
     const candlestickSeries = chart.addSeries(
       CandlestickSeries,
       {
-        upColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록 캔들
-        downColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨강 캔들
-        borderUpColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록 테두리
-        borderDownColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨강 테두리
-        wickUpColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록 꼬리
-        wickDownColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨강 꼬리
+        upColor: `rgba(163, 230, 53, ${CANDLE_OPACITY})`, // 연두색 캔들 (lime-400)
+        downColor: `rgba(251, 146, 60, ${CANDLE_OPACITY})`, // 주황색 캔들 (orange-400)
+        borderUpColor: `rgba(163, 230, 53, ${CANDLE_OPACITY})`, // 연두색 테두리
+        borderDownColor: `rgba(251, 146, 60, ${CANDLE_OPACITY})`, // 주황색 테두리
+        wickUpColor: `rgba(163, 230, 53, ${CANDLE_OPACITY})`, // 연두색 꼬리
+        wickDownColor: `rgba(251, 146, 60, ${CANDLE_OPACITY})`, // 주황색 꼬리
       },
       0,
     );
@@ -254,12 +254,12 @@ export default function ChartRenderer({
       {trendAnalysis && (
         <div className='absolute top-4 left-4 z-10 flex gap-2'>
           {trendAnalysis.trend === 'bullish' && (
-            <div className='backdrop-blur-md bg-green-500/20 text-green-400 border border-green-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-green-500/10'>
+            <div className='backdrop-blur-md bg-lime-500/20 text-lime-400 border border-lime-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-lime-500/10'>
               ↑ 상승 추세
             </div>
           )}
           {trendAnalysis.trend === 'bearish' && (
-            <div className='backdrop-blur-md bg-red-500/20 text-red-400 border border-red-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-red-500/10'>
+            <div className='backdrop-blur-md bg-orange-500/20 text-orange-400 border border-orange-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-orange-500/10'>
               ↓ 하락 추세
             </div>
           )}
@@ -269,13 +269,13 @@ export default function ChartRenderer({
             </div>
           )}
           {trendAnalysis.crossover === 'golden_cross' && (
-            <div className='backdrop-blur-md bg-green-500/20 text-green-400 border border-green-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-green-500/10'>
+            <div className='backdrop-blur-md bg-lime-500/20 text-lime-400 border border-lime-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-lime-500/10'>
               🟢 골든크로스
             </div>
           )}
           {trendAnalysis.crossover === 'dead_cross' && (
-            <div className='backdrop-blur-md bg-red-500/20 text-red-400 border border-red-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-red-500/10'>
-              🔴 데드크로스
+            <div className='backdrop-blur-md bg-orange-500/20 text-orange-400 border border-orange-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-orange-500/10'>
+              🟠 데드크로스
             </div>
           )}
         </div>

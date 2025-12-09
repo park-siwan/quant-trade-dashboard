@@ -11,6 +11,7 @@ import {
   TrendAnalysis,
   CrossoverEvent,
 } from '@/lib/types/index';
+import { Bitcoin } from 'lucide-react';
 
 interface ChartAdapterProps {
   symbol?: string;
@@ -45,7 +46,7 @@ export default function ChartAdapter({
     return (
       <div className='flex items-center justify-center h-[500px] backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl'>
         <div className='text-center'>
-          <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4'></div>
+          <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-orange-400 mx-auto mb-4'></div>
           <p className='text-gray-300'>데이터 로딩 중...</p>
         </div>
       </div>
@@ -123,9 +124,14 @@ export default function ChartAdapter({
     <div className='backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl'>
       <div className='flex items-center justify-between mb-4'>
         <div className='flex flex-1 items-center justify-start gap-4'>
-          <h2 className='text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent'>
-            {symbol}
-          </h2>
+          <div className='flex items-center gap-3'>
+            <div className='relative flex items-center justify-center w-10 h-10 rounded-full bg-orange-500 shadow-lg shadow-orange-500/30'>
+              <Bitcoin className='w-6 h-6 text-white' strokeWidth={2.5} />
+            </div>
+            <h2 className='text-xl font-bold bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-400 bg-clip-text text-transparent'>
+              {symbol}
+            </h2>
+          </div>
           <p className='text-sm text-gray-300'>
             {chartData.length}개 캔들 · RSI 포함
             {summary.total.total > 0 && (
@@ -135,7 +141,7 @@ export default function ChartAdapter({
                   {summary.total.total}개 다이버전스
                 </span>
                 {' ('}
-                <span className='text-green-400 font-medium'>
+                <span className='text-lime-400 font-medium'>
                   유효 {summary.total.valid}
                 </span>
                 {summary.total.filtered > 0 && (
@@ -160,7 +166,7 @@ export default function ChartAdapter({
               onClick={() => setSelectedTimeframe(tf.value)}
               className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${
                 selectedTimeframe === tf.value
-                  ? 'bg-blue-500/30 backdrop-blur-md text-white border border-blue-400/50 shadow-lg shadow-blue-500/20'
+                  ? 'bg-orange-500/30 backdrop-blur-md text-white border border-orange-400/50 shadow-lg shadow-orange-500/20'
                   : 'bg-white/5 backdrop-blur-sm text-gray-300 hover:text-white hover:bg-white/10 border border-white/5'
               }`}
             >
@@ -178,13 +184,8 @@ export default function ChartAdapter({
                 : 0
             }
             onRefresh={refetch}
+            onManualRefresh={refetch}
           />
-          <button
-            onClick={() => refetch()}
-            className='px-4 py-2 bg-blue-500/30 backdrop-blur-md text-white rounded-lg hover:bg-blue-500/40 transition-all duration-200 text-sm border border-blue-400/50 shadow-lg shadow-blue-500/20'
-          >
-            분석
-          </button>
         </div>
       </div>
       <ChartRenderer

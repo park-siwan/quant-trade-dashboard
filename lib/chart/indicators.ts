@@ -24,17 +24,17 @@ export function addRsiIndicator(
   chart: IChartApi,
   rsiData: LineData[],
 ): ISeriesApi<'Line'> {
-  // RSI 라인 (메인)
+  // RSI 라인 (메인) - 황금색
   const rsiSeries = chart.addSeries(
     LineSeries,
     {
-      color: '#bb86fc', // 연보라색 (트레이딩뷰 스타일)
+      color: '#fbbf24', // 황금색 (비트코인 테마)
       lineWidth: 2,
       priceScaleId: 'rsi',
-      crosshairMarkerVisible: true, // 크로스헤어 마커 표시
-      crosshairMarkerRadius: 4, // 마커 크기
-      title: 'RSI', // 범례에 표시될 제목
-      lastValueVisible: true, // 마지막 값 표시
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      title: 'RSI',
+      lastValueVisible: true,
     },
     1, // paneIndex: 1 (별도 패널)
   );
@@ -44,7 +44,7 @@ export function addRsiIndicator(
   // 과매수 기준선 (70)
   rsiSeries.createPriceLine({
     price: 70,
-    color: 'rgba(239, 68, 68, 0.5)', // 투명도 있는 빨강
+    color: 'rgba(251, 146, 60, 0.4)', // 부드러운 주황색
     lineWidth: 1,
     lineStyle: 2, // dashed
     axisLabelVisible: true,
@@ -54,7 +54,7 @@ export function addRsiIndicator(
   // 중심선 (50)
   rsiSeries.createPriceLine({
     price: 50,
-    color: 'rgba(107, 114, 128, 0.3)', // 투명도 있는 회색
+    color: 'rgba(161, 161, 170, 0.25)', // 부드러운 회색
     lineWidth: 1,
     lineStyle: 2, // dashed
     axisLabelVisible: true,
@@ -64,7 +64,7 @@ export function addRsiIndicator(
   // 과매도 기준선 (30)
   rsiSeries.createPriceLine({
     price: 30,
-    color: 'rgba(34, 197, 94, 0.5)', // 투명도 있는 초록
+    color: 'rgba(250, 204, 21, 0.4)', // 부드러운 황금색
     lineWidth: 1,
     lineStyle: 2, // dashed
     axisLabelVisible: true,
@@ -152,11 +152,11 @@ export function addEmaIndicators(
     }
   });
 
-  // EMA 20 시리즈 추가 (하늘색)
+  // EMA 20 시리즈 추가 (밝은 황금색 - 빠른 이평선)
   const ema20Series = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(56, 189, 248, 0.8)', // 하늘색 (트레이딩뷰 스타일)
+      color: 'rgba(250, 204, 21, 0.65)', // 밝은 황금색 (투명도 65%)
       lineWidth: 2,
       title: 'EMA 20',
       lastValueVisible: true,
@@ -166,11 +166,11 @@ export function addEmaIndicators(
   );
   ema20Series.setData(ema20LineData);
 
-  // EMA 50 시리즈 추가 (주황색)
+  // EMA 50 시리즈 추가 (중간 주황색)
   const ema50Series = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(251, 191, 36, 0.8)', // 부드러운 주황색
+      color: 'rgba(251, 146, 60, 0.6)', // 중간 주황색 (투명도 60%)
       lineWidth: 2,
       title: 'EMA 50',
       lastValueVisible: true,
@@ -180,11 +180,11 @@ export function addEmaIndicators(
   );
   ema50Series.setData(ema50LineData);
 
-  // EMA 200 시리즈 추가 (빨간색)
+  // EMA 200 시리즈 추가 (진한 호박색 - 느린 이평선)
   const ema200Series = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(239, 68, 68, 0.7)', // 투명도 있는 빨강
+      color: 'rgba(245, 124, 0, 0.55)', // 진한 호박색 (투명도 55%)
       lineWidth: 2,
       title: 'EMA 200',
       lastValueVisible: true,
@@ -251,12 +251,12 @@ export function addDivergenceLines(
 
   // 각 다이버전스 쌍에 대해 선 그리기
   divergencePairs.forEach((pair) => {
-    // 필터링된 신호는 회색, 정상 신호는 기존 색상
+    // 필터링된 신호는 회색, 정상 신호는 새로운 색상
     const color = pair.isFiltered
       ? '#9CA3AF' // gray-400
       : pair.direction === 'bullish'
-      ? '#22c55e' // green
-      : '#ef4444'; // red
+      ? '#a3e635' // lime (연두색)
+      : '#fb923c'; // orange (주황색)
 
     // 1. 가격 패널에 선 그리기
     const startCandle = candleData.find(
@@ -354,7 +354,7 @@ export function addCrossoverMarkers(
     return {
       time: (event.timestamp / 1000) as Time,
       position: isGoldenCross ? 'belowBar' : 'aboveBar',
-      color: isGoldenCross ? '#22c55e' : '#ef4444',
+      color: isGoldenCross ? '#a3e635' : '#fb923c', // 연두색 / 주황색
       shape: isGoldenCross ? 'arrowUp' : 'arrowDown',
       text: isGoldenCross ? 'GC' : 'DC',
     };
