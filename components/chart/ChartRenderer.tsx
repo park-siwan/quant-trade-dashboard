@@ -51,6 +51,7 @@ export default function ChartRenderer({
     crossover: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null;
     divergences: Array<{ type: string; direction: string; analysis: string }>;
   } | null>(null);
+  const [trendTooltip, setTrendTooltip] = useState<string | null>(null); // 추세 툴팁
   const isFirstRenderRef = useRef(true); // 첫 렌더링인지 추적
   const savedVisibleLogicalRangeRef = useRef<{
     from: number;
@@ -391,28 +392,55 @@ export default function ChartRenderer({
       {trendAnalysis && (
         <div className='absolute top-4 left-4 z-10 flex gap-2'>
           {trendAnalysis.trend === 'bullish' && (
-            <div className='backdrop-blur-md bg-lime-500/20 text-lime-400 border border-lime-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-lime-500/10'>
+            <div
+              className='backdrop-blur-md bg-lime-500/20 text-lime-400 border border-lime-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-lime-500/10 cursor-help relative'
+              onMouseEnter={() => setTrendTooltip('현재 가격이 EMA 200 위에 있어 상승 추세입니다')}
+              onMouseLeave={() => setTrendTooltip(null)}
+            >
               ↑ 상승 추세
             </div>
           )}
           {trendAnalysis.trend === 'bearish' && (
-            <div className='backdrop-blur-md bg-orange-500/20 text-orange-400 border border-orange-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-orange-500/10'>
+            <div
+              className='backdrop-blur-md bg-orange-500/20 text-orange-400 border border-orange-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-orange-500/10 cursor-help relative'
+              onMouseEnter={() => setTrendTooltip('현재 가격이 EMA 200 아래에 있어 하락 추세입니다')}
+              onMouseLeave={() => setTrendTooltip(null)}
+            >
               ↓ 하락 추세
             </div>
           )}
           {trendAnalysis.trend === 'neutral' && (
-            <div className='backdrop-blur-md bg-gray-500/20 text-gray-300 border border-gray-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-gray-500/10'>
+            <div
+              className='backdrop-blur-md bg-gray-500/20 text-gray-300 border border-gray-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-gray-500/10 cursor-help relative'
+              onMouseEnter={() => setTrendTooltip('현재 가격이 EMA 200 근처에 있어 중립 상태입니다')}
+              onMouseLeave={() => setTrendTooltip(null)}
+            >
               → 중립
             </div>
           )}
           {trendAnalysis.crossover === 'golden_cross' && (
-            <div className='backdrop-blur-md bg-lime-500/20 text-lime-400 border border-lime-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-lime-500/10'>
+            <div
+              className='backdrop-blur-md bg-lime-500/20 text-lime-400 border border-lime-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-lime-500/10 cursor-help relative'
+              onMouseEnter={() => setTrendTooltip('EMA 20이 EMA 50을 상향 돌파했습니다 (강력한 상승 신호)')}
+              onMouseLeave={() => setTrendTooltip(null)}
+            >
               🟢 골든크로스
             </div>
           )}
           {trendAnalysis.crossover === 'dead_cross' && (
-            <div className='backdrop-blur-md bg-orange-500/20 text-orange-400 border border-orange-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-orange-500/10'>
+            <div
+              className='backdrop-blur-md bg-orange-500/20 text-orange-400 border border-orange-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-orange-500/10 cursor-help relative'
+              onMouseEnter={() => setTrendTooltip('EMA 20이 EMA 50을 하향 돌파했습니다 (하락 추세 전환 신호)')}
+              onMouseLeave={() => setTrendTooltip(null)}
+            >
               🟠 데드크로스
+            </div>
+          )}
+
+          {/* 커스텀 툴팁 */}
+          {trendTooltip && (
+            <div className='absolute top-full left-0 mt-2 px-3 py-2 backdrop-blur-xl bg-black/80 text-white text-xs rounded-lg shadow-xl border border-white/20 whitespace-nowrap z-50'>
+              {trendTooltip}
             </div>
           )}
         </div>

@@ -176,12 +176,12 @@ export function addEmaIndicators(
     }
   });
 
-  // EMA 20 시리즈 추가 (밝은 황금색 - 빠른 이평선)
+  // EMA 20 시리즈 추가 (빨간색 - 가장 빠른 이평선, 가장 얇음)
   const ema20Series = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(250, 204, 21, 0.65)', // 밝은 황금색 (투명도 65%)
-      lineWidth: 2,
+      color: 'rgba(239, 68, 68, 0.8)', // 빨간색 (투명도 80%)
+      lineWidth: 1.5,
       title: 'EMA 20',
       lastValueVisible: true,
       priceLineVisible: false,
@@ -190,12 +190,12 @@ export function addEmaIndicators(
   );
   ema20Series.setData(ema20LineData);
 
-  // EMA 50 시리즈 추가 (중간 주황색)
+  // EMA 50 시리즈 추가 (파란색 - 중간 속도, 중간 두께)
   const ema50Series = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(251, 146, 60, 0.6)', // 중간 주황색 (투명도 60%)
-      lineWidth: 2,
+      color: 'rgba(59, 130, 246, 0.8)', // 파란색 (투명도 80%)
+      lineWidth: 2.5,
       title: 'EMA 50',
       lastValueVisible: true,
       priceLineVisible: false,
@@ -204,12 +204,12 @@ export function addEmaIndicators(
   );
   ema50Series.setData(ema50LineData);
 
-  // EMA 200 시리즈 추가 (진한 호박색 - 느린 이평선)
+  // EMA 200 시리즈 추가 (초록색 - 가장 느린 이평선, 가장 두꺼움)
   const ema200Series = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(245, 124, 0, 0.55)', // 진한 호박색 (투명도 55%)
-      lineWidth: 2,
+      color: 'rgba(34, 197, 94, 0.8)', // 초록색 (투명도 80%)
+      lineWidth: 3.5,
       title: 'EMA 200',
       lastValueVisible: true,
       priceLineVisible: false,

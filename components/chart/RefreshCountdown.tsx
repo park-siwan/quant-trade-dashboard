@@ -39,6 +39,7 @@ export default function RefreshCountdown({
   onManualRefresh,
 }: RefreshCountdownProps) {
   const [countdown, setCountdown] = useState<string>('00:00');
+  const [showTooltip, setShowTooltip] = useState(false);
   const hasRefreshedRef = useRef(false);
 
   useEffect(() => {
@@ -72,17 +73,54 @@ export default function RefreshCountdown({
     return () => clearInterval(interval);
   }, [timeframe, lastCandleTime, onRefresh]);
 
+  // 타임프레임에 따른 설명 메시지
+  const getTooltipMessage = () => {
+    const match = timeframe.match(/^(\d+)([smhd])$/);
+    if (!match) return '타임프레임에 맞춰 자동으로 새로운 분석을 시도합니다';
+
+    const value = match[1];
+    const unit = match[2];
+    let unitText = '';
+
+    switch (unit) {
+      case 's':
+        unitText = '초';
+        break;
+      case 'm':
+        unitText = '분';
+        break;
+      case 'h':
+        unitText = '시간';
+        break;
+      case 'd':
+        unitText = '일';
+        break;
+    }
+
+    return `${value}${unitText}마다 자동으로 새로운 분석을 시도합니다 (클릭하여 수동 분석)`;
+  };
+
   return (
-    <button
-      onClick={onManualRefresh}
-      className='flex items-center gap-2 px-4 py-2 backdrop-blur-md bg-orange-500/20 text-orange-300 rounded-lg text-sm font-mono border border-orange-400/30 shadow-lg shadow-orange-500/10 hover:bg-orange-500/30 hover:border-orange-400/50 hover:shadow-orange-500/20 transition-all duration-200 cursor-pointer active:scale-95'
-      title='클릭하여 수동 분석'
-    >
-      <RefreshCw
-        className='w-4 h-4 text-orange-400 animate-spin'
-        style={{ animationDuration: '3s' }}
-      />
-      <span className='font-medium'>{countdown}</span>
-    </button>
+    <div className='relative'>
+      <button
+        onClick={onManualRefresh}
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        className='flex items-center gap-2 px-4 py-2 backdrop-blur-md bg-orange-500/20 text-orange-300 rounded-lg text-sm font-mono border border-orange-400/30 shadow-lg shadow-orange-500/10 hover:bg-orange-500/30 hover:border-orange-400/50 hover:shadow-orange-500/20 transition-all duration-200 cursor-pointer active:scale-95'
+      >
+        <RefreshCw
+          className='w-4 h-4 text-orange-400 animate-spin'
+          style={{ animationDuration: '3s' }}
+        />
+        <span className='font-medium'>{countdown}</span>
+      </button>
+
+      {/* 커스텀 툴팁 */}
+      {showTooltip && (
+        <div className='absolute top-full right-0 mt-2 px-3 py-2 backdrop-blur-xl bg-black/80 text-white text-xs rounded-lg shadow-xl border border-white/20 whitespace-nowrap z-50'>
+          {getTooltipMessage()}
+        </div>
+      )}
+    </div>
   );
 }
