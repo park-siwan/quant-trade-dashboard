@@ -69,6 +69,14 @@ export default function ChartRenderer({
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
+        rightOffset: 12, // 우측 여백 추가
+      },
+      rightPriceScale: {
+        borderVisible: false,
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
       },
       localization: {
         timeFormatter: (time: number) => {
@@ -246,33 +254,33 @@ export default function ChartRenderer({
       {trendAnalysis && (
         <div className='absolute top-4 left-4 z-10 flex gap-2'>
           {trendAnalysis.trend === 'bullish' && (
-            <div className='bg-green-500/20 text-green-500 border border-green-500 px-3 py-1 rounded-md text-sm font-medium'>
+            <div className='backdrop-blur-md bg-green-500/20 text-green-400 border border-green-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-green-500/10'>
               ↑ 상승 추세
             </div>
           )}
           {trendAnalysis.trend === 'bearish' && (
-            <div className='bg-red-500/20 text-red-500 border border-red-500 px-3 py-1 rounded-md text-sm font-medium'>
+            <div className='backdrop-blur-md bg-red-500/20 text-red-400 border border-red-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-red-500/10'>
               ↓ 하락 추세
             </div>
           )}
           {trendAnalysis.trend === 'neutral' && (
-            <div className='bg-gray-500/20 text-gray-400 border border-gray-500 px-3 py-1 rounded-md text-sm font-medium'>
+            <div className='backdrop-blur-md bg-gray-500/20 text-gray-300 border border-gray-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-gray-500/10'>
               → 중립
             </div>
           )}
           {trendAnalysis.crossover === 'golden_cross' && (
-            <div className='bg-green-500/20 text-green-500 border border-green-500 px-3 py-1 rounded-md text-sm font-medium'>
+            <div className='backdrop-blur-md bg-green-500/20 text-green-400 border border-green-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-green-500/10'>
               🟢 골든크로스
             </div>
           )}
           {trendAnalysis.crossover === 'dead_cross' && (
-            <div className='bg-red-500/20 text-red-500 border border-red-500 px-3 py-1 rounded-md text-sm font-medium'>
+            <div className='backdrop-blur-md bg-red-500/20 text-red-400 border border-red-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-red-500/10'>
               🔴 데드크로스
             </div>
           )}
         </div>
       )}
-      <div ref={chartContainerRef} className='rounded-lg overflow-hidden' />
+      <div ref={chartContainerRef} className='rounded-xl overflow-hidden shadow-inner' />
 
       {/* 통합 툴팁 (RSI + 필터링 정보) */}
       {tooltip && (

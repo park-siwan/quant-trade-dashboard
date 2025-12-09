@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { RefreshCw } from 'lucide-react';
 
 interface RefreshCountdownProps {
   timeframe: string; // '5m', '1h', '1d' etc.
@@ -70,9 +71,9 @@ export default function RefreshCountdown({
   }, [timeframe, lastCandleTime, onRefresh]);
 
   return (
-    <div className='flex items-center gap-2 px-4 py-2 bg-(--secondary) text-purple-400 rounded-lg text-sm font-mono'>
-      {/* <span>🔄</span> */}
-      <span>{countdown}</span>
+    <div className='flex items-center gap-2 px-4 py-2 backdrop-blur-md bg-purple-500/20 text-purple-300 rounded-lg text-sm font-mono border border-purple-400/30 shadow-lg shadow-purple-500/10'>
+      <RefreshCw className='w-4 h-4 text-purple-400 animate-spin' style={{ animationDuration: '3s' }} />
+      <span className='font-medium'>{countdown}</span>
     </div>
   );
 }

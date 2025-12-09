@@ -17,23 +17,25 @@ export default function ChartTooltip({
         position: 'absolute',
         left: x + 15 + 'px',
         top: y + 15 + 'px',
-        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
         color: '#ffffff',
         padding: '12px 16px',
-        borderRadius: '6px',
+        borderRadius: '12px',
         fontSize: '13px',
-        border: '1px solid #a855eb',
+        border: '1px solid rgba(187, 134, 252, 0.3)',
         pointerEvents: 'none',
         zIndex: 1000,
         maxWidth: '300px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(187, 134, 252, 0.1)',
       }}
     >
       {/* RSI 값 */}
       {rsi !== null && (
         <div
           style={{
-            color: '#a855eb',
+            color: '#bb86fc',
             fontWeight: 'bold',
             marginBottom: filterReason ? '8px' : '0',
           }}

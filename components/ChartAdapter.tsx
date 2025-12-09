@@ -43,10 +43,10 @@ export default function ChartAdapter({
 
   if (isLoading) {
     return (
-      <div className='flex items-center justify-center h-[500px] border border-(--border) rounded-lg bg-(--card)'>
+      <div className='flex items-center justify-center h-[500px] backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl'>
         <div className='text-center'>
-          <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-(--primary) mx-auto mb-4'></div>
-          <p className='text-gray-400'>데이터 로딩 중...</p>
+          <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4'></div>
+          <p className='text-gray-300'>데이터 로딩 중...</p>
         </div>
       </div>
     );
@@ -54,12 +54,12 @@ export default function ChartAdapter({
 
   if (error) {
     return (
-      <div className='flex items-center justify-center h-[500px] border border-red-500/50 rounded-lg bg-(--card)'>
+      <div className='flex items-center justify-center h-[500px] backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-2xl shadow-2xl'>
         <div className='text-center'>
-          <p className='text-red-500 mb-4'>데이터 로딩 실패</p>
+          <p className='text-red-400 mb-4'>데이터 로딩 실패</p>
           <button
             onClick={() => refetch()}
-            className='px-4 py-2 bg-(--primary) text-white rounded-lg hover:opacity-80 transition-opacity'
+            className='px-4 py-2 bg-red-500/30 backdrop-blur-md text-white rounded-lg hover:bg-red-500/40 transition-all duration-200 border border-red-400/50'
           >
             다시 시도
           </button>
@@ -70,8 +70,8 @@ export default function ChartAdapter({
 
   if (!data?.success || !data?.data?.candles) {
     return (
-      <div className='flex items-center justify-center h-[500px] border border-(--border) rounded-lg bg-(--card)'>
-        <p className='text-gray-400'>데이터가 없습니다</p>
+      <div className='flex items-center justify-center h-[500px] backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl'>
+        <p className='text-gray-300'>데이터가 없습니다</p>
       </div>
     );
   }
@@ -120,26 +120,28 @@ export default function ChartAdapter({
   console.log('📊 크로스오버 이벤트:', crossoverEvents);
 
   return (
-    <div className='border border-(--border) rounded-lg bg-(--card) p-6'>
+    <div className='backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl'>
       <div className='flex items-center justify-between mb-4'>
         <div className='flex flex-1 items-center justify-start gap-4'>
-          <h2 className='text-xl font-bold'>{symbol}</h2>
-          <p className='text-sm text-gray-400'>
+          <h2 className='text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent'>
+            {symbol}
+          </h2>
+          <p className='text-sm text-gray-300'>
             {chartData.length}개 캔들 · RSI 포함
             {summary.total.total > 0 && (
               <>
                 {' · '}
-                <span className='text-purple-400'>
+                <span className='text-purple-400 font-medium'>
                   {summary.total.total}개 다이버전스
                 </span>
                 {' ('}
-                <span className='text-green-400'>
+                <span className='text-green-400 font-medium'>
                   유효 {summary.total.valid}
                 </span>
                 {summary.total.filtered > 0 && (
                   <>
                     {', '}
-                    <span className='text-gray-500'>
+                    <span className='text-gray-400'>
                       필터링 {summary.total.filtered}
                     </span>
                   </>
@@ -156,10 +158,10 @@ export default function ChartAdapter({
             <button
               key={tf.value}
               onClick={() => setSelectedTimeframe(tf.value)}
-              className={`px-3 py-1.5 rounded text-sm transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${
                 selectedTimeframe === tf.value
-                  ? 'bg-(--primary) text-white'
-                  : 'bg-(--secondary) text-gray-400 hover:text-gray-200'
+                  ? 'bg-blue-500/30 backdrop-blur-md text-white border border-blue-400/50 shadow-lg shadow-blue-500/20'
+                  : 'bg-white/5 backdrop-blur-sm text-gray-300 hover:text-white hover:bg-white/10 border border-white/5'
               }`}
             >
               {tf.label}
@@ -179,7 +181,7 @@ export default function ChartAdapter({
           />
           <button
             onClick={() => refetch()}
-            className='px-4 py-2 bg-(--secondary) text-gray-300 rounded-lg hover:bg-(--primary) hover:text-white transition-colors text-sm'
+            className='px-4 py-2 bg-blue-500/30 backdrop-blur-md text-white rounded-lg hover:bg-blue-500/40 transition-all duration-200 text-sm border border-blue-400/50 shadow-lg shadow-blue-500/20'
           >
             분석
           </button>
