@@ -46,7 +46,8 @@ export default function ChartRenderer({
     rsi: number | null;
     filterReason: string | null;
   } | null>(null);
-  const userInteractedRef = useRef(false); // 사용자가 차트를 조작했는지 추적
+  const isFirstRenderRef = useRef(true); // 첫 렌더링인지 추적
+  const savedVisibleLogicalRangeRef = useRef<{ from: number; to: number } | null>(null); // 논리적 스크롤 범위 저장 (바 인덱스 기반)
 
   // 캔들 투명도 설정
   const CANDLE_OPACITY = 0.3;
@@ -69,7 +70,7 @@ export default function ChartRenderer({
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
-        rightOffset: 12, // 우측 여백 추가
+        rightOffset: 20, // 우측 여백
       },
       rightPriceScale: {
         borderVisible: false,
@@ -149,17 +150,20 @@ export default function ChartRenderer({
       addCrossoverMarkers(candlestickSeries, crossoverEvents);
     }
 
-    // 사용자가 차트를 조작하지 않은 경우에만 자동 맞춤
-    if (!userInteractedRef.current) {
+    // 첫 렌더링에만 자동 맞춤, 이후에는 스크롤 위치 유지
+    if (isFirstRenderRef.current) {
       chart.timeScale().fitContent();
+      isFirstRenderRef.current = false;
+    } else if (savedVisibleLogicalRangeRef.current) {
+      // 이전에 저장된 논리적 범위 복원 (바 인덱스 기반)
+      try {
+        chart.timeScale().setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
+      } catch (e) {
+        // 복원 실패 시 fitContent 호출
+        console.warn('논리적 범위 복원 실패:', e);
+        chart.timeScale().fitContent();
+      }
     }
-
-    // 사용자 차트 조작 감지 (스크롤, 줌 등)
-    const timeScale = chart.timeScale();
-    const handleVisibleTimeRangeChange = () => {
-      userInteractedRef.current = true;
-    };
-    timeScale.subscribeVisibleTimeRangeChange(handleVisibleTimeRangeChange);
 
     // 통합 툴팁 (RSI 값 + 필터링 사유)
     if (rsiSeries) {
@@ -243,6 +247,19 @@ export default function ChartRenderer({
 
     // 클린업
     return () => {
+      // 현재 보이는 논리적 범위 저장 (다음 렌더링에서 복원하기 위해)
+      try {
+        const logicalRange = chart.timeScale().getVisibleLogicalRange();
+        if (logicalRange) {
+          savedVisibleLogicalRangeRef.current = {
+            from: logicalRange.from,
+            to: logicalRange.to,
+          };
+        }
+      } catch (e) {
+        console.warn('논리적 범위 저장 실패:', e);
+      }
+
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };

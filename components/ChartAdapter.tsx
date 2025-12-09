@@ -44,7 +44,7 @@ export default function ChartAdapter({
 
   if (isLoading) {
     return (
-      <div className='flex items-center justify-center h-[500px] backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl'>
+      <div className='flex items-center justify-center h-[705px] backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl'>
         <div className='text-center'>
           <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-orange-400 mx-auto mb-4'></div>
           <p className='text-gray-300'>데이터 로딩 중...</p>
@@ -55,7 +55,7 @@ export default function ChartAdapter({
 
   if (error) {
     return (
-      <div className='flex items-center justify-center h-[500px] backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-2xl shadow-2xl'>
+      <div className='flex items-center justify-center h-[705px] backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-2xl shadow-2xl'>
         <div className='text-center'>
           <p className='text-red-400 mb-4'>데이터 로딩 실패</p>
           <button
@@ -71,7 +71,7 @@ export default function ChartAdapter({
 
   if (!data?.success || !data?.data?.candles) {
     return (
-      <div className='flex items-center justify-center h-[500px] backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl'>
+      <div className='flex items-center justify-center h-[705px] backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl'>
         <p className='text-gray-300'>데이터가 없습니다</p>
       </div>
     );
@@ -132,7 +132,7 @@ export default function ChartAdapter({
               {symbol}
             </h2>
           </div>
-          <p className='text-sm text-gray-300'>
+          <p className='text-sm text-gray-300 whitespace-nowrap'>
             {chartData.length}개 캔들 · RSI 포함
             {summary.total.total > 0 && (
               <>
@@ -159,7 +159,7 @@ export default function ChartAdapter({
         </div>
 
         {/* 타임프레임 선택 버튼 */}
-        <div className='flex items-center gap-2 mb-4 flex-1 justify-center'>
+        <div className='flex items-center gap-2 flex-1 justify-center'>
           {TIMEFRAMES.map((tf) => (
             <button
               key={tf.value}
