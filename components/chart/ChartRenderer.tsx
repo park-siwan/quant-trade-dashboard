@@ -45,6 +45,8 @@ export default function ChartRenderer({
     y: number;
     rsi: number | null;
     filterReason: string | null;
+    crossover: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null;
+    divergence: { type: string; direction: string; analysis: string } | null;
   } | null>(null);
   const isFirstRenderRef = useRef(true); // 첫 렌더링인지 추적
   const savedVisibleLogicalRangeRef = useRef<{ from: number; to: number } | null>(null); // 논리적 스크롤 범위 저장 (바 인덱스 기반)
@@ -165,7 +167,7 @@ export default function ChartRenderer({
       }
     }
 
-    // 통합 툴팁 (RSI 값 + 필터링 사유)
+    // 통합 툴팁 (RSI 값 + 필터링 사유 + 크로스오버 + 다이버전스)
     if (rsiSeries) {
       chart.subscribeCrosshairMove((param) => {
         if (
@@ -179,8 +181,11 @@ export default function ChartRenderer({
         }
 
         const currentTime = param.time as number;
+        const currentTimestamp = currentTime * 1000;
         let rsiValue: number | null = null;
         let filterReason: string | null = null;
+        let crossoverInfo: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null = null;
+        let divergenceInfo: { type: string; direction: string; analysis: string } | null = null;
 
         // RSI 값 가져오기
         if (param.seriesData.has(rsiSeries)) {
@@ -190,7 +195,29 @@ export default function ChartRenderer({
           }
         }
 
-        // 필터링된 다이버전스 신호 확인
+        // 크로스오버 이벤트 확인 (±10분 범위 내)
+        if (crossoverEvents && crossoverEvents.length > 0) {
+          const nearbyEvent = crossoverEvents.find((event) => {
+            const timeDiff = Math.abs(event.timestamp - currentTimestamp);
+            return timeDiff < 10 * 60 * 1000; // 10분 이내
+          });
+
+          if (nearbyEvent) {
+            if (nearbyEvent.type === 'golden_cross') {
+              crossoverInfo = {
+                type: 'golden_cross',
+                analysis: `단기 이동평균선(EMA 20)이 장기 이동평균선(EMA 50)을 상향 돌파했습니다. 이는 강력한 상승 신호로 해석되며, 매수 기회로 볼 수 있습니다. 거래량과 함께 확인하면 신뢰도가 높아집니다.`,
+              };
+            } else {
+              crossoverInfo = {
+                type: 'dead_cross',
+                analysis: `단기 이동평균선(EMA 20)이 장기 이동평균선(EMA 50)을 하향 돌파했습니다. 이는 하락 추세 전환 신호로, 매도 또는 관망이 권장됩니다. 추가 하락 가능성을 염두에 두세요.`,
+              };
+            }
+          }
+        }
+
+        // 다이버전스 신호 확인
         if (divergenceSignals && divergenceSignals.length > 0) {
           for (let i = 0; i < divergenceSignals.length; i++) {
             const signal = divergenceSignals[i];
@@ -207,12 +234,28 @@ export default function ChartRenderer({
                 const startTime = signal.timestamp / 1000;
                 const endTime = endSignal.timestamp / 1000;
 
-                if (
-                  currentTime >= startTime &&
-                  currentTime <= endTime &&
-                  (signal.isFiltered || endSignal.isFiltered)
-                ) {
-                  filterReason = signal.reason || endSignal.reason || null;
+                if (currentTime >= startTime && currentTime <= endTime) {
+                  // 필터링 사유 체크
+                  if (signal.isFiltered || endSignal.isFiltered) {
+                    filterReason = signal.reason || endSignal.reason || null;
+                  }
+
+                  // 다이버전스 분석 정보
+                  if (!divergenceInfo) {
+                    if (signal.direction === 'bullish') {
+                      divergenceInfo = {
+                        type: signal.type,
+                        direction: 'bullish',
+                        analysis: `가격은 하락하는 반면 ${signal.type.toUpperCase()}는 상승하고 있습니다. 이는 매도 압력이 약해지고 있음을 나타내며, 곧 상승 반전할 가능성이 있습니다. 매수 진입을 고려할 수 있는 시점입니다.`,
+                      };
+                    } else {
+                      divergenceInfo = {
+                        type: signal.type,
+                        direction: 'bearish',
+                        analysis: `가격은 상승하는 반면 ${signal.type.toUpperCase()}는 하락하고 있습니다. 이는 매수 압력이 약해지고 있음을 의미하며, 하락 반전 가능성이 있습니다. 매도 또는 익절을 고려하세요.`,
+                      };
+                    }
+                  }
                   break;
                 }
               }
@@ -220,13 +263,15 @@ export default function ChartRenderer({
           }
         }
 
-        // RSI 값이나 필터링 사유가 있으면 툴팁 표시
-        if (rsiValue !== null || filterReason !== null) {
+        // 툴팁 표시 조건: RSI, 필터링, 크로스오버, 다이버전스 중 하나라도 있으면 표시
+        if (rsiValue !== null || filterReason !== null || crossoverInfo !== null || divergenceInfo !== null) {
           setTooltip({
             x: param.point.x,
             y: param.point.y,
             rsi: rsiValue,
             filterReason,
+            crossover: crossoverInfo,
+            divergence: divergenceInfo,
           });
         } else {
           setTooltip(null);
@@ -299,13 +344,15 @@ export default function ChartRenderer({
       )}
       <div ref={chartContainerRef} className='rounded-xl overflow-hidden shadow-inner' />
 
-      {/* 통합 툴팁 (RSI + 필터링 정보) */}
+      {/* 통합 툴팁 (RSI + 필터링 정보 + 크로스오버 + 다이버전스) */}
       {tooltip && (
         <ChartTooltip
           x={tooltip.x}
           y={tooltip.y}
           rsi={tooltip.rsi}
           filterReason={tooltip.filterReason}
+          crossover={tooltip.crossover}
+          divergence={tooltip.divergence}
         />
       )}
     </div>

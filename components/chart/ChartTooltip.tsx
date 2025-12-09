@@ -3,6 +3,8 @@ interface ChartTooltipProps {
   y: number;
   rsi: number | null;
   filterReason: string | null;
+  crossover: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null;
+  divergence: { type: string; direction: string; analysis: string } | null;
 }
 
 export default function ChartTooltip({
@@ -10,6 +12,8 @@ export default function ChartTooltip({
   y,
   rsi,
   filterReason,
+  crossover,
+  divergence,
 }: ChartTooltipProps) {
   return (
     <div
@@ -27,10 +31,60 @@ export default function ChartTooltip({
         border: '1px solid rgba(251, 146, 60, 0.3)',
         pointerEvents: 'none',
         zIndex: 1000,
-        maxWidth: '300px',
+        maxWidth: '350px',
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(251, 146, 60, 0.1)',
       }}
     >
+      {/* 골든크로스/데드크로스 정보 */}
+      {crossover && (
+        <>
+          <div
+            style={{
+              color: crossover.type === 'golden_cross' ? '#a3e635' : '#fb923c',
+              fontWeight: 'bold',
+              marginBottom: '8px',
+              fontSize: '14px',
+            }}
+          >
+            {crossover.type === 'golden_cross' ? '🟢 골든크로스 (GC)' : '🟠 데드크로스 (DC)'}
+          </div>
+          <div style={{ lineHeight: '1.6', color: '#d1d5db', marginBottom: '12px' }}>
+            {crossover.analysis}
+          </div>
+          <div
+            style={{
+              borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+              marginBottom: '8px',
+            }}
+          />
+        </>
+      )}
+
+      {/* 다이버전스 정보 */}
+      {divergence && (
+        <>
+          <div
+            style={{
+              color: divergence.direction === 'bullish' ? '#a3e635' : '#fb923c',
+              fontWeight: 'bold',
+              marginBottom: '8px',
+              fontSize: '14px',
+            }}
+          >
+            {divergence.direction === 'bullish' ? '📈 강세 다이버전스' : '📉 약세 다이버전스'}
+          </div>
+          <div style={{ lineHeight: '1.6', color: '#d1d5db', marginBottom: '12px' }}>
+            {divergence.analysis}
+          </div>
+          <div
+            style={{
+              borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+              marginBottom: '8px',
+            }}
+          />
+        </>
+      )}
+
       {/* RSI 값 */}
       {rsi !== null && (
         <div
