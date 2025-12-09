@@ -10,6 +10,7 @@ import {
 } from 'lightweight-charts';
 import {
   addRsiIndicator,
+  addObvIndicator,
   addDivergenceLines,
   addEmaIndicators,
   addCrossoverMarkers,
@@ -25,6 +26,7 @@ import ChartTooltip from './ChartTooltip';
 interface ChartRendererProps {
   data: CandlestickData[];
   rsiData?: LineData[];
+  obvData?: LineData[];
   emaData?: EmaData;
   divergenceSignals?: DivergenceSignal[];
   trendAnalysis?: TrendAnalysis;
@@ -34,6 +36,7 @@ interface ChartRendererProps {
 export default function ChartRenderer({
   data,
   rsiData,
+  obvData,
   emaData,
   divergenceSignals,
   trendAnalysis,
@@ -46,10 +49,13 @@ export default function ChartRenderer({
     rsi: number | null;
     filterReason: string | null;
     crossover: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null;
-    divergence: { type: string; direction: string; analysis: string } | null;
+    divergences: Array<{ type: string; direction: string; analysis: string }>;
   } | null>(null);
   const isFirstRenderRef = useRef(true); // 첫 렌더링인지 추적
-  const savedVisibleLogicalRangeRef = useRef<{ from: number; to: number } | null>(null); // 논리적 스크롤 범위 저장 (바 인덱스 기반)
+  const savedVisibleLogicalRangeRef = useRef<{
+    from: number;
+    to: number;
+  } | null>(null); // 논리적 스크롤 범위 저장 (바 인덱스 기반)
 
   // 캔들 투명도 설정
   const CANDLE_OPACITY = 0.3;
@@ -57,13 +63,24 @@ export default function ChartRenderer({
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-    // 차트 생성 (RSI 패널 포함 시 높이 조정)
+    // 차트 생성 (패널 개수에 따라 높이 조정 - 1:1:1 비율)
+    const hasRsi = rsiData && rsiData.length > 0;
+    const hasObv = obvData && obvData.length > 0;
+    const panelCount = 1 + (hasRsi ? 1 : 0) + (hasObv ? 1 : 0); // 메인 + RSI + OBV
+    const panelHeight = 200; // 각 패널당 동일한 높이 (한 화면에 맞춤)
+    const chartHeight = panelCount * panelHeight; // 1:1:1 비율
+
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
-      height: rsiData ? 600 : 500,
+      height: chartHeight,
       layout: {
         background: { type: ColorType.Solid, color: '#1a1410' }, // 황금빛 도는 다크 블랙
         textColor: '#d1d5db',
+        panes: {
+          separatorColor: '#3754bc70', // 패널 구분선 제거
+          separatorHoverColor: 'transparent', // 호버 시에도 표시 안함
+          enableResize: false, // 패널 크기 조절 비활성화
+        },
       },
       grid: {
         vertLines: { color: 'rgba(58, 48, 38, 0.3)' }, // 황금빛 도는 그리드
@@ -77,8 +94,8 @@ export default function ChartRenderer({
       rightPriceScale: {
         borderVisible: false,
         scaleMargins: {
-          top: 0.1,
-          bottom: 0.1,
+          top: 0.05,
+          bottom: 0.05,
         },
       },
       localization: {
@@ -128,6 +145,12 @@ export default function ChartRenderer({
       rsiSeries = addRsiIndicator(chart, rsiData);
     }
 
+    // OBV 지표 추가
+    let obvSeries = null;
+    if (obvData && obvData.length > 0) {
+      obvSeries = addObvIndicator(chart, obvData);
+    }
+
     // 다이버전스 선 추가
     if (divergenceSignals && divergenceSignals.length > 0) {
       // 캔들 데이터에서 시간, 고가, 저가 추출
@@ -141,9 +164,11 @@ export default function ChartRenderer({
         chart,
         candlestickSeries,
         rsiSeries,
+        obvSeries,
         divergenceSignals,
         candleData,
         rsiData || [],
+        obvData || [],
       );
     }
 
@@ -152,6 +177,28 @@ export default function ChartRenderer({
       addCrossoverMarkers(candlestickSeries, crossoverEvents);
     }
 
+    // 패널 높이를 2:1:1로 설정 (v5.0.8+ API)
+    // setStretchFactor를 사용하여 메인 패널은 2, RSI/OBV는 1로 설정
+    setTimeout(() => {
+      const panes = chart.panes();
+
+      if (panes.length > 0) {
+        panes.forEach((pane, index) => {
+          if (index === 0) {
+            // 메인 패널 (캔들스틱)은 2배 크기
+            pane.setStretchFactor(4);
+            console.log(`패널 ${index} (메인) stretch factor 설정: 2`);
+          } else {
+            // RSI, OBV 패널은 절반 크기
+            pane.setStretchFactor(1);
+            console.log(`패널 ${index} (지표) stretch factor 설정: 1`);
+          }
+        });
+
+        console.log(`✅ ${panes.length}개 패널 2:1:1 비율 설정 완료`);
+      }
+    }, 100);
+
     // 첫 렌더링에만 자동 맞춤, 이후에는 스크롤 위치 유지
     if (isFirstRenderRef.current) {
       chart.timeScale().fitContent();
@@ -159,7 +206,9 @@ export default function ChartRenderer({
     } else if (savedVisibleLogicalRangeRef.current) {
       // 이전에 저장된 논리적 범위 복원 (바 인덱스 기반)
       try {
-        chart.timeScale().setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
+        chart
+          .timeScale()
+          .setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
       } catch (e) {
         // 복원 실패 시 fitContent 호출
         console.warn('논리적 범위 복원 실패:', e);
@@ -184,8 +233,15 @@ export default function ChartRenderer({
         const currentTimestamp = currentTime * 1000;
         let rsiValue: number | null = null;
         let filterReason: string | null = null;
-        let crossoverInfo: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null = null;
-        let divergenceInfo: { type: string; direction: string; analysis: string } | null = null;
+        let crossoverInfo: {
+          type: 'golden_cross' | 'dead_cross';
+          analysis: string;
+        } | null = null;
+        const divergenceInfos: Array<{
+          type: string;
+          direction: string;
+          analysis: string;
+        }> = [];
 
         // RSI 값 가져오기
         if (param.seriesData.has(rsiSeries)) {
@@ -240,23 +296,29 @@ export default function ChartRenderer({
                     filterReason = signal.reason || endSignal.reason || null;
                   }
 
-                  // 다이버전스 분석 정보
-                  if (!divergenceInfo) {
+                  // 다이버전스 분석 정보 (중복 체크 후 추가)
+                  const alreadyExists = divergenceInfos.some(
+                    (d) =>
+                      d.type === signal.type &&
+                      d.direction === signal.direction,
+                  );
+
+                  if (!alreadyExists) {
                     if (signal.direction === 'bullish') {
-                      divergenceInfo = {
+                      divergenceInfos.push({
                         type: signal.type,
                         direction: 'bullish',
                         analysis: `가격은 하락하는 반면 ${signal.type.toUpperCase()}는 상승하고 있습니다. 이는 매도 압력이 약해지고 있음을 나타내며, 곧 상승 반전할 가능성이 있습니다. 매수 진입을 고려할 수 있는 시점입니다.`,
-                      };
+                      });
                     } else {
-                      divergenceInfo = {
+                      divergenceInfos.push({
                         type: signal.type,
                         direction: 'bearish',
                         analysis: `가격은 상승하는 반면 ${signal.type.toUpperCase()}는 하락하고 있습니다. 이는 매수 압력이 약해지고 있음을 의미하며, 하락 반전 가능성이 있습니다. 매도 또는 익절을 고려하세요.`,
-                      };
+                      });
                     }
                   }
-                  break;
+                  // break 제거 - 모든 다이버전스를 찾기 위해
                 }
               }
             }
@@ -264,14 +326,19 @@ export default function ChartRenderer({
         }
 
         // 툴팁 표시 조건: RSI, 필터링, 크로스오버, 다이버전스 중 하나라도 있으면 표시
-        if (rsiValue !== null || filterReason !== null || crossoverInfo !== null || divergenceInfo !== null) {
+        if (
+          rsiValue !== null ||
+          filterReason !== null ||
+          crossoverInfo !== null ||
+          divergenceInfos.length > 0
+        ) {
           setTooltip({
             x: param.point.x,
             y: param.point.y,
             rsi: rsiValue,
             filterReason,
             crossover: crossoverInfo,
-            divergence: divergenceInfo,
+            divergences: divergenceInfos,
           });
         } else {
           setTooltip(null);
@@ -308,7 +375,15 @@ export default function ChartRenderer({
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, rsiData, emaData, divergenceSignals, trendAnalysis, crossoverEvents]);
+  }, [
+    data,
+    rsiData,
+    obvData,
+    emaData,
+    divergenceSignals,
+    trendAnalysis,
+    crossoverEvents,
+  ]);
 
   return (
     <div className='w-full relative'>
@@ -342,7 +417,10 @@ export default function ChartRenderer({
           )}
         </div>
       )}
-      <div ref={chartContainerRef} className='rounded-xl overflow-hidden shadow-inner' />
+      <div
+        ref={chartContainerRef}
+        className='rounded-xl overflow-hidden shadow-inner'
+      />
 
       {/* 통합 툴팁 (RSI + 필터링 정보 + 크로스오버 + 다이버전스) */}
       {tooltip && (
@@ -352,7 +430,7 @@ export default function ChartRenderer({
           rsi={tooltip.rsi}
           filterReason={tooltip.filterReason}
           crossover={tooltip.crossover}
-          divergence={tooltip.divergence}
+          divergences={tooltip.divergences}
         />
       )}
     </div>

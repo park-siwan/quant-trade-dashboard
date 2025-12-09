@@ -8,11 +8,7 @@ import {
   Time,
   createSeriesMarkers,
 } from 'lightweight-charts';
-import {
-  DivergenceSignal,
-  EmaData,
-  CrossoverEvent,
-} from '@/lib/types/index';
+import { DivergenceSignal, EmaData, CrossoverEvent } from '@/lib/types/index';
 
 /**
  * RSI 지표를 차트에 추가합니다
@@ -28,7 +24,7 @@ export function addRsiIndicator(
   const rsiSeries = chart.addSeries(
     LineSeries,
     {
-      color: '#fbbf24', // 황금색 (비트코인 테마)
+      color: '#fbbe2449', // 황금색 (비트코인 테마)
       lineWidth: 2,
       priceScaleId: 'rsi',
       crosshairMarkerVisible: true,
@@ -44,7 +40,7 @@ export function addRsiIndicator(
   // 과매수 기준선 (70)
   rsiSeries.createPriceLine({
     price: 70,
-    color: 'rgba(251, 146, 60, 0.4)', // 부드러운 주황색
+    color: 'rgba(239, 68, 68, 0.4)', // 빨간색 (투명도)
     lineWidth: 1,
     lineStyle: 2, // dashed
     axisLabelVisible: true,
@@ -64,7 +60,7 @@ export function addRsiIndicator(
   // 과매도 기준선 (30)
   rsiSeries.createPriceLine({
     price: 30,
-    color: 'rgba(250, 204, 21, 0.4)', // 부드러운 황금색
+    color: 'rgba(163, 230, 53, 0.4)', // 초록색 (투명도)
     lineWidth: 1,
     lineStyle: 2, // dashed
     axisLabelVisible: true,
@@ -74,8 +70,8 @@ export function addRsiIndicator(
   // RSI 패널 스케일 설정
   rsiSeries.priceScale().applyOptions({
     scaleMargins: {
-      top: 0.1,
-      bottom: 0.1,
+      top: 0.05,
+      bottom: 0.05,
     },
     borderVisible: false,
   });
@@ -84,14 +80,42 @@ export function addRsiIndicator(
 }
 
 /**
- * OBV 지표를 차트에 추가합니다 (향후 구현)
+ * OBV 지표를 차트에 추가합니다
+ * @param chart - lightweight-charts 인스턴스
+ * @param obvData - OBV 데이터 배열
+ * @returns OBV 시리즈 인스턴스
  */
 export function addObvIndicator(
   chart: IChartApi,
   obvData: LineData[],
 ): ISeriesApi<'Line'> {
-  // TODO: OBV 구현
-  throw new Error('Not implemented yet');
+  // OBV 라인 - 노란계열 (복숭아빛 오렌지)
+  const obvSeries = chart.addSeries(
+    LineSeries,
+    {
+      color: '#fdbb7442', // 복숭아빛 오렌지 (orange-300)
+      lineWidth: 2,
+      priceScaleId: 'obv',
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      title: 'OBV',
+      lastValueVisible: true,
+    },
+    2, // paneIndex: 2 (세 번째 패널)
+  );
+
+  obvSeries.setData(obvData);
+
+  // OBV 패널 스케일 설정 (1:1:1 비율을 위해 여백 최소화)
+  obvSeries.priceScale().applyOptions({
+    scaleMargins: {
+      top: 0.05,
+      bottom: 0.05,
+    },
+    borderVisible: false,
+  });
+
+  return obvSeries;
 }
 
 /**
@@ -202,15 +226,17 @@ export function addEmaIndicators(
 }
 
 /**
- * 다이버전스를 선으로 그립니다 (가격 패널 + RSI 패널)
+ * 다이버전스를 선으로 그립니다 (가격 패널 + RSI/OBV 패널)
  */
 export function addDivergenceLines(
   chart: IChartApi,
   candlestickSeries: ISeriesApi<'Candlestick'>,
   rsiSeries: ISeriesApi<'Line'> | null,
+  obvSeries: ISeriesApi<'Line'> | null,
   signals: DivergenceSignal[],
   candleData: Array<{ time: number; high: number; low: number }>,
   rsiData: LineData[],
+  obvData: LineData[],
 ): void {
   // start와 end를 쌍으로 그룹화
   const divergencePairs: Array<{
@@ -330,6 +356,48 @@ export function addDivergenceLines(
           startTime,
           endTime,
           rsiDataLength: rsiData.length,
+        });
+      }
+    }
+
+    // 3. OBV 패널에 선 그리기
+    if (obvSeries && pair.start.type === 'obv') {
+      const startTime = (pair.start.timestamp / 1000) as Time;
+      const endTime = (pair.end.timestamp / 1000) as Time;
+
+      const startObv = obvData.find((o) => o.time === startTime);
+      const endObv = obvData.find((o) => o.time === endTime);
+
+      console.log('🔍 OBV 선 그리기:', {
+        startTime,
+        endTime,
+        startObv,
+        endObv,
+      });
+
+      if (startObv && endObv) {
+        const obvLineSeries = chart.addSeries(
+          LineSeries,
+          {
+            color: color,
+            lineWidth: pair.isFiltered ? 1 : 2, // 필터링된 신호는 얇은 선
+            lastValueVisible: false,
+            priceLineVisible: false,
+            priceScaleId: 'obv', // OBV 스케일 사용 (중요!)
+            lineStyle: pair.isFiltered ? 2 : 0, // 필터링된 신호는 점선 (2 = dashed)
+          },
+          2,
+        ); // OBV 패널
+
+        obvLineSeries.setData([
+          { time: startObv.time, value: startObv.value },
+          { time: endObv.time, value: endObv.value },
+        ]);
+      } else {
+        console.warn('⚠️ OBV 데이터를 찾을 수 없음:', {
+          startTime,
+          endTime,
+          obvDataLength: obvData.length,
         });
       }
     }
