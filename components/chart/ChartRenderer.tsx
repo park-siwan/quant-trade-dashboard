@@ -48,6 +48,9 @@ export default function ChartRenderer({
   } | null>(null);
   const userInteractedRef = useRef(false); // 사용자가 차트를 조작했는지 추적
 
+  // 캔들 투명도 설정
+  const CANDLE_OPACITY = 0.3;
+
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
@@ -56,12 +59,12 @@ export default function ChartRenderer({
       width: chartContainerRef.current.clientWidth,
       height: rsiData ? 600 : 500,
       layout: {
-        background: { type: ColorType.Solid, color: '#1a1a1a' },
+        background: { type: ColorType.Solid, color: '#131722' }, // 트레이딩뷰 스타일 네이비
         textColor: '#d1d5db',
       },
       grid: {
-        vertLines: { color: '#2a2a2a' },
-        horzLines: { color: '#2a2a2a' },
+        vertLines: { color: 'rgba(42, 46, 57, 0.5)' }, // 투명도 있는 그리드
+        horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
       },
       timeScale: {
         timeVisible: true,
@@ -88,12 +91,12 @@ export default function ChartRenderer({
     const candlestickSeries = chart.addSeries(
       CandlestickSeries,
       {
-        upColor: '#22c55e',
-        downColor: '#ef4444',
-        borderUpColor: '#22c55e',
-        borderDownColor: '#ef4444',
-        wickUpColor: '#22c55e',
-        wickDownColor: '#ef4444',
+        upColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록 캔들
+        downColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨강 캔들
+        borderUpColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록 테두리
+        borderDownColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨강 테두리
+        wickUpColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록 꼬리
+        wickDownColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨강 꼬리
       },
       0,
     );

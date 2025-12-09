@@ -106,7 +106,8 @@ export default function ChartAdapter({
   const crossoverEvents: CrossoverEvent[] = data.data.crossoverEvents || [];
 
   // 다이버전스 시그널
-  const divergenceSignals: DivergenceSignal[] = data.data.signals.divergence || [];
+  const divergenceSignals: DivergenceSignal[] =
+    data.data.signals.divergence || [];
 
   // 다이버전스 요약 정보
   const summary = data.data.summary;
@@ -120,25 +121,8 @@ export default function ChartAdapter({
 
   return (
     <div className='border border-(--border) rounded-lg bg-(--card) p-6'>
-      {/* 타임프레임 선택 버튼 */}
-      <div className='flex items-center gap-2 mb-4'>
-        {TIMEFRAMES.map((tf) => (
-          <button
-            key={tf.value}
-            onClick={() => setSelectedTimeframe(tf.value)}
-            className={`px-3 py-1.5 rounded text-sm transition-colors ${
-              selectedTimeframe === tf.value
-                ? 'bg-(--primary) text-white'
-                : 'bg-(--secondary) text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            {tf.label}
-          </button>
-        ))}
-      </div>
-
       <div className='flex items-center justify-between mb-4'>
-        <div>
+        <div className='flex flex-1 items-center justify-start gap-4'>
           <h2 className='text-xl font-bold'>{symbol}</h2>
           <p className='text-sm text-gray-400'>
             {chartData.length}개 캔들 · RSI 포함
@@ -149,11 +133,15 @@ export default function ChartAdapter({
                   {summary.total.total}개 다이버전스
                 </span>
                 {' ('}
-                <span className='text-green-400'>유효 {summary.total.valid}</span>
+                <span className='text-green-400'>
+                  유효 {summary.total.valid}
+                </span>
                 {summary.total.filtered > 0 && (
                   <>
                     {', '}
-                    <span className='text-gray-500'>필터링 {summary.total.filtered}</span>
+                    <span className='text-gray-500'>
+                      필터링 {summary.total.filtered}
+                    </span>
                   </>
                 )}
                 {')'}
@@ -161,11 +149,31 @@ export default function ChartAdapter({
             )}
           </p>
         </div>
-        <div className='flex items-center gap-2'>
+
+        {/* 타임프레임 선택 버튼 */}
+        <div className='flex items-center gap-2 mb-4 flex-1 justify-center'>
+          {TIMEFRAMES.map((tf) => (
+            <button
+              key={tf.value}
+              onClick={() => setSelectedTimeframe(tf.value)}
+              className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                selectedTimeframe === tf.value
+                  ? 'bg-(--primary) text-white'
+                  : 'bg-(--secondary) text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              {tf.label}
+            </button>
+          ))}
+        </div>
+
+        <div className='flex items-center gap-2 flex-1 justify-end'>
           <RefreshCountdown
             timeframe={selectedTimeframe}
             lastCandleTime={
-              chartData.length > 0 ? (chartData[chartData.length - 1].time as number) : 0
+              chartData.length > 0
+                ? (chartData[chartData.length - 1].time as number)
+                : 0
             }
             onRefresh={refetch}
           />

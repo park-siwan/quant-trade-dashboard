@@ -28,7 +28,7 @@ export function addRsiIndicator(
   const rsiSeries = chart.addSeries(
     LineSeries,
     {
-      color: '#a855eb',
+      color: '#bb86fc', // 연보라색 (트레이딩뷰 스타일)
       lineWidth: 2,
       priceScaleId: 'rsi',
       crosshairMarkerVisible: true, // 크로스헤어 마커 표시
@@ -44,7 +44,7 @@ export function addRsiIndicator(
   // 과매수 기준선 (70)
   rsiSeries.createPriceLine({
     price: 70,
-    color: '#ef4444',
+    color: 'rgba(239, 68, 68, 0.5)', // 투명도 있는 빨강
     lineWidth: 1,
     lineStyle: 2, // dashed
     axisLabelVisible: true,
@@ -54,7 +54,7 @@ export function addRsiIndicator(
   // 중심선 (50)
   rsiSeries.createPriceLine({
     price: 50,
-    color: '#6b7280',
+    color: 'rgba(107, 114, 128, 0.3)', // 투명도 있는 회색
     lineWidth: 1,
     lineStyle: 2, // dashed
     axisLabelVisible: true,
@@ -64,7 +64,7 @@ export function addRsiIndicator(
   // 과매도 기준선 (30)
   rsiSeries.createPriceLine({
     price: 30,
-    color: '#22c55e',
+    color: 'rgba(34, 197, 94, 0.5)', // 투명도 있는 초록
     lineWidth: 1,
     lineStyle: 2, // dashed
     axisLabelVisible: true,
@@ -152,11 +152,11 @@ export function addEmaIndicators(
     }
   });
 
-  // EMA 20 시리즈 추가 (파란색)
+  // EMA 20 시리즈 추가 (하늘색)
   const ema20Series = chart.addSeries(
     LineSeries,
     {
-      color: '#3B82F6',
+      color: 'rgba(56, 189, 248, 0.8)', // 하늘색 (트레이딩뷰 스타일)
       lineWidth: 2,
       title: 'EMA 20',
       lastValueVisible: true,
@@ -170,7 +170,7 @@ export function addEmaIndicators(
   const ema50Series = chart.addSeries(
     LineSeries,
     {
-      color: '#F59E0B',
+      color: 'rgba(251, 191, 36, 0.8)', // 부드러운 주황색
       lineWidth: 2,
       title: 'EMA 50',
       lastValueVisible: true,
@@ -184,8 +184,8 @@ export function addEmaIndicators(
   const ema200Series = chart.addSeries(
     LineSeries,
     {
-      color: '#EF4444',
-      lineWidth: 3,
+      color: 'rgba(239, 68, 68, 0.7)', // 투명도 있는 빨강
+      lineWidth: 2,
       title: 'EMA 200',
       lastValueVisible: true,
       priceLineVisible: false,
@@ -340,15 +340,14 @@ export function addDivergenceLines(
  * 크로스오버 마커를 차트에 추가합니다
  * @param candlestickSeries - 캔들스틱 시리즈 인스턴스
  * @param crossoverEvents - 크로스오버 이벤트 배열
- * @returns 생성된 마커 배열
  */
 export function addCrossoverMarkers(
   candlestickSeries: ISeriesApi<'Candlestick'>,
   crossoverEvents: CrossoverEvent[],
-): SeriesMarker<Time>[] {
-  if (crossoverEvents.length === 0) return [];
+): void {
+  if (crossoverEvents.length === 0) return;
 
-  // 크로스오버 이벤트를 SeriesMarker 형식으로 변환
+  // 모든 크로스오버 이벤트를 마커로 변환
   const markers: SeriesMarker<Time>[] = crossoverEvents.map((event) => {
     const isGoldenCross = event.type === 'golden_cross';
 
@@ -357,17 +356,12 @@ export function addCrossoverMarkers(
       position: isGoldenCross ? 'belowBar' : 'aboveBar',
       color: isGoldenCross ? '#22c55e' : '#ef4444',
       shape: isGoldenCross ? 'arrowUp' : 'arrowDown',
-      text: isGoldenCross ? '골든' : '데드',
+      text: isGoldenCross ? 'GC' : 'DC',
     };
   });
 
-  // v5에서는 createSeriesMarkers 함수를 사용
+  // 한 번에 모든 마커 추가
   createSeriesMarkers(candlestickSeries, markers);
 
-  console.log(
-    `✅ ${crossoverEvents.length}개의 크로스오버 마커 추가됨`,
-    markers,
-  );
-
-  return markers;
+  console.log(`✅ ${crossoverEvents.length}개의 크로스오버 마커 추가됨`);
 }
