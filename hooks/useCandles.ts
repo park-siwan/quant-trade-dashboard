@@ -24,7 +24,7 @@ const getRefreshInterval = (timeframe: string) => {
 export function useCandles({
   symbol,
   timeframe,
-  limit = 500,
+  limit = 1000,
   enableAutoRefresh = true,
 }: UseCandlesParams) {
   return useQuery({

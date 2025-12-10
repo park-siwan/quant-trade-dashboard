@@ -70,7 +70,7 @@ function calculateTimeRange(candleCount: number, timeframe: string): string {
 export default function ChartAdapter({
   symbol = 'BTC/USDT',
   initialTimeframe = '5m',
-  limit = 500,
+  limit = 1000,
 }: ChartAdapterProps) {
   const [selectedTimeframe, setSelectedTimeframe] = useState(initialTimeframe);
 

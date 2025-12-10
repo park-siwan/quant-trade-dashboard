@@ -11,7 +11,7 @@ interface FetchCandlesParams {
 export async function fetchCandles({
   symbol,
   timeframe,
-  limit = 500,
+  limit = 1000,
 }: FetchCandlesParams): Promise<ApiResponse> {
   const params = new URLSearchParams({
     symbol,
