@@ -141,6 +141,30 @@ export default function ChartAdapter({
       })
       .filter((item): item is LineData => item !== null) || [];
 
+  // CVD 데이터 변환
+  const cvdData: LineData[] =
+    data?.data?.indicators?.cvd
+      ?.map((cvd, index) => {
+        if (cvd === null || cvd === undefined) return null;
+        return {
+          time: (data.data.candles[index][0] / 1000) as LineData['time'],
+          value: cvd,
+        };
+      })
+      .filter((item): item is LineData => item !== null) || [];
+
+  // OI 데이터 변환
+  const oiData: LineData[] =
+    data?.data?.indicators?.oi
+      ?.map((oi, index) => {
+        if (oi === null || oi === undefined) return null;
+        return {
+          time: (data.data.candles[index][0] / 1000) as LineData['time'],
+          value: oi,
+        };
+      })
+      .filter((item): item is LineData => item !== null) || [];
+
   // EMA 데이터
   const emaData: EmaData | undefined = data?.data?.indicators?.ema;
 
@@ -158,6 +182,9 @@ export default function ChartAdapter({
   const summary = data?.data?.summary || {
     total: { total: 0, valid: 0, filtered: 0 },
   };
+
+  // CVD + OI 신호
+  const marketSignals = data?.data?.cvdOi?.signals || [];
 
   // 다이버전스 방향별 개수 계산 (start 신호만 카운트)
   const bullishCount = divergenceSignals.filter(
@@ -273,10 +300,13 @@ export default function ChartAdapter({
         data={chartData}
         rsiData={rsiData}
         obvData={obvData}
+        cvdData={cvdData}
+        oiData={oiData}
         emaData={emaData}
         divergenceSignals={divergenceSignals}
         trendAnalysis={trendAnalysis}
         crossoverEvents={crossoverEvents}
+        marketSignals={marketSignals}
       />
 
       {/* 초보자를 위한 용어 설명 */}
