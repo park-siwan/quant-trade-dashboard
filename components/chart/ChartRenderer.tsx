@@ -11,15 +11,19 @@ import {
 import {
   addRsiIndicator,
   addObvIndicator,
+  addCvdIndicator,
+  addOiIndicator,
   addDivergenceLines,
   addEmaIndicators,
   addCrossoverMarkers,
+  addCvdOiMarkers,
 } from '@/lib/chart/indicators';
 import {
   DivergenceSignal,
   EmaData,
   TrendAnalysis,
   CrossoverEvent,
+  MarketSignal,
 } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
 
@@ -27,20 +31,26 @@ interface ChartRendererProps {
   data: CandlestickData[];
   rsiData?: LineData[];
   obvData?: LineData[];
+  cvdData?: LineData[];
+  oiData?: LineData[];
   emaData?: EmaData;
   divergenceSignals?: DivergenceSignal[];
   trendAnalysis?: TrendAnalysis;
   crossoverEvents?: CrossoverEvent[];
+  marketSignals?: MarketSignal[]; // CVD + OI 신호
 }
 
 export default function ChartRenderer({
   data,
   rsiData,
   obvData,
+  cvdData,
+  oiData,
   emaData,
   divergenceSignals,
   trendAnalysis,
   crossoverEvents,
+  marketSignals,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -50,6 +60,7 @@ export default function ChartRenderer({
     filterReason: string | null;
     crossover: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null;
     divergences: Array<{ type: string; direction: string; analysis: string }>;
+    marketSignal?: MarketSignal | null;
   } | null>(null);
   const [trendTooltip, setTrendTooltip] = useState<string | null>(null); // 추세 툴팁
   const isFirstRenderRef = useRef(true); // 첫 렌더링인지 추적
@@ -67,9 +78,11 @@ export default function ChartRenderer({
     // 차트 생성 (패널 개수에 따라 높이 조정 - 1:1:1 비율)
     const hasRsi = rsiData && rsiData.length > 0;
     const hasObv = obvData && obvData.length > 0;
-    const panelCount = 1 + (hasRsi ? 1 : 0) + (hasObv ? 1 : 0); // 메인 + RSI + OBV
-    const panelHeight = 200; // 각 패널당 동일한 높이 (한 화면에 맞춤)
-    const chartHeight = panelCount * panelHeight; // 1:1:1 비율
+    const hasCvd = cvdData && cvdData.length > 0;
+    const hasOi = oiData && oiData.length > 0;
+    const panelCount = 1 + (hasRsi ? 1 : 0) + (hasObv ? 1 : 0) + (hasCvd ? 1 : 0) + (hasOi ? 1 : 0); // 메인 + RSI + OBV + CVD + OI
+    const panelHeight = 100; // 각 패널당 동일한 높이 (한 화면에 맞춤)
+    const chartHeight = panelCount * panelHeight; // 1:1:1:1:1 비율
 
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
@@ -152,6 +165,18 @@ export default function ChartRenderer({
       obvSeries = addObvIndicator(chart, obvData);
     }
 
+    // CVD 지표 추가
+    let cvdSeries = null;
+    if (cvdData && cvdData.length > 0) {
+      cvdSeries = addCvdIndicator(chart, cvdData);
+    }
+
+    // OI 지표 추가
+    let oiSeries = null;
+    if (oiData && oiData.length > 0) {
+      oiSeries = addOiIndicator(chart, oiData);
+    }
+
     // 다이버전스 선 추가
     if (divergenceSignals && divergenceSignals.length > 0) {
       // 캔들 데이터에서 시간, 고가, 저가 추출
@@ -166,16 +191,25 @@ export default function ChartRenderer({
         candlestickSeries,
         rsiSeries,
         obvSeries,
+        cvdSeries,
+        oiSeries,
         divergenceSignals,
         candleData,
         rsiData || [],
         obvData || [],
+        cvdData || [],
+        oiData || [],
       );
     }
 
     // 크로스오버 마커 추가
     if (crossoverEvents && crossoverEvents.length > 0) {
       addCrossoverMarkers(candlestickSeries, crossoverEvents);
+    }
+
+    // CVD + OI 신호 마커 추가
+    if (marketSignals && marketSignals.length > 0) {
+      addCvdOiMarkers(candlestickSeries, marketSignals);
     }
 
     // 패널 높이를 2:1:1로 설정 (v5.0.8+ API)
@@ -244,6 +278,7 @@ export default function ChartRenderer({
           analysis: string;
           isFiltered: boolean;
         }> = [];
+        let marketSignalInfo: MarketSignal | null = null;
 
         // RSI 값 가져오기
         if (param.seriesData.has(rsiSeries)) {
@@ -330,12 +365,25 @@ export default function ChartRenderer({
           }
         }
 
-        // 툴팁 표시 조건: RSI, 필터링, 크로스오버, 다이버전스 중 하나라도 있으면 표시
+        // CVD+OI 시장 신호 확인 (±10분 범위 내)
+        if (marketSignals && marketSignals.length > 0) {
+          const nearbySignal = marketSignals.find((signal) => {
+            const timeDiff = Math.abs(signal.timestamp - currentTimestamp);
+            return timeDiff < 10 * 60 * 1000; // 10분 이내
+          });
+
+          if (nearbySignal) {
+            marketSignalInfo = nearbySignal;
+          }
+        }
+
+        // 툴팁 표시 조건: RSI, 필터링, 크로스오버, 다이버전스, CVD+OI 중 하나라도 있으면 표시
         if (
           rsiValue !== null ||
           filterReason !== null ||
           crossoverInfo !== null ||
-          divergenceInfos.length > 0
+          divergenceInfos.length > 0 ||
+          marketSignalInfo !== null
         ) {
           setTooltip({
             x: param.point.x,
@@ -344,6 +392,7 @@ export default function ChartRenderer({
             filterReason,
             crossover: crossoverInfo,
             divergences: divergenceInfos,
+            marketSignal: marketSignalInfo,
           });
         } else {
           setTooltip(null);
@@ -388,6 +437,7 @@ export default function ChartRenderer({
     divergenceSignals,
     trendAnalysis,
     crossoverEvents,
+    marketSignals,
   ]);
 
   return (
@@ -454,7 +504,7 @@ export default function ChartRenderer({
         className='rounded-xl overflow-hidden shadow-inner'
       />
 
-      {/* 통합 툴팁 (RSI + 필터링 정보 + 크로스오버 + 다이버전스) */}
+      {/* 통합 툴팁 (RSI + 필터링 정보 + 크로스오버 + 다이버전스 + CVD+OI) */}
       {tooltip && (
         <ChartTooltip
           x={tooltip.x}
@@ -463,6 +513,7 @@ export default function ChartRenderer({
           filterReason={tooltip.filterReason}
           crossover={tooltip.crossover}
           divergences={tooltip.divergences}
+          marketSignal={tooltip.marketSignal}
         />
       )}
     </div>

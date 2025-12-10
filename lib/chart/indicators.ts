@@ -8,7 +8,12 @@ import {
   Time,
   createSeriesMarkers,
 } from 'lightweight-charts';
-import { DivergenceSignal, EmaData, CrossoverEvent } from '@/lib/types/index';
+import {
+  DivergenceSignal,
+  EmaData,
+  CrossoverEvent,
+  MarketSignal,
+} from '@/lib/types/index';
 
 /**
  * RSI 지표를 차트에 추가합니다
@@ -119,6 +124,86 @@ export function addObvIndicator(
 }
 
 /**
+ * CVD (Cumulative Volume Delta) 지표를 차트에 추가합니다
+ * @param chart - lightweight-charts 인스턴스
+ * @param cvdData - CVD 데이터 배열
+ * @returns CVD 시리즈 인스턴스
+ */
+export function addCvdIndicator(
+  chart: IChartApi,
+  cvdData: LineData[],
+): ISeriesApi<'Line'> {
+  // CVD 라인 - 파란계열 (하늘색)
+  const cvdSeries = chart.addSeries(
+    LineSeries,
+    {
+      color: '#60a5fa', // 하늘색 (blue-400)
+      lineWidth: 2,
+      priceScaleId: 'cvd',
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      title: 'CVD',
+      lastValueVisible: true,
+    },
+    3, // paneIndex: 3 (네 번째 패널)
+  );
+
+  cvdSeries.setData(cvdData);
+
+  // CVD 패널 스케일 설정
+  cvdSeries.priceScale().applyOptions({
+    autoScale: true, // Y축 자동 스케일링
+    scaleMargins: {
+      top: 0.1,
+      bottom: 0.1,
+    },
+    borderVisible: false,
+  });
+
+  return cvdSeries;
+}
+
+/**
+ * OI (Open Interest) 지표를 차트에 추가합니다
+ * @param chart - lightweight-charts 인스턴스
+ * @param oiData - OI 데이터 배열
+ * @returns OI 시리즈 인스턴스
+ */
+export function addOiIndicator(
+  chart: IChartApi,
+  oiData: LineData[],
+): ISeriesApi<'Line'> {
+  // OI 라인 - 보라계열 (자주색)
+  const oiSeries = chart.addSeries(
+    LineSeries,
+    {
+      color: '#c084fc', // 자주색 (purple-400)
+      lineWidth: 2,
+      priceScaleId: 'oi',
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      title: 'OI',
+      lastValueVisible: true,
+    },
+    4, // paneIndex: 4 (다섯 번째 패널)
+  );
+
+  oiSeries.setData(oiData);
+
+  // OI 패널 스케일 설정
+  oiSeries.priceScale().applyOptions({
+    autoScale: true, // Y축 자동 스케일링 (작은 변화도 확대)
+    scaleMargins: {
+      top: 0.1,
+      bottom: 0.1,
+    },
+    borderVisible: false,
+  });
+
+  return oiSeries;
+}
+
+/**
  * EMA 지표를 차트에 추가합니다
  * @param chart - lightweight-charts 인스턴스
  * @param emaData - EMA 데이터 (배열 형태)
@@ -226,17 +311,21 @@ export function addEmaIndicators(
 }
 
 /**
- * 다이버전스를 선으로 그립니다 (가격 패널 + RSI/OBV 패널)
+ * 다이버전스를 선으로 그립니다 (가격 패널 + RSI/OBV/CVD/OI 패널)
  */
 export function addDivergenceLines(
   chart: IChartApi,
   candlestickSeries: ISeriesApi<'Candlestick'>,
   rsiSeries: ISeriesApi<'Line'> | null,
   obvSeries: ISeriesApi<'Line'> | null,
+  cvdSeries: ISeriesApi<'Line'> | null,
+  oiSeries: ISeriesApi<'Line'> | null,
   signals: DivergenceSignal[],
   candleData: Array<{ time: number; high: number; low: number }>,
   rsiData: LineData[],
   obvData: LineData[],
+  cvdData: LineData[],
+  oiData: LineData[],
 ): void {
   // start와 end를 쌍으로 그룹화
   const divergencePairs: Array<{
@@ -401,6 +490,90 @@ export function addDivergenceLines(
         });
       }
     }
+
+    // 4. CVD 패널에 선 그리기
+    if (cvdSeries && pair.start.type === 'cvd') {
+      const startTime = (pair.start.timestamp / 1000) as Time;
+      const endTime = (pair.end.timestamp / 1000) as Time;
+
+      const startCvd = cvdData.find((c) => c.time === startTime);
+      const endCvd = cvdData.find((c) => c.time === endTime);
+
+      console.log('🔍 CVD 선 그리기:', {
+        startTime,
+        endTime,
+        startCvd,
+        endCvd,
+      });
+
+      if (startCvd && endCvd) {
+        const cvdLineSeries = chart.addSeries(
+          LineSeries,
+          {
+            color: color,
+            lineWidth: pair.isFiltered ? 1 : 2,
+            lastValueVisible: false,
+            priceLineVisible: false,
+            priceScaleId: 'cvd', // CVD 스케일 사용
+            lineStyle: pair.isFiltered ? 2 : 0,
+          },
+          3,
+        ); // CVD 패널
+
+        cvdLineSeries.setData([
+          { time: startCvd.time, value: startCvd.value },
+          { time: endCvd.time, value: endCvd.value },
+        ]);
+      } else {
+        console.warn('⚠️ CVD 데이터를 찾을 수 없음:', {
+          startTime,
+          endTime,
+          cvdDataLength: cvdData.length,
+        });
+      }
+    }
+
+    // 5. OI 패널에 선 그리기
+    if (oiSeries && pair.start.type === 'oi') {
+      const startTime = (pair.start.timestamp / 1000) as Time;
+      const endTime = (pair.end.timestamp / 1000) as Time;
+
+      const startOi = oiData.find((o) => o.time === startTime);
+      const endOi = oiData.find((o) => o.time === endTime);
+
+      console.log('🔍 OI 선 그리기:', {
+        startTime,
+        endTime,
+        startOi,
+        endOi,
+      });
+
+      if (startOi && endOi) {
+        const oiLineSeries = chart.addSeries(
+          LineSeries,
+          {
+            color: color,
+            lineWidth: pair.isFiltered ? 1 : 2,
+            lastValueVisible: false,
+            priceLineVisible: false,
+            priceScaleId: 'oi', // OI 스케일 사용
+            lineStyle: pair.isFiltered ? 2 : 0,
+          },
+          4,
+        ); // OI 패널
+
+        oiLineSeries.setData([
+          { time: startOi.time, value: startOi.value },
+          { time: endOi.time, value: endOi.value },
+        ]);
+      } else {
+        console.warn('⚠️ OI 데이터를 찾을 수 없음:', {
+          startTime,
+          endTime,
+          oiDataLength: oiData.length,
+        });
+      }
+    }
   });
 }
 
@@ -432,4 +605,71 @@ export function addCrossoverMarkers(
   createSeriesMarkers(candlestickSeries, markers);
 
   console.log(`✅ ${crossoverEvents.length}개의 크로스오버 마커 추가됨`);
+}
+
+/**
+ * CVD + OI 신호 마커를 차트에 추가합니다
+ * @param candlestickSeries - 캔들스틱 시리즈 인스턴스
+ * @param marketSignals - CVD+OI 시장 신호 배열
+ */
+export function addCvdOiMarkers(
+  candlestickSeries: ISeriesApi<'Candlestick'>,
+  marketSignals: MarketSignal[],
+): void {
+  if (marketSignals.length === 0) return;
+
+  // 신호 타입별 색상 및 모양 매핑
+  const signalConfig: Record<
+    MarketSignal['type'],
+    { color: string; shape: 'arrowUp' | 'arrowDown' | 'circle'; text: string; position: 'aboveBar' | 'belowBar' }
+  > = {
+    REAL_BULL: {
+      color: '#22c55e', // 초록색 (강한 매수)
+      shape: 'arrowUp',
+      text: '🚀',
+      position: 'belowBar',
+    },
+    SHORT_TRAP: {
+      color: '#f97316', // 주황색
+      shape: 'arrowDown',
+      text: '📉',
+      position: 'aboveBar',
+    },
+    PUMP_DUMP: {
+      color: '#ef4444', // 빨간색 (위험)
+      shape: 'arrowDown',
+      text: '⚠️',
+      position: 'aboveBar',
+    },
+    MORE_DROP: {
+      color: '#dc2626', // 진한 빨간색
+      shape: 'arrowDown',
+      text: '🔻',
+      position: 'aboveBar',
+    },
+    LONG_ENTRY: {
+      color: '#10b981', // 에메랄드 (매수 기회)
+      shape: 'arrowUp',
+      text: '💎',
+      position: 'belowBar',
+    },
+  };
+
+  // 모든 CVD+OI 신호를 마커로 변환
+  const markers: SeriesMarker<Time>[] = marketSignals.map((signal) => {
+    const config = signalConfig[signal.type];
+
+    return {
+      time: (signal.timestamp / 1000) as Time,
+      position: config.position,
+      color: config.color,
+      shape: config.shape,
+      text: config.text,
+    };
+  });
+
+  // 한 번에 모든 마커 추가
+  createSeriesMarkers(candlestickSeries, markers);
+
+  console.log(`✅ ${marketSignals.length}개의 CVD+OI 신호 마커 추가됨`);
 }

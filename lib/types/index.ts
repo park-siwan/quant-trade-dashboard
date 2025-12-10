@@ -10,7 +10,7 @@ export interface CandleData {
 
 export interface DivergenceSignal {
   index: number;
-  type: 'rsi' | 'obv';
+  type: 'rsi' | 'obv' | 'cvd' | 'oi';
   direction: 'bullish' | 'bearish';
   phase: 'start' | 'end' | 'entry';
   timestamp: number;
@@ -68,6 +68,37 @@ export interface CrossoverEvent {
   ema50: number;
 }
 
+// CVD + OI 관련 타입
+export type PriceDirection = 'up' | 'down' | 'neutral';
+export type CvdDirection = 'up' | 'down' | 'neutral';
+export type OiDirection = 'up' | 'down' | 'neutral';
+
+export type MarketSignalType =
+  | 'REAL_BULL' // 진짜 상승
+  | 'SHORT_TRAP' // 숏 유인 상승
+  | 'PUMP_DUMP' // 청산 기반 펌핑
+  | 'MORE_DROP' // 더 하락
+  | 'LONG_ENTRY'; // 저점 롱 타점
+
+export interface MarketSignal {
+  timestamp: number;
+  type: MarketSignalType;
+  price: number;
+  priceDirection: PriceDirection;
+  cvd: number;
+  cvdDirection: CvdDirection;
+  oi: number;
+  oiDirection: OiDirection;
+  description: string;
+  action: 'LONG' | 'SHORT' | 'CLOSE' | 'WAIT';
+}
+
+export interface CvdOiData {
+  cvd: number[];
+  oi: number[];
+  signals: MarketSignal[];
+}
+
 export interface ApiResponse {
   success: boolean;
   data: {
@@ -75,6 +106,8 @@ export interface ApiResponse {
     indicators: {
       rsi: (number | null)[];
       obv: number[];
+      cvd?: number[]; // CVD 데이터
+      oi?: number[]; // OI 데이터
       ema?: EmaData;
     };
     signals: {
@@ -89,9 +122,18 @@ export interface ApiResponse {
         bullish: DivergenceSummaryItem;
         bearish: DivergenceSummaryItem;
       };
+      cvd: {
+        bullish: DivergenceSummaryItem;
+        bearish: DivergenceSummaryItem;
+      };
+      oi: {
+        bullish: DivergenceSummaryItem;
+        bearish: DivergenceSummaryItem;
+      };
       total: DivergenceSummaryItem;
     };
     trendAnalysis?: TrendAnalysis;
     crossoverEvents?: CrossoverEvent[];
+    cvdOi?: CvdOiData; // CVD + OI 3중 조합 신호
   };
 }

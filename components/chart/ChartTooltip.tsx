@@ -1,3 +1,5 @@
+import { MarketSignal } from '@/lib/types/index';
+
 interface ChartTooltipProps {
   x: number;
   y: number;
@@ -5,6 +7,7 @@ interface ChartTooltipProps {
   filterReason: string | null;
   crossover: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null;
   divergences: Array<{ type: string; direction: string; analysis: string; isFiltered: boolean }>;
+  marketSignal?: MarketSignal | null;
 }
 
 export default function ChartTooltip({
@@ -14,6 +17,7 @@ export default function ChartTooltip({
   filterReason,
   crossover,
   divergences,
+  marketSignal,
 }: ChartTooltipProps) {
   return (
     <div
@@ -35,6 +39,28 @@ export default function ChartTooltip({
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(251, 146, 60, 0.1)',
       }}
     >
+      {/* CVD+OI 시장 신호 */}
+      {marketSignal && (
+        <>
+          <div
+            style={{
+              whiteSpace: 'pre-line',
+              lineHeight: '1.6',
+              color: '#d1d5db',
+              marginBottom: '12px',
+            }}
+          >
+            {marketSignal.description}
+          </div>
+          <div
+            style={{
+              borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+              marginBottom: '8px',
+            }}
+          />
+        </>
+      )}
+
       {/* 골든크로스/데드크로스 정보 */}
       {crossover && (
         <>
