@@ -4,7 +4,7 @@ interface ChartTooltipProps {
   rsi: number | null;
   filterReason: string | null;
   crossover: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null;
-  divergences: Array<{ type: string; direction: string; analysis: string }>;
+  divergences: Array<{ type: string; direction: string; analysis: string; isFiltered: boolean }>;
 }
 
 export default function ChartTooltip({
@@ -94,9 +94,12 @@ export default function ChartTooltip({
           ))}
           {/* 복수 지표 다이버전스 신뢰도 안내 */}
           {(() => {
-            // 모든 다이버전스가 같은 방향인지 확인
-            const allSameDirection = divergences.length >= 2 &&
-              divergences.every(d => d.direction === divergences[0].direction);
+            // 필터링되지 않은 다이버전스만 추출
+            const validDivergences = divergences.filter(d => !d.isFiltered);
+
+            // 필터링되지 않은 다이버전스가 2개 이상이고 모두 같은 방향인지 확인
+            const allSameDirection = validDivergences.length >= 2 &&
+              validDivergences.every(d => d.direction === validDivergences[0].direction);
 
             if (allSameDirection) {
               return (
@@ -117,7 +120,7 @@ export default function ChartTooltip({
                   </div>
                 </div>
               );
-            } else if (divergences.length >= 2) {
+            } else if (validDivergences.length >= 2) {
               // 방향이 다른 경우 (상충)
               return (
                 <div

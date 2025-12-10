@@ -242,6 +242,7 @@ export default function ChartRenderer({
           type: string;
           direction: string;
           analysis: string;
+          isFiltered: boolean;
         }> = [];
 
         // RSI 값 가져오기
@@ -305,17 +306,20 @@ export default function ChartRenderer({
                   );
 
                   if (!alreadyExists) {
+                    const isFiltered = signal.isFiltered || endSignal.isFiltered;
                     if (signal.direction === 'bullish') {
                       divergenceInfos.push({
                         type: signal.type,
                         direction: 'bullish',
                         analysis: `가격은 하락하는 반면 ${signal.type.toUpperCase()}는 상승하고 있습니다. 이는 매도 압력이 약해지고 있음을 나타내며, 곧 상승 반전할 가능성이 있습니다. 매수 진입을 고려할 수 있는 시점입니다.`,
+                        isFiltered,
                       });
                     } else {
                       divergenceInfos.push({
                         type: signal.type,
                         direction: 'bearish',
                         analysis: `가격은 상승하는 반면 ${signal.type.toUpperCase()}는 하락하고 있습니다. 이는 매수 압력이 약해지고 있음을 의미하며, 하락 반전 가능성이 있습니다. 매도 또는 익절을 고려하세요.`,
+                        isFiltered,
                       });
                     }
                   }
