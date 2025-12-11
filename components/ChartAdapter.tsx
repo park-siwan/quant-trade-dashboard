@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useCandles } from '@/hooks/useCandles';
+import { useLongShortRatio } from '@/hooks/useLongShortRatio';
 import ChartRenderer from '@/components/chart/ChartRenderer';
 import RefreshCountdown from '@/components/chart/RefreshCountdown';
 import { CandlestickData, LineData } from 'lightweight-charts';
@@ -80,6 +81,12 @@ export default function ChartAdapter({
     limit,
     enableAutoRefresh: true,
     enableWebSocket: true, // 실시간 캔들 WebSocket 활성화
+  });
+
+  // Long/Short Ratio 가져오기 (Bybit API)
+  const { ratio: longShortRatio } = useLongShortRatio({
+    symbol: symbol.replace('/', ''),
+    period: '1h',
   });
 
   // API 응답을 CandlestickData 형식으로 변환 (데이터가 없으면 빈 배열)
@@ -371,6 +378,7 @@ export default function ChartAdapter({
         marketSignals={marketSignals}
         timeframe={selectedTimeframe}
         realtimeCandle={realtimeCandle}
+        longShortRatio={longShortRatio}
       />
     </div>
   );

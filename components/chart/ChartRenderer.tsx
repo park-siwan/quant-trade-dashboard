@@ -30,6 +30,7 @@ import {
   MarketSignal,
 } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
+import { LongShortRatio } from '@/hooks/useLongShortRatio';
 
 interface ChartRendererProps {
   data: CandlestickData[];
@@ -52,6 +53,7 @@ interface ChartRendererProps {
     volume: number;
     isFinal: boolean;
   } | null;
+  longShortRatio?: LongShortRatio | null; // 롱/숏 비율 (Bybit API)
 }
 
 // 타임프레임을 분 단위로 변환
@@ -100,6 +102,7 @@ export default function ChartRenderer({
   marketSignals,
   timeframe = '5m',
   realtimeCandle,
+  longShortRatio,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -382,9 +385,14 @@ export default function ChartRenderer({
     // }
 
     // 청산 가격 라인 추가 (현재가 기준, Y축 변경 시 자동 반영)
+    // Long/Short 비율에 따라 더 위험한 쪽 강조
     if (showLiquidationZones && data.length > 0) {
       const currentPrice = data[data.length - 1].close;
       const leverages = [10, 25, 50, 100];
+
+      // Long/Short 비율에 따른 강조 계수 (롱이 많으면 롱 청산 위험 ↑)
+      const longEmphasis = longShortRatio ? longShortRatio.longRatio : 0.5;
+      const shortEmphasis = longShortRatio ? longShortRatio.shortRatio : 0.5;
 
       leverages.forEach((lev) => {
         // 롱 청산가: 현재가 * (1 - 1/레버리지)
@@ -392,30 +400,38 @@ export default function ChartRenderer({
         // 숏 청산가: 현재가 * (1 + 1/레버리지)
         const shortLiqPrice = currentPrice * (1 + 1 / lev);
 
-        // 레버리지별 투명도 (100x가 가장 진하게)
-        const opacity = lev === 100 ? 0.8 : lev === 50 ? 0.6 : lev === 25 ? 0.4 : 0.25;
+        // 레버리지별 기본 투명도 (100x가 가장 진하게)
+        const baseOpacity = lev === 100 ? 0.8 : lev === 50 ? 0.6 : lev === 25 ? 0.4 : 0.25;
 
-        // 롱 청산 라인 (노란색)
+        // Long/Short 비율 반영 (많은 쪽이 더 강조됨)
+        const longOpacity = Math.min(baseOpacity * (0.5 + longEmphasis), 1);
+        const shortOpacity = Math.min(baseOpacity * (0.5 + shortEmphasis), 1);
+
+        // 라인 두께도 비율에 따라 조정 (1 | 2 | 3 | 4)
+        const longLineWidth = (longEmphasis > 0.52 ? 2 : 1) as 1 | 2 | 3 | 4;
+        const shortLineWidth = (shortEmphasis > 0.52 ? 2 : 1) as 1 | 2 | 3 | 4;
+
+        // 롱 청산 라인 (노란색 - 롱이 많을수록 강조)
         candlestickSeries.createPriceLine({
           price: longLiqPrice,
-          color: `rgba(250, 204, 21, ${opacity})`,
-          lineWidth: 1,
+          color: `rgba(250, 204, 21, ${longOpacity})`,
+          lineWidth: (lev === 100 ? Math.min(longLineWidth + 1, 4) : longLineWidth) as 1 | 2 | 3 | 4,
           lineStyle: lev === 100 ? 0 : 2, // 100x는 실선, 나머지는 점선
           axisLabelVisible: true,
           title: `${lev}x L`,
-          axisLabelColor: `rgba(250, 204, 21, ${opacity})`,
+          axisLabelColor: `rgba(250, 204, 21, ${longOpacity})`,
           axisLabelTextColor: '#000',
         });
 
-        // 숏 청산 라인 (민트색)
+        // 숏 청산 라인 (민트색 - 숏이 많을수록 강조)
         candlestickSeries.createPriceLine({
           price: shortLiqPrice,
-          color: `rgba(45, 212, 191, ${opacity})`,
-          lineWidth: 1,
+          color: `rgba(45, 212, 191, ${shortOpacity})`,
+          lineWidth: (lev === 100 ? Math.min(shortLineWidth + 1, 4) : shortLineWidth) as 1 | 2 | 3 | 4,
           lineStyle: lev === 100 ? 0 : 2, // 100x는 실선, 나머지는 점선
           axisLabelVisible: true,
           title: `${lev}x S`,
-          axisLabelColor: `rgba(45, 212, 191, ${opacity})`,
+          axisLabelColor: `rgba(45, 212, 191, ${shortOpacity})`,
           axisLabelTextColor: '#000',
         });
       });
@@ -756,6 +772,7 @@ export default function ChartRenderer({
     crossoverEvents?.length,
     marketSignals?.length,
     showLiquidationZones, // 청산맵 토글 시 재렌더링
+    longShortRatio?.longRatio, // Long/Short 비율 변경 시 재렌더링
   ]);
 
   // 크로스오버 X 마커 좌표 상태
@@ -1011,17 +1028,32 @@ export default function ChartRenderer({
         </>
       )}
 
-        {/* 청산 구간 토글 버튼 */}
-        <button
-          onClick={() => setShowLiquidationZones(!showLiquidationZones)}
-          className={`backdrop-blur-md px-3 py-1 rounded-lg text-sm font-medium shadow-lg cursor-pointer transition-all ${
-            showLiquidationZones
-              ? 'bg-purple-500/20 text-purple-400 border border-purple-400/50 shadow-purple-500/10'
-              : 'bg-gray-500/20 text-gray-400 border border-gray-400/50 shadow-gray-500/10'
-          }`}
-        >
-          💥 청산맵
-        </button>
+        {/* 청산 구간 토글 버튼 + Long/Short 비율 표시 */}
+        <div className='flex items-center gap-2'>
+          <button
+            onClick={() => setShowLiquidationZones(!showLiquidationZones)}
+            className={`backdrop-blur-md px-3 py-1 rounded-lg text-sm font-medium shadow-lg cursor-pointer transition-all ${
+              showLiquidationZones
+                ? 'bg-purple-500/20 text-purple-400 border border-purple-400/50 shadow-purple-500/10'
+                : 'bg-gray-500/20 text-gray-400 border border-gray-400/50 shadow-gray-500/10'
+            }`}
+          >
+            💥 청산맵
+          </button>
+
+          {/* Long/Short 비율 표시 */}
+          {longShortRatio && (
+            <div className='backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border border-white/10 bg-white/5 flex items-center gap-2'>
+              <span className={longShortRatio.dominant === 'long' ? 'text-yellow-400 font-bold' : 'text-yellow-400/60'}>
+                L {(longShortRatio.longRatio * 100).toFixed(1)}%
+              </span>
+              <span className='text-gray-500'>|</span>
+              <span className={longShortRatio.dominant === 'short' ? 'text-teal-400 font-bold' : 'text-teal-400/60'}>
+                S {(longShortRatio.shortRatio * 100).toFixed(1)}%
+              </span>
+            </div>
+          )}
+        </div>
       </div>
       <div
         ref={chartContainerRef}
