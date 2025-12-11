@@ -247,6 +247,9 @@ export default function ChartAdapter({
               </button>
             ))}
           </div>
+
+          {/* 가격 정보 표시 */}
+          <div id="price-info-container"></div>
         </div>
         <div className='flex items-center gap-4'>
           <>
@@ -307,6 +310,7 @@ export default function ChartAdapter({
         trendAnalysis={trendAnalysis}
         crossoverEvents={crossoverEvents}
         marketSignals={marketSignals}
+        timeframe={selectedTimeframe}
       />
 
       {/* 초보자를 위한 용어 설명 */}

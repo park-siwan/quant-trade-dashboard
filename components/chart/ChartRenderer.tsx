@@ -1,12 +1,16 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   createChart,
   ColorType,
   CandlestickSeries,
   CandlestickData,
   LineData,
+  LineSeries,
+  IChartApi,
+  ISeriesApi,
 } from 'lightweight-charts';
 import {
   addRsiIndicator,
@@ -38,6 +42,40 @@ interface ChartRendererProps {
   trendAnalysis?: TrendAnalysis;
   crossoverEvents?: CrossoverEvent[];
   marketSignals?: MarketSignal[]; // CVD + OI 신호
+  timeframe?: string; // 타임프레임 정보 (5m, 15m, 1h 등)
+}
+
+// 타임프레임을 분 단위로 변환
+function timeframeToMinutes(timeframe: string): number {
+  const value = parseInt(timeframe.slice(0, -1));
+  const unit = timeframe.slice(-1);
+
+  switch (unit) {
+    case 'm':
+      return value;
+    case 'h':
+      return value * 60;
+    case 'd':
+      return value * 60 * 24;
+    case 'w':
+      return value * 60 * 24 * 7;
+    default:
+      return 5; // 기본값 5분
+  }
+}
+
+// 분을 "X일 X시간 X분" 형식으로 변환
+function formatTimeRange(totalMinutes: number): string {
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days}일`);
+  if (hours > 0) parts.push(`${hours}시간`);
+  if (minutes > 0) parts.push(`${minutes}분`);
+
+  return parts.length > 0 ? parts.join(' ') : '0분';
 }
 
 export default function ChartRenderer({
@@ -51,6 +89,7 @@ export default function ChartRenderer({
   trendAnalysis,
   crossoverEvents,
   marketSignals,
+  timeframe = '5m',
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -59,15 +98,45 @@ export default function ChartRenderer({
     rsi: number | null;
     filterReason: string | null;
     crossover: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null;
-    divergences: Array<{ type: string; direction: string; analysis: string }>;
+    divergences: Array<{ type: string; direction: string; analysis: string; isFiltered: boolean }>;
     marketSignal?: MarketSignal | null;
   } | null>(null);
   const [trendTooltip, setTrendTooltip] = useState<string | null>(null); // 추세 툴팁
+  const [currentPriceInfo, setCurrentPriceInfo] = useState<{
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    change: number;
+    changePercent: number;
+  } | null>(null);
+  // 측정 모드는 항상 활성화
+  const [measurePoints, setMeasurePoints] = useState<{
+    start: { time: number; price: number; x: number; y: number } | null;
+    end: { time: number; price: number; x: number; y: number } | null;
+  }>({ start: null, end: null });
+  const measurePointsRef = useRef(measurePoints); // ref로도 관리하여 closure 문제 해결
+  const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const isFirstRenderRef = useRef(true); // 첫 렌더링인지 추적
   const savedVisibleLogicalRangeRef = useRef<{
     from: number;
     to: number;
   } | null>(null); // 논리적 스크롤 범위 저장 (바 인덱스 기반)
+  const chartRef = useRef<IChartApi | null>(null);
+  const measureLineRef = useRef<ISeriesApi<'Line'> | null>(null);
+
+  // measurePoints가 변경될 때마다 ref도 업데이트
+  useEffect(() => {
+    measurePointsRef.current = measurePoints;
+  }, [measurePoints]);
+
+  // 데이터가 변경되면 측정 도구 초기화 (타임프레임 변경 등)
+  useEffect(() => {
+    setMeasurePoints({ start: null, end: null });
+  }, [data]);
+
+  // 차트 스케일 변경 감지를 위한 state (줌/스크롤 시 박스 위치 업데이트용)
+  const [scaleUpdateTrigger, setScaleUpdateTrigger] = useState(0);
 
   // 캔들 투명도 설정
   const CANDLE_OPACITY = 0.3;
@@ -108,7 +177,7 @@ export default function ChartRenderer({
       rightPriceScale: {
         borderVisible: false,
         scaleMargins: {
-          top: 0.05,
+          top: 0.1, // 상단 여백 증가 (가격 정보 표시 공간)
           bottom: 0.05,
         },
       },
@@ -129,6 +198,9 @@ export default function ChartRenderer({
       },
     });
 
+    // 차트 참조 저장
+    chartRef.current = chart;
+
     // 캔들스틱 시리즈 추가 (메인 패널 - paneIndex: 0)
     const candlestickSeries = chart.addSeries(
       CandlestickSeries,
@@ -144,6 +216,29 @@ export default function ChartRenderer({
     );
 
     candlestickSeries.setData(data);
+    candlestickSeriesRef.current = candlestickSeries;
+
+    // 초기 가격 정보 설정 (최신 캔들)
+    if (data.length > 0) {
+      const latestCandle = data[data.length - 1];
+      if ('open' in latestCandle && 'close' in latestCandle) {
+        const open = latestCandle.open;
+        const high = latestCandle.high;
+        const low = latestCandle.low;
+        const close = latestCandle.close;
+        const change = close - open;
+        const changePercent = (change / open) * 100;
+
+        setCurrentPriceInfo({
+          open,
+          high,
+          low,
+          close,
+          change,
+          changePercent,
+        });
+      }
+    }
 
     // EMA 지표 추가
     if (emaData) {
@@ -254,6 +349,58 @@ export default function ChartRenderer({
     // 통합 툴팁 (RSI 값 + 필터링 사유 + 크로스오버 + 다이버전스)
     if (rsiSeries) {
       chart.subscribeCrosshairMove((param) => {
+        // 첫 번째 점만 설정된 상태: 미리보기 박스 그리기
+        const currentMeasurePoints = measurePointsRef.current;
+        if (currentMeasurePoints.start && !currentMeasurePoints.end && param.point) {
+          const currentX = param.point.x;
+          const currentY = param.point.y;
+
+          const currentTime = chart.timeScale().coordinateToTime(currentX);
+          const currentPrice = candlestickSeries.coordinateToPrice(currentY);
+
+          if (currentTime !== null && currentPrice !== null) {
+            const startX = chart.timeScale().timeToCoordinate(currentMeasurePoints.start.time as any);
+            const startY = candlestickSeries.priceToCoordinate(currentMeasurePoints.start.price);
+
+            if (startX !== null && startY !== null) {
+              const left = Math.min(startX, currentX);
+              const top = Math.min(startY, currentY);
+              const width = Math.abs(currentX - startX);
+              const height = Math.abs(currentY - startY);
+
+              const priceDiff = currentPrice - currentMeasurePoints.start.price;
+              const pricePercent = (priceDiff / currentMeasurePoints.start.price) * 100;
+
+              // 시간 계산
+              const timeframeMinutes = timeframeToMinutes(timeframe);
+              const timeDiffSeconds = Math.abs(Number(currentTime) - currentMeasurePoints.start.time);
+              const bars = Math.round(timeDiffSeconds / (timeframeMinutes * 60));
+              const totalMinutes = bars * timeframeMinutes;
+              const timeRange = formatTimeRange(totalMinutes);
+
+              setMeasureBox({
+                left,
+                top,
+                width,
+                height,
+                priceDiff,
+                pricePercent,
+                bars,
+                timeRange,
+                isPreview: true, // 미리보기 박스
+              });
+            }
+          }
+        } else if (!currentMeasurePoints.start || currentMeasurePoints.end) {
+          // 측정 중이 아니면 미리보기 박스 제거 (단, 확정 박스는 유지)
+          setMeasureBox((prev) => {
+            if (prev?.isPreview) {
+              return null;
+            }
+            return prev;
+          });
+        }
+
         if (
           !param.time ||
           !param.point ||
@@ -279,6 +426,29 @@ export default function ChartRenderer({
           isFiltered: boolean;
         }> = [];
         let marketSignalInfo: MarketSignal | null = null;
+
+        // 가격 정보 가져오기 (헤더 표시용)
+        if (param.seriesData.has(candlestickSeries)) {
+          const candleData = param.seriesData.get(candlestickSeries);
+          if (candleData && 'open' in candleData && 'close' in candleData) {
+            const open = candleData.open;
+            const high = candleData.high;
+            const low = candleData.low;
+            const close = candleData.close;
+            const change = close - open;
+            const changePercent = (change / open) * 100;
+
+            // 헤더 가격 정보 업데이트
+            setCurrentPriceInfo({
+              open,
+              high,
+              low,
+              close,
+              change,
+              changePercent,
+            });
+          }
+        }
 
         // RSI 값 가져오기
         if (param.seriesData.has(rsiSeries)) {
@@ -341,7 +511,7 @@ export default function ChartRenderer({
                   );
 
                   if (!alreadyExists) {
-                    const isFiltered = signal.isFiltered || endSignal.isFiltered;
+                    const isFiltered = Boolean(signal.isFiltered || endSignal.isFiltered);
                     if (signal.direction === 'bullish') {
                       divergenceInfos.push({
                         type: signal.type,
@@ -400,6 +570,49 @@ export default function ChartRenderer({
       });
     }
 
+    // 측정 클릭 이벤트 (항상 활성화)
+    chart.subscribeClick((param) => {
+      if (!param.point) return;
+
+      const clickX = param.point.x;
+      const clickY = param.point.y;
+
+      // 먼저 현재 상태 확인 (세 번째 클릭인지)
+      setMeasurePoints((prev) => {
+        // 세 번째 클릭 (박스가 이미 그려진 상태): 완전히 초기화 (좌표 체크 없이)
+        if (prev.start && prev.end) {
+          return {
+            start: null,
+            end: null,
+          };
+        }
+
+        // X 좌표를 시간으로 변환 (허공에서도 측정 가능)
+        const currentTime = chart.timeScale().coordinateToTime(clickX);
+        if (currentTime === null) return prev;
+
+        // Y 좌표를 가격으로 변환 (허공에서도 측정 가능)
+        const currentPrice = candlestickSeries.coordinateToPrice(clickY);
+        if (currentPrice === null) return prev;
+
+        if (!prev.start) {
+          // 첫 번째 클릭: 시작점 설정
+          return {
+            start: { time: currentTime as number, price: currentPrice, x: clickX, y: clickY },
+            end: null,
+          };
+        } else if (!prev.end) {
+          // 두 번째 클릭: 끝점 설정 (박스 완성)
+          return {
+            ...prev,
+            end: { time: currentTime as number, price: currentPrice, x: clickX, y: clickY },
+          };
+        }
+
+        return prev;
+      });
+    });
+
     // 반응형 처리
     const handleResize = () => {
       if (chartContainerRef.current) {
@@ -410,6 +623,13 @@ export default function ChartRenderer({
     };
 
     window.addEventListener('resize', handleResize);
+
+    // 차트 스케일 변경 감지 (줌/스크롤 시 측정 박스 위치 업데이트)
+    const handleScaleChange = () => {
+      setScaleUpdateTrigger((prev) => prev + 1);
+    };
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleScaleChange);
 
     // 클린업
     return () => {
@@ -426,6 +646,7 @@ export default function ChartRenderer({
         console.warn('논리적 범위 저장 실패:', e);
       }
 
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleScaleChange);
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
@@ -440,11 +661,103 @@ export default function ChartRenderer({
     marketSignals,
   ]);
 
+  // 측정 박스를 위한 상태 (화면 좌표)
+  const [measureBox, setMeasureBox] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    priceDiff: number;
+    pricePercent: number;
+    bars: number;
+    timeRange: string; // "X일 X시간 X분" 형식
+    isPreview?: boolean; // 미리보기인지 확정인지 구분
+  } | null>(null);
+
+  // 측정 박스 업데이트 (확정된 박스)
+  useEffect(() => {
+    if (!chartRef.current || !candlestickSeriesRef.current) return;
+    if (!measurePoints.start || !measurePoints.end) {
+      // 끝점이 없으면 박스 제거 (미리보기는 crosshairMove에서 처리)
+      setMeasureBox(null);
+      return;
+    }
+
+    // 두 점의 화면 좌표 계산
+    const startX = chartRef.current.timeScale().timeToCoordinate(measurePoints.start.time as any);
+    const endX = chartRef.current.timeScale().timeToCoordinate(measurePoints.end.time as any);
+    const startY = candlestickSeriesRef.current.priceToCoordinate(measurePoints.start.price);
+    const endY = candlestickSeriesRef.current.priceToCoordinate(measurePoints.end.price);
+
+    if (startX === null || endX === null || startY === null || endY === null) {
+      setMeasureBox(null);
+      return;
+    }
+
+    // 박스 위치와 크기 계산
+    const left = Math.min(startX, endX);
+    const top = Math.min(startY, endY);
+    const width = Math.abs(endX - startX);
+    const height = Math.abs(endY - startY);
+
+    // 가격 차이 계산
+    const priceDiff = measurePoints.end.price - measurePoints.start.price;
+    const pricePercent = (priceDiff / measurePoints.start.price) * 100;
+
+    // 캔들 개수 및 시간 계산
+    const timeframeMinutes = timeframeToMinutes(timeframe);
+    const timeDiffSeconds = Math.abs(measurePoints.end.time - measurePoints.start.time);
+    const bars = Math.round(timeDiffSeconds / (timeframeMinutes * 60));
+    const totalMinutes = bars * timeframeMinutes;
+    const timeRange = formatTimeRange(totalMinutes);
+
+    setMeasureBox({
+      left,
+      top,
+      width,
+      height,
+      priceDiff,
+      pricePercent,
+      bars,
+      timeRange,
+      isPreview: false, // 확정된 박스
+    });
+  }, [measurePoints, scaleUpdateTrigger, timeframe]);
+
+  const priceInfoContainer = typeof window !== 'undefined' ? document.getElementById('price-info-container') : null;
+
   return (
     <div className='w-full relative'>
-      {/* 추세 인디케이터 (좌측 상단) */}
-      {trendAnalysis && (
-        <div className='absolute top-4 left-4 z-10 flex gap-2'>
+      {/* 가격 정보 (헤더에 포털로 렌더링) */}
+      {currentPriceInfo && priceInfoContainer && createPortal(
+        <div className='flex items-center gap-2 text-sm font-medium'>
+          <span style={{ color: currentPriceInfo.changePercent >= 0 ? '#a3e635' : '#fb923c' }}>
+            ${currentPriceInfo.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+          <span style={{ color: currentPriceInfo.changePercent >= 0 ? '#a3e635' : '#fb923c' }}>
+            {currentPriceInfo.changePercent >= 0 ? '▲' : '▼'} {Math.abs(currentPriceInfo.changePercent).toFixed(2)}%
+          </span>
+        </div>,
+        priceInfoContainer
+      )}
+
+      {/* 추세 인디케이터 + 측정 결과 (좌측 상단) */}
+      <div className='absolute top-4 left-4 z-10 flex gap-2'>
+        {/* 측정 결과 표시 (헤더) */}
+        {measureBox && (
+          <div className='backdrop-blur-md bg-blue-500/20 text-blue-300 border border-blue-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-blue-500/10'>
+            <span style={{ color: measureBox.pricePercent >= 0 ? '#a3e635' : '#fb923c' }}>
+              {measureBox.pricePercent >= 0 ? '▲' : '▼'} {Math.abs(measureBox.pricePercent).toFixed(2)}%
+            </span>
+            <span className='ml-2 text-gray-300'>
+              (${Math.abs(measureBox.priceDiff).toFixed(2)})
+            </span>
+          </div>
+        )}
+
+        {/* 추세 인디케이터 */}
+        {trendAnalysis && (
+          <>
           {trendAnalysis.trend === 'bullish' && (
             <div
               className='backdrop-blur-md bg-lime-500/20 text-lime-400 border border-lime-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-lime-500/10 cursor-help relative'
@@ -497,12 +810,136 @@ export default function ChartRenderer({
               {trendTooltip}
             </div>
           )}
-        </div>
+        </>
       )}
+      </div>
       <div
         ref={chartContainerRef}
         className='rounded-xl overflow-hidden shadow-inner'
-      />
+        style={{ position: 'relative' }}
+      >
+        {/* 측정 박스 오버레이 (트레이딩뷰 스타일) */}
+        {measureBox && (() => {
+          const isPositive = measureBox.pricePercent >= 0;
+          const boxColor = isPositive ? '163, 230, 53' : '251, 146, 60'; // lime-400 : orange-400
+
+          // 툴팁이 차트 밖으로 나가는지 확인
+          const TOOLTIP_HEIGHT = 40; // 대략적인 툴팁 높이
+          const hasSpaceAbove = measureBox.top > TOOLTIP_HEIGHT + 10;
+          const hasSpaceBelow = chartContainerRef.current
+            ? (chartContainerRef.current.clientHeight - (measureBox.top + measureBox.height)) > TOOLTIP_HEIGHT + 10
+            : true;
+
+          // 툴팁 위치 결정
+          let tooltipPosition;
+          if (isPositive) {
+            // 플러스: 위에 공간있으면 위에, 없으면 박스 안쪽 상단
+            tooltipPosition = hasSpaceAbove
+              ? { bottom: '100%', marginBottom: '4px' }
+              : { top: '4px' };
+          } else {
+            // 마이너스: 아래 공간있으면 아래, 없으면 박스 안쪽 하단
+            tooltipPosition = hasSpaceBelow
+              ? { top: '100%', marginTop: '4px' }
+              : { bottom: '4px' };
+          }
+
+          return (
+            <div
+              style={{
+                position: 'absolute',
+                left: `${measureBox.left}px`,
+                top: `${measureBox.top}px`,
+                width: `${measureBox.width}px`,
+                height: `${measureBox.height}px`,
+                backgroundColor: measureBox.isPreview ? `rgba(${boxColor}, 0.05)` : `rgba(${boxColor}, 0.1)`,
+                border: measureBox.isPreview ? `1px dashed rgba(${boxColor}, 0.4)` : `1px solid rgba(${boxColor}, 0.5)`,
+                pointerEvents: 'none',
+                zIndex: 15, // 점 마커(11)와 툴팁(12)보다 높게 설정
+              }}
+            >
+              {/* 측정 정보 텍스트 (공간에 따라 동적 위치) */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  ...tooltipPosition,
+                  transform: 'translateX(-50%)',
+                  backgroundColor: `rgba(${boxColor}, 0.9)`,
+                  color: 'white',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  whiteSpace: 'nowrap',
+                  zIndex: 12, // 점 마커(zIndex 11)보다 위에 표시
+                }}
+              >
+                <div style={{ color: 'white' }}>
+                  {Math.abs(measureBox.priceDiff).toFixed(2)} ({isPositive ? '+' : ''}{measureBox.pricePercent.toFixed(2)}%)
+                </div>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>
+                  {measureBox.bars} 봉, {measureBox.timeRange}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* 측정 시작점 마커 */}
+        {measurePoints.start && chartRef.current && candlestickSeriesRef.current && (() => {
+          const startX = chartRef.current!.timeScale().timeToCoordinate(measurePoints.start.time as any);
+          const startY = candlestickSeriesRef.current!.priceToCoordinate(measurePoints.start.price);
+          if (startX !== null && startY !== null) {
+            return (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `${startX}px`,
+                  top: `${startY}px`,
+                  width: '8px',
+                  height: '8px',
+                  backgroundColor: 'rgba(59, 130, 246, 0.9)',
+                  border: '2px solid white',
+                  borderRadius: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  pointerEvents: 'none',
+                  zIndex: 11,
+                  boxShadow: '0 0 8px rgba(59, 130, 246, 0.6)',
+                }}
+              />
+            );
+          }
+          return null;
+        })()}
+
+        {/* 측정 끝점 마커 */}
+        {measurePoints.end && chartRef.current && candlestickSeriesRef.current && (() => {
+          const endX = chartRef.current!.timeScale().timeToCoordinate(measurePoints.end.time as any);
+          const endY = candlestickSeriesRef.current!.priceToCoordinate(measurePoints.end.price);
+          if (endX !== null && endY !== null) {
+            return (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `${endX}px`,
+                  top: `${endY}px`,
+                  width: '8px',
+                  height: '8px',
+                  backgroundColor: 'rgba(59, 130, 246, 0.9)',
+                  border: '2px solid white',
+                  borderRadius: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  pointerEvents: 'none',
+                  zIndex: 11,
+                  boxShadow: '0 0 8px rgba(59, 130, 246, 0.6)',
+                }}
+              />
+            );
+          }
+          return null;
+        })()}
+      </div>
 
       {/* 통합 툴팁 (RSI + 필터링 정보 + 크로스오버 + 다이버전스 + CVD+OI) */}
       {tooltip && (

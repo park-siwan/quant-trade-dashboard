@@ -8,6 +8,14 @@ interface ChartTooltipProps {
   crossover: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null;
   divergences: Array<{ type: string; direction: string; analysis: string; isFiltered: boolean }>;
   marketSignal?: MarketSignal | null;
+  priceInfo?: {
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    change: number;
+    changePercent: number;
+  } | null;
 }
 
 export default function ChartTooltip({
@@ -18,6 +26,7 @@ export default function ChartTooltip({
   crossover,
   divergences,
   marketSignal,
+  priceInfo,
 }: ChartTooltipProps) {
   return (
     <div

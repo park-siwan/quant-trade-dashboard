@@ -266,7 +266,7 @@ export function addEmaIndicators(
     LineSeries,
     {
       color: 'rgba(239, 68, 68, 0.8)', // 빨간색 (투명도 80%)
-      lineWidth: 1.5,
+      lineWidth: 2,
       title: 'EMA 20',
       lastValueVisible: true,
       priceLineVisible: false,
@@ -280,7 +280,7 @@ export function addEmaIndicators(
     LineSeries,
     {
       color: 'rgba(59, 130, 246, 0.8)', // 파란색 (투명도 80%)
-      lineWidth: 2.5,
+      lineWidth: 3,
       title: 'EMA 50',
       lastValueVisible: true,
       priceLineVisible: false,
@@ -294,7 +294,7 @@ export function addEmaIndicators(
     LineSeries,
     {
       color: 'rgba(34, 197, 94, 0.8)', // 초록색 (투명도 80%)
-      lineWidth: 3.5,
+      lineWidth: 4,
       title: 'EMA 200',
       lastValueVisible: true,
       priceLineVisible: false,
