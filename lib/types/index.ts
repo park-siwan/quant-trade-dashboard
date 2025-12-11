@@ -66,6 +66,10 @@ export interface CrossoverEvent {
   type: Crossover;
   ema20: number;
   ema50: number;
+  // 볼륨 기반 필터링
+  isFiltered?: boolean; // 볼륨이 낮으면 true
+  volume?: number; // 해당 캔들 볼륨
+  avgVolume?: number; // 평균 볼륨
 }
 
 // CVD + OI 관련 타입

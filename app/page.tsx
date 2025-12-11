@@ -48,6 +48,13 @@ export default function Home() {
               </span>
             </div>
             <div>
+              <span className='text-gray-400 font-semibold'>X (회색)</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 볼륨 부족. 평균의 1.5배 미만. 신뢰도 낮음
+              </span>
+            </div>
+            <div>
               <span className='font-semibold'>
                 EMA:{' '}
                 <span className='text-red-400'>20</span>

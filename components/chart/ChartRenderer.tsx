@@ -779,6 +779,7 @@ export default function ChartRenderer({
     x: number;
     y: number;
     type: 'golden_cross' | 'dead_cross';
+    isFiltered?: boolean; // 볼륨 낮으면 true
   }>>([]);
 
   // CVD+OI 신호 마커 좌표 상태
@@ -859,7 +860,7 @@ export default function ChartRenderer({
       return;
     }
 
-    const markers: Array<{ x: number; y: number; type: 'golden_cross' | 'dead_cross' }> = [];
+    const markers: Array<{ x: number; y: number; type: 'golden_cross' | 'dead_cross'; isFiltered?: boolean }> = [];
 
     crossoverEvents.forEach((event) => {
       // 'none' 타입은 스킵 (실제로 발생하지 않아야 함)
@@ -884,6 +885,7 @@ export default function ChartRenderer({
         x,
         y: event.type === 'golden_cross' ? y + 15 : y - 15, // 캔들과 간격
         type: event.type,
+        isFiltered: event.isFiltered, // 볼륨 기반 필터링
       });
     });
 
@@ -1202,8 +1204,14 @@ export default function ChartRenderer({
               zIndex: 20,
               fontSize: '16px',
               fontWeight: 'bold',
-              color: marker.type === 'golden_cross' ? '#a3e635' : '#f87171',
+              // 필터링된 신호는 회색, 아니면 골든=초록/데드=빨강
+              color: marker.isFiltered
+                ? '#9ca3af' // gray-400
+                : marker.type === 'golden_cross'
+                ? '#a3e635' // lime-400
+                : '#f87171', // red-400
               textShadow: '0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.5)',
+              opacity: marker.isFiltered ? 0.6 : 1, // 필터링된 신호는 투명도
             }}
           >
             ✕
