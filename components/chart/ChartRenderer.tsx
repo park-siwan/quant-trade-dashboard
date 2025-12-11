@@ -151,10 +151,7 @@ export default function ChartRenderer({
   const chartRef = useRef<IChartApi | null>(null);
   const measureLineRef = useRef<ISeriesApi<'Line'> | null>(null);
 
-  // 청산 구간 표시 토글 (useEffect보다 먼저 선언해야 함)
-  const [showLiquidationZones, setShowLiquidationZones] = useState(true);
-
-  // Volume Profile 표시 토글
+  // Volume Profile 표시 토글 (useEffect보다 먼저 선언해야 함)
   const [showVolumeProfile, setShowVolumeProfile] = useState(true);
 
   // measurePoints가 변경될 때마다 ref도 업데이트
@@ -400,93 +397,40 @@ export default function ChartRenderer({
     //   addCvdOiMarkers(candlestickSeries, marketSignals);
     // }
 
-    // 청산 가격 라인 추가 (현재가 기준, Y축 변경 시 자동 반영)
-    // Long/Short 비율에 따라 더 위험한 쪽 강조
-    if (showLiquidationZones && data.length > 0) {
-      const currentPrice = data[data.length - 1].close;
-      const leverages = [10, 25, 50, 100];
-
-      // Long/Short 비율에 따른 강조 계수 (롱이 많으면 롱 청산 위험 ↑)
-      const longEmphasis = longShortRatio ? longShortRatio.longRatio : 0.5;
-      const shortEmphasis = longShortRatio ? longShortRatio.shortRatio : 0.5;
-
-      leverages.forEach((lev) => {
-        // 롱 청산가: 현재가 * (1 - 1/레버리지)
-        const longLiqPrice = currentPrice * (1 - 1 / lev);
-        // 숏 청산가: 현재가 * (1 + 1/레버리지)
-        const shortLiqPrice = currentPrice * (1 + 1 / lev);
-
-        // 레버리지별 기본 투명도 (100x가 가장 진하게)
-        const baseOpacity = lev === 100 ? 0.8 : lev === 50 ? 0.6 : lev === 25 ? 0.4 : 0.25;
-
-        // Long/Short 비율 반영 (많은 쪽이 더 강조됨)
-        const longOpacity = Math.min(baseOpacity * (0.5 + longEmphasis), 1);
-        const shortOpacity = Math.min(baseOpacity * (0.5 + shortEmphasis), 1);
-
-        // 라인 두께도 비율에 따라 조정 (1 | 2 | 3 | 4)
-        const longLineWidth = (longEmphasis > 0.52 ? 2 : 1) as 1 | 2 | 3 | 4;
-        const shortLineWidth = (shortEmphasis > 0.52 ? 2 : 1) as 1 | 2 | 3 | 4;
-
-        // 롱 청산 라인 (노란색 - 롱이 많을수록 강조)
-        candlestickSeries.createPriceLine({
-          price: longLiqPrice,
-          color: `rgba(250, 204, 21, ${longOpacity})`,
-          lineWidth: (lev === 100 ? Math.min(longLineWidth + 1, 4) : longLineWidth) as 1 | 2 | 3 | 4,
-          lineStyle: lev === 100 ? 0 : 2, // 100x는 실선, 나머지는 점선
-          axisLabelVisible: true,
-          title: `${lev}x L`,
-          axisLabelColor: `rgba(250, 204, 21, ${longOpacity})`,
-          axisLabelTextColor: '#000',
-        });
-
-        // 숏 청산 라인 (민트색 - 숏이 많을수록 강조)
-        candlestickSeries.createPriceLine({
-          price: shortLiqPrice,
-          color: `rgba(45, 212, 191, ${shortOpacity})`,
-          lineWidth: (lev === 100 ? Math.min(shortLineWidth + 1, 4) : shortLineWidth) as 1 | 2 | 3 | 4,
-          lineStyle: lev === 100 ? 0 : 2, // 100x는 실선, 나머지는 점선
-          axisLabelVisible: true,
-          title: `${lev}x S`,
-          axisLabelColor: `rgba(45, 212, 191, ${shortOpacity})`,
-          axisLabelTextColor: '#000',
-        });
-      });
-    }
-
-    // Volume Profile 라인 (POC, VAH, VAL)
+    // Volume Profile 라인 (핵심가, 상단저항, 하단지지)
     if (showVolumeProfile && volumeProfile) {
-      // POC (Point of Control) - 최대 거래량 가격 (빨간색, 가장 중요)
+      // 핵심가 (POC) - 가장 많이 거래된 가격 = 많은 사람이 여기서 진입함
       candlestickSeries.createPriceLine({
         price: volumeProfile.poc,
         color: 'rgba(239, 68, 68, 0.8)', // red-500
         lineWidth: 2,
         lineStyle: 0, // 실선
         axisLabelVisible: true,
-        title: 'POC',
+        title: '핵심가',
         axisLabelColor: 'rgba(239, 68, 68, 0.9)',
         axisLabelTextColor: '#fff',
       });
 
-      // VAH (Value Area High) - 상단 가치 영역
+      // 상단저항 (VAH) - 거래 많은 영역의 상단 = 저항선 역할
       candlestickSeries.createPriceLine({
         price: volumeProfile.vah,
         color: 'rgba(168, 85, 247, 0.6)', // purple-500
         lineWidth: 1,
         lineStyle: 2, // 점선
         axisLabelVisible: true,
-        title: 'VAH',
+        title: '상단',
         axisLabelColor: 'rgba(168, 85, 247, 0.8)',
         axisLabelTextColor: '#fff',
       });
 
-      // VAL (Value Area Low) - 하단 가치 영역
+      // 하단지지 (VAL) - 거래 많은 영역의 하단 = 지지선 역할
       candlestickSeries.createPriceLine({
         price: volumeProfile.val,
         color: 'rgba(168, 85, 247, 0.6)', // purple-500
         lineWidth: 1,
         lineStyle: 2, // 점선
         axisLabelVisible: true,
-        title: 'VAL',
+        title: '하단',
         axisLabelColor: 'rgba(168, 85, 247, 0.8)',
         axisLabelTextColor: '#fff',
       });
@@ -826,8 +770,6 @@ export default function ChartRenderer({
     trendAnalysis !== undefined,
     crossoverEvents?.length,
     marketSignals?.length,
-    showLiquidationZones, // 청산맵 토글 시 재렌더링
-    longShortRatio?.longRatio, // Long/Short 비율 변경 시 재렌더링
     showVolumeProfile, // Volume Profile 토글 시 재렌더링
     volumeProfile?.poc, // Volume Profile 변경 시 재렌더링
   ]);
@@ -1085,19 +1027,8 @@ export default function ChartRenderer({
         </>
       )}
 
-        {/* 청산 구간 토글 버튼 + Long/Short 비율 표시 */}
+        {/* Volume Profile + Long/Short 비율 */}
         <div className='flex items-center gap-2'>
-          <button
-            onClick={() => setShowLiquidationZones(!showLiquidationZones)}
-            className={`backdrop-blur-md px-3 py-1 rounded-lg text-sm font-medium shadow-lg cursor-pointer transition-all ${
-              showLiquidationZones
-                ? 'bg-purple-500/20 text-purple-400 border border-purple-400/50 shadow-purple-500/10'
-                : 'bg-gray-500/20 text-gray-400 border border-gray-400/50 shadow-gray-500/10'
-            }`}
-          >
-            💥 청산맵
-          </button>
-
           {/* Volume Profile 토글 버튼 */}
           <button
             onClick={() => setShowVolumeProfile(!showVolumeProfile)}
@@ -1107,26 +1038,26 @@ export default function ChartRenderer({
                 : 'bg-gray-500/20 text-gray-400 border border-gray-400/50 shadow-gray-500/10'
             }`}
           >
-            📊 VP
+            📊 거래량
           </button>
 
           {/* Long/Short 비율 표시 */}
           {longShortRatio && (
             <div className='backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border border-white/10 bg-white/5 flex items-center gap-2'>
               <span className={longShortRatio.dominant === 'long' ? 'text-yellow-400 font-bold' : 'text-yellow-400/60'}>
-                L {(longShortRatio.longRatio * 100).toFixed(1)}%
+                롱 {(longShortRatio.longRatio * 100).toFixed(1)}%
               </span>
               <span className='text-gray-500'>|</span>
               <span className={longShortRatio.dominant === 'short' ? 'text-teal-400 font-bold' : 'text-teal-400/60'}>
-                S {(longShortRatio.shortRatio * 100).toFixed(1)}%
+                숏 {(longShortRatio.shortRatio * 100).toFixed(1)}%
               </span>
             </div>
           )}
 
-          {/* Volume Profile POC 가격 표시 */}
+          {/* Volume Profile 핵심가격 표시 */}
           {showVolumeProfile && volumeProfile && (
             <div className='backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border border-red-400/30 bg-red-500/10 text-red-400'>
-              POC: {volumeProfile.poc.toLocaleString()}
+              핵심가: {volumeProfile.poc.toLocaleString()}
             </div>
           )}
         </div>

@@ -95,6 +95,34 @@ export default function Home() {
                 - 신뢰도가 낮아 회색 점선으로 표시
               </span>
             </div>
+            <div>
+              <span className='text-red-400 font-semibold'>핵심가 (빨간선)</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 가장 많이 거래된 가격. 여기서 많이 진입함
+              </span>
+            </div>
+            <div>
+              <span className='text-purple-400 font-semibold'>상단/하단 (보라선)</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 거래 많은 영역. 지지/저항 역할
+              </span>
+            </div>
+            <div>
+              <span className='text-yellow-400 font-semibold'>롱 비율</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 롱 포지션 보유자 비율. 높으면 하락 주의
+              </span>
+            </div>
+            <div>
+              <span className='text-teal-400 font-semibold'>숏 비율</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 숏 포지션 보유자 비율. 높으면 상승 주의
+              </span>
+            </div>
           </div>
         </div>
       </div>
