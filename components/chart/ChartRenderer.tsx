@@ -863,23 +863,17 @@ export default function ChartRenderer({
 
   // 크로스오버 X 마커 좌표 업데이트
   useEffect(() => {
-    // 데이터 변경 시 마커 초기화
-    setCrossoverMarkers([]);
-  }, [crossoverEvents, data]);
-
-  useEffect(() => {
     if (!chartRef.current || !candlestickSeriesRef.current || !crossoverEvents || crossoverEvents.length === 0) {
+      setCrossoverMarkers([]);
       return;
     }
 
-    // 차트 렌더링 완료 후 좌표 계산 (100ms 딜레이)
-    const timeoutId = setTimeout(() => {
+    const calculateMarkers = () => {
       if (!chartRef.current || !candlestickSeriesRef.current) return;
 
       const markers: Array<{ x: number; y: number; type: 'golden_cross' | 'dead_cross'; isFiltered?: boolean }> = [];
 
       crossoverEvents.forEach((event) => {
-        // 'none' 타입은 스킵 (실제로 발생하지 않아야 함)
         if (event.type === 'none') return;
 
         const time = (event.timestamp / 1000) as any;
@@ -888,43 +882,42 @@ export default function ChartRenderer({
         // 유효하지 않은 좌표 스킵
         if (x === null || x < 0 || x > 5000) return;
 
-        // 해당 시간의 캔들 데이터 찾기
         const candleData = data.find((c) => c.time === time);
         if (!candleData) return;
 
-        // 골든크로스는 캔들 아래, 데드크로스는 캔들 위에 표시
         const price = event.type === 'golden_cross' ? candleData.low : candleData.high;
         const y = candlestickSeriesRef.current!.priceToCoordinate(price);
 
-        // 유효하지 않은 좌표 스킵
         if (y === null || y < 0 || y > 2000) return;
 
         markers.push({
           x,
-          y: event.type === 'golden_cross' ? y + 15 : y - 15, // 캔들과 간격
+          y: event.type === 'golden_cross' ? y + 15 : y - 15,
           type: event.type,
-          isFiltered: event.isFiltered, // 볼륨 기반 필터링
+          isFiltered: event.isFiltered,
         });
       });
 
-      setCrossoverMarkers(markers);
-    }, 100);
+      // 유효한 마커가 있을 때만 업데이트 (깜빡임 방지)
+      if (markers.length > 0) {
+        setCrossoverMarkers(markers);
+      }
+    };
+
+    // 즉시 계산 시도, 실패하면 딜레이 후 재시도
+    calculateMarkers();
+    const timeoutId = setTimeout(calculateMarkers, 50);
 
     return () => clearTimeout(timeoutId);
   }, [crossoverEvents, data, scaleUpdateTrigger]);
 
   // CVD+OI 신호 마커 좌표 업데이트
   useEffect(() => {
-    // 데이터 변경 시 마커 초기화
-    setSignalMarkers([]);
-  }, [marketSignals, data]);
-
-  useEffect(() => {
     if (!chartRef.current || !candlestickSeriesRef.current || !marketSignals || marketSignals.length === 0) {
+      setSignalMarkers([]);
       return;
     }
 
-    // 신호 타입별 이모지와 위치 매핑
     const signalConfig: Record<string, { text: string; position: 'above' | 'below' }> = {
       REAL_BULL: { text: '🚀', position: 'below' },
       SHORT_TRAP: { text: '📉', position: 'above' },
@@ -933,8 +926,7 @@ export default function ChartRenderer({
       LONG_ENTRY: { text: '💎', position: 'below' },
     };
 
-    // 차트 렌더링 완료 후 좌표 계산 (100ms 딜레이)
-    const timeoutId = setTimeout(() => {
+    const calculateMarkers = () => {
       if (!chartRef.current || !candlestickSeriesRef.current) return;
 
       const markers: Array<{ x: number; y: number; text: string; position: 'above' | 'below' }> = [];
@@ -946,18 +938,14 @@ export default function ChartRenderer({
         const time = (signal.timestamp / 1000) as any;
         const x = chartRef.current!.timeScale().timeToCoordinate(time);
 
-        // 유효하지 않은 좌표 스킵
         if (x === null || x < 0 || x > 5000) return;
 
-        // 해당 시간의 캔들 데이터 찾기
         const candleData = data.find((c) => c.time === time);
         if (!candleData) return;
 
-        // 위치에 따라 high 또는 low 사용
         const price = config.position === 'below' ? candleData.low : candleData.high;
         const y = candlestickSeriesRef.current!.priceToCoordinate(price);
 
-        // 유효하지 않은 좌표 스킵
         if (y === null || y < 0 || y > 2000) return;
 
         markers.push({
@@ -968,8 +956,13 @@ export default function ChartRenderer({
         });
       });
 
-      setSignalMarkers(markers);
-    }, 100);
+      if (markers.length > 0) {
+        setSignalMarkers(markers);
+      }
+    };
+
+    calculateMarkers();
+    const timeoutId = setTimeout(calculateMarkers, 50);
 
     return () => clearTimeout(timeoutId);
   }, [marketSignals, data, scaleUpdateTrigger]);
