@@ -96,17 +96,24 @@ export default function Home() {
               </span>
             </div>
             <div>
-              <span className='text-red-400 font-semibold'>핵심가 (빨간선)</span>
+              <span className='text-yellow-400 font-semibold'>목표 (노란선)</span>
               <span className='text-gray-300'>
                 {' '}
-                - 가장 많이 거래된 가격. 여기서 많이 진입함
+                - 가장 많이 거래된 가격. 가격이 여기로 돌아옴
               </span>
             </div>
             <div>
-              <span className='text-purple-400 font-semibold'>상단/하단 (보라선)</span>
+              <span className='text-orange-400 font-semibold'>숏 (주황 점선)</span>
               <span className='text-gray-300'>
                 {' '}
-                - 거래 많은 영역. 지지/저항 역할
+                - 저항 구간. 여기서 숏 진입 고려
+              </span>
+            </div>
+            <div>
+              <span className='text-lime-400 font-semibold'>롱 (초록 점선)</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 지지 구간. 여기서 롱 진입 고려
               </span>
             </div>
             <div>

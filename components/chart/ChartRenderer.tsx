@@ -399,40 +399,40 @@ export default function ChartRenderer({
 
     // Volume Profile 라인 (핵심가, 상단저항, 하단지지)
     if (showVolumeProfile && volumeProfile) {
-      // 핵심가 (POC) - 가장 많이 거래된 가격 = 많은 사람이 여기서 진입함
+      // 핵심가 (POC) - 가장 많이 거래된 가격 = 목표가 (가격이 여기로 돌아옴)
       candlestickSeries.createPriceLine({
         price: volumeProfile.poc,
-        color: 'rgba(239, 68, 68, 0.8)', // red-500
+        color: 'rgba(250, 204, 21, 0.9)', // yellow-400 - 목표가
         lineWidth: 2,
         lineStyle: 0, // 실선
         axisLabelVisible: true,
-        title: '핵심가',
-        axisLabelColor: 'rgba(239, 68, 68, 0.9)',
-        axisLabelTextColor: '#fff',
+        title: '목표',
+        axisLabelColor: 'rgba(250, 204, 21, 1)',
+        axisLabelTextColor: '#000',
       });
 
-      // 상단저항 (VAH) - 거래 많은 영역의 상단 = 저항선 역할
+      // 상단저항 (VAH) - 저항선 = 숏 진입 구간
       candlestickSeries.createPriceLine({
         price: volumeProfile.vah,
-        color: 'rgba(168, 85, 247, 0.6)', // purple-500
+        color: 'rgba(251, 146, 60, 0.7)', // orange-400 - 숏 구간
         lineWidth: 1,
         lineStyle: 2, // 점선
         axisLabelVisible: true,
-        title: '상단',
-        axisLabelColor: 'rgba(168, 85, 247, 0.8)',
-        axisLabelTextColor: '#fff',
+        title: '숏',
+        axisLabelColor: 'rgba(251, 146, 60, 0.9)',
+        axisLabelTextColor: '#000',
       });
 
-      // 하단지지 (VAL) - 거래 많은 영역의 하단 = 지지선 역할
+      // 하단지지 (VAL) - 지지선 = 롱 진입 구간
       candlestickSeries.createPriceLine({
         price: volumeProfile.val,
-        color: 'rgba(168, 85, 247, 0.6)', // purple-500
+        color: 'rgba(163, 230, 53, 0.7)', // lime-400 - 롱 구간
         lineWidth: 1,
         lineStyle: 2, // 점선
         axisLabelVisible: true,
-        title: '하단',
-        axisLabelColor: 'rgba(168, 85, 247, 0.8)',
-        axisLabelTextColor: '#fff',
+        title: '롱',
+        axisLabelColor: 'rgba(163, 230, 53, 0.9)',
+        axisLabelTextColor: '#000',
       });
     }
 
