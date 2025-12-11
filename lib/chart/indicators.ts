@@ -363,12 +363,12 @@ export function addDivergenceLines(
 
   // 각 다이버전스 쌍에 대해 선 그리기
   divergencePairs.forEach((pair) => {
-    // 필터링된 신호는 회색, 정상 신호는 오더북 색상 기준 (투명도 적용 - 겹치면 진해짐)
+    // 필터링된 신호는 회색, 정상 신호는 오더북 색상 기준
     const color = pair.isFiltered
-      ? 'rgba(156, 163, 175, 0.5)' // gray-400 (투명도 50%)
+      ? 'rgba(156, 163, 175, 0.7)' // gray-400 (투명도 70%)
       : pair.direction === 'bullish'
-      ? 'rgba(163, 230, 53, 0.6)' // lime-400 (롱 타점 - 투명도 60%)
-      : 'rgba(248, 113, 113, 0.6)'; // red-400 (숏 타점 - 투명도 60%)
+      ? 'rgba(163, 230, 53, 0.9)' // lime-400 (롱 타점 - 투명도 90%)
+      : 'rgba(248, 113, 113, 0.9)'; // red-400 (숏 타점 - 투명도 90%)
 
     // 1. 가격 패널에 선 그리기
     const startCandle = candleData.find(
