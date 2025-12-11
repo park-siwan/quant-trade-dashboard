@@ -436,27 +436,17 @@ export default function ChartRenderer({
       });
     }
 
-    // 패널 높이를 2:1:1로 설정 (v5.0.8+ API)
-    // setStretchFactor를 사용하여 메인 패널은 2, RSI/OBV는 1로 설정
-    setTimeout(() => {
-      const panes = chart.panes();
-
-      if (panes.length > 0) {
-        panes.forEach((pane, index) => {
-          if (index === 0) {
-            // 메인 패널 (캔들스틱)은 2배 크기
-            pane.setStretchFactor(4);
-            console.log(`패널 ${index} (메인) stretch factor 설정: 2`);
-          } else {
-            // RSI, OBV 패널은 절반 크기
-            pane.setStretchFactor(1);
-            console.log(`패널 ${index} (지표) stretch factor 설정: 1`);
-          }
-        });
-
-        console.log(`✅ ${panes.length}개 패널 2:1:1 비율 설정 완료`);
-      }
-    }, 100);
+    // 패널 높이를 4:1:1:1 비율로 설정 (즉시 실행)
+    const panes = chart.panes();
+    if (panes.length > 0) {
+      panes.forEach((pane, index) => {
+        if (index === 0) {
+          pane.setStretchFactor(4); // 메인 패널 4배
+        } else {
+          pane.setStretchFactor(1); // 지표 패널 1배
+        }
+      });
+    }
 
     // 항상 최신 캔들(오른쪽 끝)을 보여주도록 설정
     chart.timeScale().scrollToRealTime();
