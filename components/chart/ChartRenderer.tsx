@@ -108,7 +108,7 @@ export default function ChartRenderer({
     rsi: number | null;
     filterReason: string | null;
     crossover: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null;
-    divergences: Array<{ type: string; direction: string; analysis: string; isFiltered: boolean }>;
+    divergences: Array<{ type: string; direction: string; analysis: string; isFiltered: boolean; startTime: number; endTime: number }>;
     marketSignal?: MarketSignal | null;
   } | null>(null);
   const [trendTooltip, setTrendTooltip] = useState<string | null>(null); // 추세 툴팁
@@ -482,6 +482,8 @@ export default function ChartRenderer({
           direction: string;
           analysis: string;
           isFiltered: boolean;
+          startTime: number;
+          endTime: number;
         }> = [];
         let marketSignalInfo: MarketSignal | null = null;
 
@@ -576,6 +578,8 @@ export default function ChartRenderer({
                         direction: 'bullish',
                         analysis: `가격은 하락하는 반면 ${signal.type.toUpperCase()}는 상승하고 있습니다. 이는 매도 압력이 약해지고 있음을 나타내며, 곧 상승 반전할 가능성이 있습니다. 매수 진입을 고려할 수 있는 시점입니다.`,
                         isFiltered,
+                        startTime,
+                        endTime,
                       });
                     } else {
                       divergenceInfos.push({
@@ -583,6 +587,8 @@ export default function ChartRenderer({
                         direction: 'bearish',
                         analysis: `가격은 상승하는 반면 ${signal.type.toUpperCase()}는 하락하고 있습니다. 이는 매수 압력이 약해지고 있음을 의미하며, 하락 반전 가능성이 있습니다. 매도 또는 익절을 고려하세요.`,
                         isFiltered,
+                        startTime,
+                        endTime,
                       });
                     }
                   }

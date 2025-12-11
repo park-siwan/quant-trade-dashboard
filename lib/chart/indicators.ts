@@ -133,11 +133,11 @@ export function addCvdIndicator(
   chart: IChartApi,
   cvdData: LineData[],
 ): ISeriesApi<'Line'> {
-  // CVD 라인 - 파란계열 (하늘색)
+  // CVD 라인 - 파란계열 (하늘색, 투명도 50%)
   const cvdSeries = chart.addSeries(
     LineSeries,
     {
-      color: '#60a5fa', // 하늘색 (blue-400)
+      color: 'rgba(96, 165, 250, 0.5)', // 하늘색 (blue-400) 투명도 50%
       lineWidth: 2,
       priceScaleId: 'cvd',
       crosshairMarkerVisible: true,
@@ -173,11 +173,11 @@ export function addOiIndicator(
   chart: IChartApi,
   oiData: LineData[],
 ): ISeriesApi<'Line'> {
-  // OI 라인 - 보라계열 (자주색)
+  // OI 라인 - 보라계열 (자주색, 투명도 50%)
   const oiSeries = chart.addSeries(
     LineSeries,
     {
-      color: '#c084fc', // 자주색 (purple-400)
+      color: 'rgba(192, 132, 252, 0.5)', // 자주색 (purple-400) 투명도 50%
       lineWidth: 2,
       priceScaleId: 'oi',
       crosshairMarkerVisible: true,
@@ -265,7 +265,7 @@ export function addEmaIndicators(
   const ema20Series = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(239, 68, 68, 0.8)', // 빨간색 (투명도 80%)
+      color: 'rgba(239, 68, 68, 0.25)', // 빨간색 (투명도 25%)
       lineWidth: 2,
       title: 'EMA 20',
       lastValueVisible: false,
@@ -279,7 +279,7 @@ export function addEmaIndicators(
   const ema50Series = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(59, 130, 246, 0.8)', // 파란색 (투명도 80%)
+      color: 'rgba(59, 130, 246, 0.25)', // 파란색 (투명도 25%)
       lineWidth: 3,
       title: 'EMA 50',
       lastValueVisible: false,
@@ -293,7 +293,7 @@ export function addEmaIndicators(
   const ema200Series = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(34, 197, 94, 0.8)', // 초록색 (투명도 80%)
+      color: 'rgba(34, 197, 94, 0.25)', // 초록색 (투명도 25%)
       lineWidth: 4,
       title: 'EMA 200',
       lastValueVisible: false,
@@ -366,12 +366,12 @@ export function addDivergenceLines(
 
   // 각 다이버전스 쌍에 대해 선 그리기
   divergencePairs.forEach((pair) => {
-    // 필터링된 신호는 회색, 정상 신호는 새로운 색상
+    // 필터링된 신호는 회색, 정상 신호는 오더북 색상 기준 (투명도 적용 - 겹치면 진해짐)
     const color = pair.isFiltered
-      ? '#9CA3AF' // gray-400
+      ? 'rgba(156, 163, 175, 0.4)' // gray-400 (투명도 40%)
       : pair.direction === 'bullish'
-      ? '#a3e635' // lime (연두색)
-      : '#fb923c'; // orange (주황색)
+      ? 'rgba(163, 230, 53, 0.4)' // lime-400 (롱 타점 - 투명도 40%)
+      : 'rgba(248, 113, 113, 0.4)'; // red-400 (숏 타점 - 투명도 40%)
 
     // 1. 가격 패널에 선 그리기
     const startCandle = candleData.find(
@@ -595,7 +595,7 @@ export function addCrossoverMarkers(
     return {
       time: (event.timestamp / 1000) as Time,
       position: isGoldenCross ? 'belowBar' : 'aboveBar',
-      color: isGoldenCross ? '#a3e635' : '#fb923c', // 연두색 / 주황색
+      color: isGoldenCross ? '#a3e635' : '#f87171', // lime-400 (롱) / red-400 (숏)
       shape: isGoldenCross ? 'arrowUp' : 'arrowDown',
       text: isGoldenCross ? 'GC' : 'DC',
     };
