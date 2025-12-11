@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useCandles } from '@/hooks/useCandles';
 import ChartRenderer from '@/components/chart/ChartRenderer';
 import RefreshCountdown from '@/components/chart/RefreshCountdown';
@@ -74,96 +74,87 @@ export default function ChartAdapter({
 }: ChartAdapterProps) {
   const [selectedTimeframe, setSelectedTimeframe] = useState(initialTimeframe);
 
-  const { data, isLoading, error, refetch } = useCandles({
+  const { data, isLoading, error, refetch, realtimeCandle } = useCandles({
     symbol,
     timeframe: selectedTimeframe,
     limit,
     enableAutoRefresh: true,
+    enableWebSocket: true, // 실시간 캔들 WebSocket 활성화
   });
 
-  // 에러 상태 처리
-  if (error) {
-    return (
-      <div className='flex items-center justify-center h-[600px] backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-2xl shadow-2xl'>
-        <div className='text-center'>
-          <p className='text-red-400 mb-4'>데이터 로딩 실패</p>
-          <button
-            onClick={() => refetch()}
-            className='px-4 py-2 bg-red-500/30 backdrop-blur-md text-white rounded-lg hover:bg-red-500/40 transition-all duration-200 border border-red-400/50'
-          >
-            다시 시도
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 데이터 없음 상태 처리
-  if (!isLoading && (!data?.success || !data?.data?.candles)) {
-    return (
-      <div className='flex items-center justify-center h-[600px] backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl'>
-        <p className='text-gray-300'>데이터가 없습니다</p>
-      </div>
-    );
-  }
-
   // API 응답을 CandlestickData 형식으로 변환 (데이터가 없으면 빈 배열)
-  const chartData: CandlestickData[] =
-    data?.data?.candles?.map((candle) => ({
-      time: (candle[0] / 1000) as CandlestickData['time'], // 밀리초를 초로 변환
-      open: candle[1],
-      high: candle[2],
-      low: candle[3],
-      close: candle[4],
-    })) || [];
+  // 모든 useMemo 훅은 early return 전에 호출되어야 함
+  const chartData: CandlestickData[] = useMemo(
+    () =>
+      data?.data?.candles?.map((candle) => ({
+        time: (candle[0] / 1000) as CandlestickData['time'], // 밀리초를 초로 변환
+        open: candle[1],
+        high: candle[2],
+        low: candle[3],
+        close: candle[4],
+      })) || [],
+    [data]
+  );
 
   // RSI 데이터 변환 (null 값 제외)
-  const rsiData: LineData[] =
-    data?.data?.indicators?.rsi
-      ?.map((rsi, index) => {
-        if (rsi === null) return null;
-        return {
-          time: (data.data.candles[index][0] / 1000) as LineData['time'],
-          value: rsi,
-        };
-      })
-      .filter((item): item is LineData => item !== null) || [];
+  const rsiData: LineData[] = useMemo(
+    () =>
+      data?.data?.indicators?.rsi
+        ?.map((rsi, index) => {
+          if (rsi === null || !data?.data?.candles?.[index]) return null;
+          return {
+            time: (data.data.candles[index][0] / 1000) as LineData['time'],
+            value: rsi,
+          };
+        })
+        .filter((item): item is LineData => item !== null) || [],
+    [data]
+  );
 
   // OBV 데이터 변환 (null 값 제외)
-  const obvData: LineData[] =
-    data?.data?.indicators?.obv
-      ?.map((obv, index) => {
-        if (obv === null) return null;
-        return {
-          time: (data.data.candles[index][0] / 1000) as LineData['time'],
-          value: obv,
-        };
-      })
-      .filter((item): item is LineData => item !== null) || [];
+  const obvData: LineData[] = useMemo(
+    () =>
+      data?.data?.indicators?.obv
+        ?.map((obv, index) => {
+          if (obv === null || !data?.data?.candles?.[index]) return null;
+          return {
+            time: (data.data.candles[index][0] / 1000) as LineData['time'],
+            value: obv,
+          };
+        })
+        .filter((item): item is LineData => item !== null) || [],
+    [data]
+  );
 
   // CVD 데이터 변환
-  const cvdData: LineData[] =
-    data?.data?.indicators?.cvd
-      ?.map((cvd, index) => {
-        if (cvd === null || cvd === undefined) return null;
-        return {
-          time: (data.data.candles[index][0] / 1000) as LineData['time'],
-          value: cvd,
-        };
-      })
-      .filter((item): item is LineData => item !== null) || [];
+  const cvdData: LineData[] = useMemo(
+    () =>
+      data?.data?.indicators?.cvd
+        ?.map((cvd, index) => {
+          if (cvd === null || cvd === undefined || !data?.data?.candles?.[index]) return null;
+          return {
+            time: (data.data.candles[index][0] / 1000) as LineData['time'],
+            value: cvd,
+          };
+        })
+        .filter((item): item is LineData => item !== null) || [],
+    [data]
+  );
 
   // OI 데이터 변환
-  const oiData: LineData[] =
-    data?.data?.indicators?.oi
-      ?.map((oi, index) => {
-        if (oi === null || oi === undefined) return null;
-        return {
-          time: (data.data.candles[index][0] / 1000) as LineData['time'],
-          value: oi,
-        };
-      })
-      .filter((item): item is LineData => item !== null) || [];
+  const oiData: LineData[] = useMemo(
+    () =>
+      data?.data?.indicators?.oi
+        ?.map((oi, index) => {
+          if (oi === null || oi === undefined || !data?.data?.candles?.[index]) return null;
+          return {
+            time: (data.data.candles[index][0] / 1000) as LineData['time'],
+            value: oi,
+          };
+        })
+        .filter((item): item is LineData => item !== null) || [],
+    [data]
+  );
 
   // EMA 데이터
   const emaData: EmaData | undefined = data?.data?.indicators?.ema;
@@ -194,12 +185,31 @@ export default function ChartAdapter({
     (signal) => signal.phase === 'start' && signal.direction === 'bearish'
   ).length;
 
-  // 디버깅: 콘솔에 데이터 출력
-  console.log('📊 다이버전스 시그널:', divergenceSignals);
-  console.log('📊 요약:', summary);
-  console.log('📊 EMA 데이터:', emaData);
-  console.log('📊 추세 분석:', trendAnalysis);
-  console.log('📊 크로스오버 이벤트:', crossoverEvents);
+  // 에러 상태 처리 (훅 호출 이후에 배치)
+  if (error) {
+    return (
+      <div className='flex items-center justify-center h-[600px] backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-2xl shadow-2xl'>
+        <div className='text-center'>
+          <p className='text-red-400 mb-4'>데이터 로딩 실패</p>
+          <button
+            onClick={() => refetch()}
+            className='px-4 py-2 bg-red-500/30 backdrop-blur-md text-white rounded-lg hover:bg-red-500/40 transition-all duration-200 border border-red-400/50'
+          >
+            다시 시도
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 데이터 없음 상태 처리 (훅 호출 이후에 배치)
+  if (!isLoading && (!data?.success || !data?.data?.candles)) {
+    return (
+      <div className='flex items-center justify-center h-[600px] backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl'>
+        <p className='text-gray-300'>데이터가 없습니다</p>
+      </div>
+    );
+  }
 
   return (
     <div className='relative backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl'>
@@ -311,6 +321,7 @@ export default function ChartAdapter({
         crossoverEvents={crossoverEvents}
         marketSignals={marketSignals}
         timeframe={selectedTimeframe}
+        realtimeCandle={realtimeCandle}
       />
 
       {/* 초보자를 위한 용어 설명 */}

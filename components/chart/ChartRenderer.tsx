@@ -43,6 +43,15 @@ interface ChartRendererProps {
   crossoverEvents?: CrossoverEvent[];
   marketSignals?: MarketSignal[]; // CVD + OI 신호
   timeframe?: string; // 타임프레임 정보 (5m, 15m, 1h 등)
+  realtimeCandle?: {
+    timestamp: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+    isFinal: boolean;
+  } | null;
 }
 
 // 타임프레임을 분 단위로 변환
@@ -90,6 +99,7 @@ export default function ChartRenderer({
   crossoverEvents,
   marketSignals,
   timeframe = '5m',
+  realtimeCandle,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -135,6 +145,49 @@ export default function ChartRenderer({
     setMeasurePoints({ start: null, end: null });
   }, [data]);
 
+  // 실시간 캔들 업데이트 (update 방식으로 뷰 유지)
+  useEffect(() => {
+    // 차트가 아직 준비되지 않았거나, realtimeCandle이 없거나, 캔들이 닫힌 경우 스킵
+    if (!realtimeCandle || !candlestickSeriesRef.current || realtimeCandle.isFinal || !chartRef.current) {
+      return;
+    }
+
+    const candleUpdate: CandlestickData = {
+      time: (realtimeCandle.timestamp / 1000) as CandlestickData['time'],
+      open: realtimeCandle.open,
+      high: realtimeCandle.high,
+      low: realtimeCandle.low,
+      close: realtimeCandle.close,
+    };
+
+    try {
+      // 차트가 dispose되지 않았는지 확인
+      if (candlestickSeriesRef.current) {
+        candlestickSeriesRef.current.update(candleUpdate);
+
+        // 가격 정보 업데이트
+        const change = realtimeCandle.close - realtimeCandle.open;
+        const changePercent = (change / realtimeCandle.open) * 100;
+
+        setCurrentPriceInfo({
+          open: realtimeCandle.open,
+          high: realtimeCandle.high,
+          low: realtimeCandle.low,
+          close: realtimeCandle.close,
+          change,
+          changePercent,
+        });
+      }
+    } catch (err) {
+      // disposed 에러는 무시 (차트가 재생성 중)
+      if (err instanceof Error && err.message.includes('disposed')) {
+        console.warn('⚠️ 차트가 재생성 중입니다.');
+      } else {
+        console.error('❌ 캔들 업데이트 에러:', err);
+      }
+    }
+  }, [realtimeCandle]);
+
   // 차트 스케일 변경 감지를 위한 state (줌/스크롤 시 박스 위치 업데이트용)
   const [scaleUpdateTrigger, setScaleUpdateTrigger] = useState(0);
 
@@ -165,6 +218,17 @@ export default function ChartRenderer({
           enableResize: false, // 패널 크기 조절 비활성화
         },
       },
+      handleScale: {
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+        pinch: true,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: true,
+      },
       grid: {
         vertLines: { color: 'rgba(58, 48, 38, 0.3)' }, // 황금빛 도는 그리드
         horzLines: { color: 'rgba(58, 48, 38, 0.3)' },
@@ -173,13 +237,20 @@ export default function ChartRenderer({
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 20, // 우측 여백
+        lockVisibleTimeRangeOnResize: true, // 리사이즈 시 시간 범위 유지
+      },
+      kineticScroll: {
+        touch: false, // 터치 스크롤 비활성화 (들썩임 방지)
+        mouse: false, // 마우스 스크롤 비활성화 (들썩임 방지)
       },
       rightPriceScale: {
         borderVisible: false,
         scaleMargins: {
-          top: 0.1, // 상단 여백 증가 (가격 정보 표시 공간)
-          bottom: 0.05,
+          top: 0.1,
+          bottom: 0.1,
         },
+        autoScale: true, // 자동 스케일 활성화
+        mode: 0, // Normal price scale mode
       },
       localization: {
         timeFormatter: (time: number) => {
@@ -329,22 +400,9 @@ export default function ChartRenderer({
       }
     }, 100);
 
-    // 첫 렌더링에만 자동 맞춤, 이후에는 스크롤 위치 유지
-    if (isFirstRenderRef.current) {
-      chart.timeScale().fitContent();
-      isFirstRenderRef.current = false;
-    } else if (savedVisibleLogicalRangeRef.current) {
-      // 이전에 저장된 논리적 범위 복원 (바 인덱스 기반)
-      try {
-        chart
-          .timeScale()
-          .setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
-      } catch (e) {
-        // 복원 실패 시 fitContent 호출
-        console.warn('논리적 범위 복원 실패:', e);
-        chart.timeScale().fitContent();
-      }
-    }
+    // 항상 최신 캔들(오른쪽 끝)을 보여주도록 설정
+    chart.timeScale().scrollToRealTime();
+    isFirstRenderRef.current = false;
 
     // 통합 툴팁 (RSI 값 + 필터링 사유 + 크로스오버 + 다이버전스)
     if (rsiSeries) {
@@ -633,32 +691,21 @@ export default function ChartRenderer({
 
     // 클린업
     return () => {
-      // 현재 보이는 논리적 범위 저장 (다음 렌더링에서 복원하기 위해)
-      try {
-        const logicalRange = chart.timeScale().getVisibleLogicalRange();
-        if (logicalRange) {
-          savedVisibleLogicalRangeRef.current = {
-            from: logicalRange.from,
-            to: logicalRange.to,
-          };
-        }
-      } catch (e) {
-        console.warn('논리적 범위 저장 실패:', e);
-      }
-
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleScaleChange);
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
   }, [
-    data,
-    rsiData,
-    obvData,
-    emaData,
-    divergenceSignals,
-    trendAnalysis,
-    crossoverEvents,
-    marketSignals,
+    data.length, // 캔들 개수만 체크 (데이터 내용 변경은 무시)
+    rsiData?.length,
+    obvData?.length,
+    cvdData?.length,
+    oiData?.length,
+    emaData !== undefined,
+    divergenceSignals?.length,
+    trendAnalysis !== undefined,
+    crossoverEvents?.length,
+    marketSignals?.length,
   ]);
 
   // 측정 박스를 위한 상태 (화면 좌표)

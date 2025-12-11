@@ -1,4 +1,5 @@
 import ChartAdapter from '@/components/ChartAdapter';
+import OrderBook from '@/components/OrderBook';
 
 export default function Home() {
   return (
@@ -16,7 +17,19 @@ export default function Home() {
           </h1>
           <p className='text-gray-300'>실시간 암호화폐 차트 대시보드</p>
         </div> */}
-        <ChartAdapter symbol='BTC/USDT' initialTimeframe='5m' limit={1000} />
+
+        {/* 그리드 레이아웃: 차트(좌) + 오더북(우) */}
+        <div className='grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6'>
+          {/* 메인 차트 */}
+          <div>
+            <ChartAdapter symbol='BTC/USDT' initialTimeframe='5m' limit={1000} />
+          </div>
+
+          {/* 오더북 사이드바 */}
+          <div className='h-[800px]'>
+            <OrderBook symbol='BTCUSDT' limit={20} />
+          </div>
+        </div>
       </div>
     </div>
   );
