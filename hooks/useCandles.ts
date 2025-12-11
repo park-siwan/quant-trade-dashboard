@@ -10,10 +10,24 @@ interface UseCandlesParams {
   enableWebSocket?: boolean;
 }
 
-// 타임프레임 변환 (API 형식 -> Binance WebSocket 형식)
-const convertTimeframe = (timeframe: string): string => {
-  // '5m', '15m', '1h', '4h', '1d' 등은 그대로 사용 가능
-  return timeframe;
+// 타임프레임 변환 (API 형식 -> Bybit WebSocket 형식)
+const convertTimeframeToBybit = (timeframe: string): string => {
+  // Bybit 타임프레임: 1, 3, 5, 15, 30, 60, 120, 240, 360, 720, D, W, M
+  const map: Record<string, string> = {
+    '1m': '1',
+    '3m': '3',
+    '5m': '5',
+    '15m': '15',
+    '30m': '30',
+    '1h': '60',
+    '2h': '120',
+    '4h': '240',
+    '6h': '360',
+    '12h': '720',
+    '1d': 'D',
+    '1w': 'W',
+  };
+  return map[timeframe] || '5';
 };
 
 // 타임프레임에 맞춘 폴링 간격
@@ -55,20 +69,21 @@ export function useCandles({
     refetchRef.current = query.refetch;
   }, [query.refetch]);
 
-  // WebSocket 연결 (실시간 캔들 업데이트)
+  // WebSocket 연결 (실시간 캔들 업데이트) - Bybit
   useEffect(() => {
     if (!enableWebSocket) return;
     if (typeof window === 'undefined') {
       return;
     }
 
-    // 심볼 변환: BTC/USDT -> btcusdt
-    const wsSymbol = symbol.replace('/', '').toLowerCase();
-    const wsTimeframe = convertTimeframe(timeframe);
-    const wsUrl = `wss://fstream.binance.com/ws/${wsSymbol}@kline_${wsTimeframe}`;
+    // 심볼 변환: BTC/USDT -> BTCUSDT
+    const wsSymbol = symbol.replace('/', '').toUpperCase();
+    const wsTimeframe = convertTimeframeToBybit(timeframe);
+    const wsUrl = 'wss://stream.bybit.com/v5/public/linear';
 
     let isIntentionalClose = false;
     let reconnectTimeout: NodeJS.Timeout | null = null;
+    let pingInterval: NodeJS.Timeout | null = null;
 
     const connectWebSocket = () => {
       // 이미 의도적으로 닫힌 경우 재연결 안함
@@ -78,39 +93,57 @@ export function useCandles({
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
-        ws.onopen = () => {};
+        ws.onopen = () => {
+          // Bybit은 연결 후 구독 메시지를 보내야 함
+          const subscribeMsg = {
+            op: 'subscribe',
+            args: [`kline.${wsTimeframe}.${wsSymbol}`],
+          };
+          ws.send(JSON.stringify(subscribeMsg));
+
+          // Bybit은 20초마다 ping을 보내야 연결 유지
+          pingInterval = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ op: 'ping' }));
+            }
+          }, 20000);
+        };
 
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
 
-            if (data.e === 'kline' && data.k) {
-              const kline = data.k;
-              const currentCandleTime = kline.t;
-              const now = Date.now();
+            // Bybit kline 데이터 처리
+            if (data.topic && data.topic.startsWith('kline.') && data.data) {
+              const klineArray = data.data;
+              if (klineArray.length > 0) {
+                const kline = klineArray[0];
+                const currentCandleTime = kline.start;
+                const now = Date.now();
 
-              // throttle: 500ms마다 업데이트 (더 실시간)
-              const shouldUpdate = now - lastUpdateTimeRef.current > 500;
+                // throttle: 500ms마다 업데이트 (더 실시간)
+                const shouldUpdate = now - lastUpdateTimeRef.current > 500;
 
-              if (shouldUpdate) {
-                lastUpdateTimeRef.current = now;
+                if (shouldUpdate) {
+                  lastUpdateTimeRef.current = now;
 
-                // 새로운 캔들 데이터로 업데이트
-                setWsData({
-                  timestamp: currentCandleTime,
-                  open: parseFloat(kline.o),
-                  high: parseFloat(kline.h),
-                  low: parseFloat(kline.l),
-                  close: parseFloat(kline.c),
-                  volume: parseFloat(kline.v),
-                  isFinal: kline.x, // 캔들이 닫혔는지 여부
-                });
-              }
+                  // 새로운 캔들 데이터로 업데이트
+                  setWsData({
+                    timestamp: currentCandleTime,
+                    open: parseFloat(kline.open),
+                    high: parseFloat(kline.high),
+                    low: parseFloat(kline.low),
+                    close: parseFloat(kline.close),
+                    volume: parseFloat(kline.volume),
+                    isFinal: kline.confirm, // 캔들이 닫혔는지 여부
+                  });
+                }
 
-              // 캔들이 닫히면 전체 데이터 리프레시 (지표 재계산)
-              if (kline.x && currentCandleTime !== lastCandleTimeRef.current) {
-                lastCandleTimeRef.current = currentCandleTime;
-                refetchRef.current();
+                // 캔들이 닫히면 전체 데이터 리프레시 (지표 재계산)
+                if (kline.confirm && currentCandleTime !== lastCandleTimeRef.current) {
+                  lastCandleTimeRef.current = currentCandleTime;
+                  refetchRef.current();
+                }
               }
             }
           } catch (err) {
@@ -121,6 +154,12 @@ export function useCandles({
         ws.onerror = () => {};
 
         ws.onclose = () => {
+          // ping interval 정리
+          if (pingInterval) {
+            clearInterval(pingInterval);
+            pingInterval = null;
+          }
+
           // 의도적 종료가 아니면 재연결 시도
           if (!isIntentionalClose) {
             reconnectTimeout = setTimeout(() => {
@@ -138,6 +177,12 @@ export function useCandles({
     // 클린업
     return () => {
       isIntentionalClose = true;
+
+      // ping interval 정리
+      if (pingInterval) {
+        clearInterval(pingInterval);
+        pingInterval = null;
+      }
 
       // 재연결 timeout 취소
       if (reconnectTimeout) {

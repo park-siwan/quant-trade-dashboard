@@ -14,12 +14,12 @@ export interface OrderBookData {
 
 interface UseOrderBookProps {
   symbol?: string;
-  limit?: number; // 표시할 호가 단계 (5, 10, 20 중 하나)
+  limit?: number; // 표시할 호가 단계 (1, 25, 50, 100, 200)
 }
 
-export function useOrderBook({ symbol = 'BTCUSDT', limit = 20 }: UseOrderBookProps = {}) {
-  // 바이낸스가 지원하는 depth 레벨로 조정
-  const validLimit = limit <= 5 ? 5 : limit <= 10 ? 10 : 20;
+export function useOrderBook({ symbol = 'BTCUSDT', limit = 25 }: UseOrderBookProps = {}) {
+  // Bybit이 지원하는 depth 레벨로 조정 (1, 25, 50, 100, 200)
+  const validLimit = limit <= 1 ? 1 : limit <= 25 ? 25 : limit <= 50 ? 50 : limit <= 100 ? 100 : 200;
   const [orderBook, setOrderBook] = useState<OrderBookData>({
     bids: [],
     asks: [],
@@ -37,11 +37,13 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 20 }: UseOrderBookPro
       return;
     }
 
-    // 바이낸스 선물 WebSocket 엔드포인트 (validLimit 사용)
-    const wsUrl = `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@depth${validLimit}@100ms`;
+    // Bybit 선물 WebSocket 엔드포인트
+    const wsUrl = 'wss://stream.bybit.com/v5/public/linear';
+    const wsSymbol = symbol.toUpperCase();
 
     let isIntentionalClose = false;
     let reconnectTimeout: NodeJS.Timeout | null = null;
+    let pingInterval: NodeJS.Timeout | null = null;
 
     const connectWebSocket = () => {
       // 이미 의도적으로 닫힌 경우 재연결 안함
@@ -54,37 +56,56 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 20 }: UseOrderBookPro
         ws.onopen = () => {
           setIsConnected(true);
           setError(null);
+
+          // Bybit은 연결 후 구독 메시지를 보내야 함
+          const subscribeMsg = {
+            op: 'subscribe',
+            args: [`orderbook.${validLimit}.${wsSymbol}`],
+          };
+          ws.send(JSON.stringify(subscribeMsg));
+
+          // Bybit은 20초마다 ping을 보내야 연결 유지
+          pingInterval = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ op: 'ping' }));
+            }
+          }, 20000);
         };
 
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
 
-            // 중복 업데이트 방지
-            if (data.u <= lastUpdateIdRef.current) {
-              return;
-            }
+            // Bybit orderbook 데이터 처리
+            if (data.topic && data.topic.startsWith('orderbook.') && data.data) {
+              const orderbookData = data.data;
 
-            lastUpdateIdRef.current = data.u;
+              // 중복 업데이트 방지
+              if (orderbookData.u <= lastUpdateIdRef.current) {
+                return;
+              }
 
-            // 매수/매도 호가 누적 총량 계산
-            const processLevels = (levels: [string, string][]): OrderBookLevel[] => {
-              let cumulativeTotal = 0;
-              return levels.map(([price, quantity]) => {
-                cumulativeTotal += parseFloat(quantity);
-                return {
-                  price: parseFloat(price),
-                  quantity: parseFloat(quantity),
-                  total: cumulativeTotal,
-                };
+              lastUpdateIdRef.current = orderbookData.u;
+
+              // 매수/매도 호가 누적 총량 계산
+              const processLevels = (levels: [string, string][]): OrderBookLevel[] => {
+                let cumulativeTotal = 0;
+                return levels.map(([price, quantity]) => {
+                  cumulativeTotal += parseFloat(quantity);
+                  return {
+                    price: parseFloat(price),
+                    quantity: parseFloat(quantity),
+                    total: cumulativeTotal,
+                  };
+                });
+              };
+
+              setOrderBook({
+                bids: processLevels(orderbookData.b || []),
+                asks: processLevels(orderbookData.a || []),
+                lastUpdateId: orderbookData.u,
               });
-            };
-
-            setOrderBook({
-              bids: processLevels(data.b || []),
-              asks: processLevels(data.a || []),
-              lastUpdateId: data.u,
-            });
+            }
           } catch (err) {
             // 파싱 에러 무시
           }
@@ -97,6 +118,12 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 20 }: UseOrderBookPro
 
         ws.onclose = () => {
           setIsConnected(false);
+
+          // ping interval 정리
+          if (pingInterval) {
+            clearInterval(pingInterval);
+            pingInterval = null;
+          }
 
           // 의도적 종료가 아니면 재연결 시도
           if (!isIntentionalClose) {
@@ -115,6 +142,12 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 20 }: UseOrderBookPro
     // 클린업
     return () => {
       isIntentionalClose = true;
+
+      // ping interval 정리
+      if (pingInterval) {
+        clearInterval(pingInterval);
+        pingInterval = null;
+      }
 
       // 재연결 timeout 취소
       if (reconnectTimeout) {
