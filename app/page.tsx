@@ -48,12 +48,17 @@ export default function Home() {
               </span>
             </div>
             <div>
-              <span className='text-yellow-400 font-semibold'>
-                EMA (지수이동평균)
+              <span className='font-semibold'>
+                EMA:{' '}
+                <span className='text-red-400'>20</span>
+                <span className='text-gray-500'>/</span>
+                <span className='text-blue-400'>50</span>
+                <span className='text-gray-500'>/</span>
+                <span className='text-green-400'>200</span>
               </span>
               <span className='text-gray-300'>
                 {' '}
-                - 최근 가격에 더 높은 가중치를 둔 이동평균선. 추세 파악용
+                - 이동평균선. 숫자가 클수록 장기 추세
               </span>
             </div>
             <div>
