@@ -406,7 +406,7 @@ export default function ChartRenderer({
         lineWidth: 2,
         lineStyle: 0, // 실선
         axisLabelVisible: true,
-        title: '목표',
+        title: '목표(POC)',
         axisLabelColor: 'rgba(250, 204, 21, 1)',
         axisLabelTextColor: '#000',
       });
@@ -418,7 +418,7 @@ export default function ChartRenderer({
         lineWidth: 1,
         lineStyle: 2, // 점선
         axisLabelVisible: true,
-        title: '숏',
+        title: '숏(VAH)',
         axisLabelColor: 'rgba(251, 146, 60, 0.9)',
         axisLabelTextColor: '#000',
       });
@@ -430,7 +430,7 @@ export default function ChartRenderer({
         lineWidth: 1,
         lineStyle: 2, // 점선
         axisLabelVisible: true,
-        title: '롱',
+        title: '롱(VAL)',
         axisLabelColor: 'rgba(163, 230, 53, 0.9)',
         axisLabelTextColor: '#000',
       });

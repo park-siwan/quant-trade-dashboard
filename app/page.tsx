@@ -96,21 +96,21 @@ export default function Home() {
               </span>
             </div>
             <div>
-              <span className='text-yellow-400 font-semibold'>목표 (노란선)</span>
+              <span className='text-yellow-400 font-semibold'>목표(POC) 노란선</span>
               <span className='text-gray-300'>
                 {' '}
                 - 가장 많이 거래된 가격. 가격이 여기로 돌아옴
               </span>
             </div>
             <div>
-              <span className='text-orange-400 font-semibold'>숏 (주황 점선)</span>
+              <span className='text-orange-400 font-semibold'>숏(VAH) 주황 점선</span>
               <span className='text-gray-300'>
                 {' '}
                 - 저항 구간. 여기서 숏 진입 고려
               </span>
             </div>
             <div>
-              <span className='text-lime-400 font-semibold'>롱 (초록 점선)</span>
+              <span className='text-lime-400 font-semibold'>롱(VAL) 초록 점선</span>
               <span className='text-gray-300'>
                 {' '}
                 - 지지 구간. 여기서 롱 진입 고려
