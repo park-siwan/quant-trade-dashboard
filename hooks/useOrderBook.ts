@@ -12,6 +12,11 @@ export interface OrderBookData {
   lastUpdateId: number;
 }
 
+export interface RatioHistoryPoint {
+  timestamp: number;
+  bidRatio: number; // 매수 비율 (0~100)
+}
+
 interface UseOrderBookProps {
   symbol?: string;
   limit?: number; // 표시할 호가 단계 (1, 50, 200, 500)
@@ -25,11 +30,13 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookPro
     asks: [],
     lastUpdateId: 0,
   });
+  const [ratioHistory, setRatioHistory] = useState<RatioHistoryPoint[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
+  const lastRatioUpdateRef = useRef<number>(0);
   // 오더북 데이터를 ref로 관리 (delta 병합용)
   const orderBookRef = useRef<{ bids: Map<string, number>; asks: Map<string, number> }>({
     bids: new Map(),
@@ -110,6 +117,23 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookPro
                 return arr;
               };
 
+              // 비율 히스토리 업데이트 함수 (3초마다, 최근 15분 유지)
+              const updateRatioHistory = (bids: OrderBookLevel[], asks: OrderBookLevel[]) => {
+                if (now - lastRatioUpdateRef.current > 3000) {
+                  lastRatioUpdateRef.current = now;
+                  const totalBid = bids.reduce((sum, b) => sum + b.quantity, 0);
+                  const totalAsk = asks.reduce((sum, a) => sum + a.quantity, 0);
+                  const total = totalBid + totalAsk;
+                  const bidRatio = total > 0 ? (totalBid / total) * 100 : 50;
+
+                  setRatioHistory(prev => {
+                    const fifteenMinutesAgo = now - 15 * 60 * 1000;
+                    const filtered = prev.filter(p => p.timestamp > fifteenMinutesAgo);
+                    return [...filtered, { timestamp: now, bidRatio }];
+                  });
+                }
+              };
+
               // snapshot: ref 초기화 + 즉시 렌더
               if (message.type === 'snapshot') {
                 orderBookRef.current.bids.clear();
@@ -123,11 +147,14 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookPro
                 });
 
                 lastUpdateTimeRef.current = now;
+                const newBids = mapToSortedArray(orderBookRef.current.bids, false);
+                const newAsks = mapToSortedArray(orderBookRef.current.asks, true);
                 setOrderBook({
-                  bids: mapToSortedArray(orderBookRef.current.bids, false),
-                  asks: mapToSortedArray(orderBookRef.current.asks, true),
+                  bids: newBids,
+                  asks: newAsks,
                   lastUpdateId: orderbookData.u || 0,
                 });
+                updateRatioHistory(newBids, newAsks);
               }
               // delta: ref에 병합 + throttle 렌더
               else if (message.type === 'delta') {
@@ -138,11 +165,14 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookPro
                 // throttle: 100ms마다만 UI 업데이트
                 if (now - lastUpdateTimeRef.current > 100) {
                   lastUpdateTimeRef.current = now;
+                  const newBids = mapToSortedArray(orderBookRef.current.bids, false);
+                  const newAsks = mapToSortedArray(orderBookRef.current.asks, true);
                   setOrderBook({
-                    bids: mapToSortedArray(orderBookRef.current.bids, false),
-                    asks: mapToSortedArray(orderBookRef.current.asks, true),
+                    bids: newBids,
+                    asks: newAsks,
                     lastUpdateId: orderbookData.u || 0,
                   });
+                  updateRatioHistory(newBids, newAsks);
                 }
               }
             }
@@ -204,6 +234,7 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookPro
 
   return {
     orderBook,
+    ratioHistory,
     isConnected,
     error,
   };

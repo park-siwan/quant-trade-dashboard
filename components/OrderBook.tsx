@@ -1,14 +1,146 @@
 'use client';
 
-import { useOrderBook, OrderBookLevel } from '@/hooks/useOrderBook';
+import { useOrderBook, OrderBookLevel, RatioHistoryPoint } from '@/hooks/useOrderBook';
 
 interface OrderBookProps {
   symbol?: string;
   limit?: number;
 }
 
+// 이동평균 계산 함수
+function calculateSMA(data: number[], period: number): number[] {
+  const result: number[] = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      // 초기 데이터는 가능한 범위로 평균
+      const slice = data.slice(0, i + 1);
+      result.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+    } else {
+      const slice = data.slice(i - period + 1, i + 1);
+      result.push(slice.reduce((a, b) => a + b, 0) / period);
+    }
+  }
+  return result;
+}
+
+// 미니 차트 컴포넌트
+function RatioChart({ data }: { data: RatioHistoryPoint[] }) {
+  if (data.length < 2) {
+    return (
+      <div className='h-16 flex items-center justify-center text-gray-500 text-xs'>
+        데이터 수집 중...
+      </div>
+    );
+  }
+
+  const width = 260;
+  const height = 60;
+  const padding = { top: 5, bottom: 5, left: 0, right: 0 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+
+  // 20개 포인트 이동평균으로 스무딩 (60초 평균)
+  const rawRatios = data.map(d => d.bidRatio);
+  const smoothedRatios = calculateSMA(rawRatios, 20);
+
+  // Y축 범위: 35~65% (스무딩 후 더 좁은 범위)
+  const minY = 35;
+  const maxY = 65;
+  const yRange = maxY - minY;
+
+  // 데이터 포인트를 SVG 좌표로 변환 (스무딩된 값 사용)
+  const points = smoothedRatios.map((ratio, index) => {
+    const x = padding.left + (index / (smoothedRatios.length - 1)) * chartWidth;
+    const clampedRatio = Math.max(minY, Math.min(maxY, ratio));
+    const y = padding.top + chartHeight - ((clampedRatio - minY) / yRange) * chartHeight;
+    return { x, y, ratio };
+  });
+
+  // SVG path 생성
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+  // 영역 채우기를 위한 path (50% 라인 기준)
+  const baseY = padding.top + chartHeight - ((50 - minY) / yRange) * chartHeight;
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${baseY} L ${points[0].x} ${baseY} Z`;
+
+  // 현재 비율 (스무딩된 값)
+  const currentRatio = smoothedRatios[smoothedRatios.length - 1] ?? 50;
+  // 2분 전 대비 (40개 포인트 = 120초)
+  const trendDirection = smoothedRatios.length > 40
+    ? currentRatio - smoothedRatios[smoothedRatios.length - 40]
+    : 0;
+
+  // 색상 결정 (매수 우세: 초록, 매도 우세: 빨강)
+  const isAbove50 = currentRatio > 50;
+  const strokeColor = isAbove50 ? '#84cc16' : '#ef4444';
+  const fillColor = isAbove50 ? 'rgba(132, 204, 22, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+
+  return (
+    <div className='relative'>
+      {/* 헤더 */}
+      <div className='flex items-center justify-between mb-1'>
+        <span className='text-[10px] text-gray-400'>매수/매도 비율 추이 (15분)</span>
+        <div className='flex items-center gap-1'>
+          <span className={`text-xs font-mono font-bold ${isAbove50 ? 'text-lime-400' : 'text-red-400'}`}>
+            {currentRatio.toFixed(1)}%
+          </span>
+          {trendDirection !== 0 && (
+            <span className={`text-[10px] ${trendDirection > 0 ? 'text-lime-400' : 'text-red-400'}`}>
+              {trendDirection > 0 ? '▲' : '▼'}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* 차트 */}
+      <svg width={width} height={height} className='overflow-visible'>
+        {/* 50% 기준선 */}
+        <line
+          x1={padding.left}
+          y1={baseY}
+          x2={width - padding.right}
+          y2={baseY}
+          stroke='rgba(255,255,255,0.2)'
+          strokeDasharray='4,4'
+        />
+
+        {/* 영역 채우기 */}
+        <path d={areaPath} fill={fillColor} />
+
+        {/* 라인 */}
+        <path d={linePath} fill='none' stroke={strokeColor} strokeWidth='2' />
+
+        {/* 현재 포인트 */}
+        <circle
+          cx={points[points.length - 1].x}
+          cy={points[points.length - 1].y}
+          r='4'
+          fill={strokeColor}
+        />
+
+        {/* Y축 레이블 */}
+        <text x={width - 2} y={padding.top + 8} fontSize='8' fill='rgba(255,255,255,0.4)' textAnchor='end'>
+          {maxY}%
+        </text>
+        <text x={width - 2} y={baseY + 3} fontSize='8' fill='rgba(255,255,255,0.4)' textAnchor='end'>
+          50%
+        </text>
+        <text x={width - 2} y={height - padding.bottom} fontSize='8' fill='rgba(255,255,255,0.4)' textAnchor='end'>
+          {minY}%
+        </text>
+      </svg>
+
+      {/* 범례 */}
+      <div className='flex justify-between text-[9px] text-gray-500 mt-1'>
+        <span>15분 전</span>
+        <span>현재</span>
+      </div>
+    </div>
+  );
+}
+
 export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookProps) {
-  const { orderBook, isConnected, error } = useOrderBook({ symbol, limit });
+  const { orderBook, ratioHistory, isConnected, error } = useOrderBook({ symbol, limit });
 
   // 최대 총량 계산 (백그라운드 바 너비 비율용)
   const maxBidTotal = orderBook.bids.length > 0
@@ -212,6 +344,11 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
             </div>
           );
         })()}
+
+        {/* 비율 추이 차트 */}
+        <div className='mt-4 pt-4 border-t border-white/10'>
+          <RatioChart data={ratioHistory} />
+        </div>
       </div>
 
       {/* 오더북 보는 법 설명 */}
