@@ -32,6 +32,17 @@ import {
 import ChartTooltip from './ChartTooltip';
 import { LongShortRatio } from '@/hooks/useLongShortRatio';
 
+// Volume Profile 타입
+export interface VolumeProfileData {
+  buckets: Array<{ price: number; volume: number; buyVolume: number; sellVolume: number }>;
+  maxVolume: number;
+  poc: number; // Point of Control (최대 거래량 가격)
+  vah: number; // Value Area High
+  val: number; // Value Area Low
+  minPrice: number;
+  maxPrice: number;
+}
+
 interface ChartRendererProps {
   data: CandlestickData[];
   rsiData?: LineData[];
@@ -54,6 +65,7 @@ interface ChartRendererProps {
     isFinal: boolean;
   } | null;
   longShortRatio?: LongShortRatio | null; // 롱/숏 비율 (Bybit API)
+  volumeProfile?: VolumeProfileData | null; // 가격대별 거래량
 }
 
 // 타임프레임을 분 단위로 변환
@@ -103,6 +115,7 @@ export default function ChartRenderer({
   timeframe = '5m',
   realtimeCandle,
   longShortRatio,
+  volumeProfile,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -140,6 +153,9 @@ export default function ChartRenderer({
 
   // 청산 구간 표시 토글 (useEffect보다 먼저 선언해야 함)
   const [showLiquidationZones, setShowLiquidationZones] = useState(true);
+
+  // Volume Profile 표시 토글
+  const [showVolumeProfile, setShowVolumeProfile] = useState(true);
 
   // measurePoints가 변경될 때마다 ref도 업데이트
   useEffect(() => {
@@ -434,6 +450,45 @@ export default function ChartRenderer({
           axisLabelColor: `rgba(45, 212, 191, ${shortOpacity})`,
           axisLabelTextColor: '#000',
         });
+      });
+    }
+
+    // Volume Profile 라인 (POC, VAH, VAL)
+    if (showVolumeProfile && volumeProfile) {
+      // POC (Point of Control) - 최대 거래량 가격 (빨간색, 가장 중요)
+      candlestickSeries.createPriceLine({
+        price: volumeProfile.poc,
+        color: 'rgba(239, 68, 68, 0.8)', // red-500
+        lineWidth: 2,
+        lineStyle: 0, // 실선
+        axisLabelVisible: true,
+        title: 'POC',
+        axisLabelColor: 'rgba(239, 68, 68, 0.9)',
+        axisLabelTextColor: '#fff',
+      });
+
+      // VAH (Value Area High) - 상단 가치 영역
+      candlestickSeries.createPriceLine({
+        price: volumeProfile.vah,
+        color: 'rgba(168, 85, 247, 0.6)', // purple-500
+        lineWidth: 1,
+        lineStyle: 2, // 점선
+        axisLabelVisible: true,
+        title: 'VAH',
+        axisLabelColor: 'rgba(168, 85, 247, 0.8)',
+        axisLabelTextColor: '#fff',
+      });
+
+      // VAL (Value Area Low) - 하단 가치 영역
+      candlestickSeries.createPriceLine({
+        price: volumeProfile.val,
+        color: 'rgba(168, 85, 247, 0.6)', // purple-500
+        lineWidth: 1,
+        lineStyle: 2, // 점선
+        axisLabelVisible: true,
+        title: 'VAL',
+        axisLabelColor: 'rgba(168, 85, 247, 0.8)',
+        axisLabelTextColor: '#fff',
       });
     }
 
@@ -773,6 +828,8 @@ export default function ChartRenderer({
     marketSignals?.length,
     showLiquidationZones, // 청산맵 토글 시 재렌더링
     longShortRatio?.longRatio, // Long/Short 비율 변경 시 재렌더링
+    showVolumeProfile, // Volume Profile 토글 시 재렌더링
+    volumeProfile?.poc, // Volume Profile 변경 시 재렌더링
   ]);
 
   // 크로스오버 X 마커 좌표 상태
@@ -1041,6 +1098,18 @@ export default function ChartRenderer({
             💥 청산맵
           </button>
 
+          {/* Volume Profile 토글 버튼 */}
+          <button
+            onClick={() => setShowVolumeProfile(!showVolumeProfile)}
+            className={`backdrop-blur-md px-3 py-1 rounded-lg text-sm font-medium shadow-lg cursor-pointer transition-all ${
+              showVolumeProfile
+                ? 'bg-red-500/20 text-red-400 border border-red-400/50 shadow-red-500/10'
+                : 'bg-gray-500/20 text-gray-400 border border-gray-400/50 shadow-gray-500/10'
+            }`}
+          >
+            📊 VP
+          </button>
+
           {/* Long/Short 비율 표시 */}
           {longShortRatio && (
             <div className='backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border border-white/10 bg-white/5 flex items-center gap-2'>
@@ -1051,6 +1120,13 @@ export default function ChartRenderer({
               <span className={longShortRatio.dominant === 'short' ? 'text-teal-400 font-bold' : 'text-teal-400/60'}>
                 S {(longShortRatio.shortRatio * 100).toFixed(1)}%
               </span>
+            </div>
+          )}
+
+          {/* Volume Profile POC 가격 표시 */}
+          {showVolumeProfile && volumeProfile && (
+            <div className='backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border border-red-400/30 bg-red-500/10 text-red-400'>
+              POC: {volumeProfile.poc.toLocaleString()}
             </div>
           )}
         </div>

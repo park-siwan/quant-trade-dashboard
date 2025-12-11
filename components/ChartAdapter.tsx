@@ -103,6 +103,102 @@ export default function ChartAdapter({
     [data],
   );
 
+  // Volume Profile 계산 (가격대별 거래량 집계)
+  const volumeProfile = useMemo(() => {
+    if (!data?.data?.candles || data.data.candles.length === 0) return null;
+
+    const candles = data.data.candles;
+    // [timestamp, open, high, low, close, volume]
+    const prices = candles.map(c => ({ high: c[2], low: c[3], close: c[4], volume: c[5] || 0 }));
+
+    // 가격 범위 계산
+    const allHighs = prices.map(p => p.high);
+    const allLows = prices.map(p => p.low);
+    const maxPrice = Math.max(...allHighs);
+    const minPrice = Math.min(...allLows);
+    const priceRange = maxPrice - minPrice;
+
+    // 가격을 20개 구간으로 나눔
+    const bucketCount = 20;
+    const bucketSize = priceRange / bucketCount;
+
+    // 각 구간별 볼륨 집계
+    const buckets: Array<{ price: number; volume: number; buyVolume: number; sellVolume: number }> = [];
+
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketLow = minPrice + (i * bucketSize);
+      const bucketHigh = bucketLow + bucketSize;
+      const bucketMid = (bucketLow + bucketHigh) / 2;
+
+      let totalVolume = 0;
+      let buyVolume = 0;
+      let sellVolume = 0;
+
+      prices.forEach(p => {
+        // 캔들이 이 가격 구간을 통과하면 볼륨 배분
+        if (p.high >= bucketLow && p.low <= bucketHigh) {
+          // 캔들이 구간에 걸친 비율만큼 볼륨 배분
+          const overlap = Math.min(p.high, bucketHigh) - Math.max(p.low, bucketLow);
+          const candleRange = p.high - p.low || 1;
+          const volumeShare = p.volume * (overlap / candleRange);
+
+          totalVolume += volumeShare;
+
+          // 상승 캔들이면 매수, 하락 캔들이면 매도
+          if (p.close >= p.high - (p.high - p.low) / 2) {
+            buyVolume += volumeShare;
+          } else {
+            sellVolume += volumeShare;
+          }
+        }
+      });
+
+      buckets.push({ price: bucketMid, volume: totalVolume, buyVolume, sellVolume });
+    }
+
+    // 최대 볼륨 (정규화용)
+    const maxVolume = Math.max(...buckets.map(b => b.volume));
+
+    // POC (Point of Control) - 최대 거래량 가격
+    const poc = buckets.reduce((max, b) => b.volume > max.volume ? b : max, buckets[0]);
+
+    // VAH/VAL (Value Area High/Low) - 전체 거래량의 70% 포함 구간
+    const totalVolume = buckets.reduce((sum, b) => sum + b.volume, 0);
+    const targetVolume = totalVolume * 0.7;
+
+    // POC 중심으로 확장하며 70% 찾기
+    const pocIndex = buckets.indexOf(poc);
+    let vaLowIndex = pocIndex;
+    let vaHighIndex = pocIndex;
+    let vaVolume = poc.volume;
+
+    while (vaVolume < targetVolume && (vaLowIndex > 0 || vaHighIndex < buckets.length - 1)) {
+      const lowVol = vaLowIndex > 0 ? buckets[vaLowIndex - 1].volume : 0;
+      const highVol = vaHighIndex < buckets.length - 1 ? buckets[vaHighIndex + 1].volume : 0;
+
+      if (lowVol >= highVol && vaLowIndex > 0) {
+        vaLowIndex--;
+        vaVolume += buckets[vaLowIndex].volume;
+      } else if (vaHighIndex < buckets.length - 1) {
+        vaHighIndex++;
+        vaVolume += buckets[vaHighIndex].volume;
+      } else if (vaLowIndex > 0) {
+        vaLowIndex--;
+        vaVolume += buckets[vaLowIndex].volume;
+      }
+    }
+
+    return {
+      buckets,
+      maxVolume,
+      poc: poc.price,
+      vah: buckets[vaHighIndex].price + bucketSize / 2, // Value Area High
+      val: buckets[vaLowIndex].price - bucketSize / 2, // Value Area Low
+      minPrice,
+      maxPrice,
+    };
+  }, [data]);
+
   // RSI 데이터 변환 (null 값 제외)
   const rsiData: LineData[] = useMemo(
     () =>
@@ -379,6 +475,7 @@ export default function ChartAdapter({
         timeframe={selectedTimeframe}
         realtimeCandle={realtimeCandle}
         longShortRatio={longShortRatio}
+        volumeProfile={volumeProfile}
       />
     </div>
   );
