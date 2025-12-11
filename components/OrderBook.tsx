@@ -97,15 +97,60 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
         </div>
 
         {/* 스프레드 표시 */}
-        <div className='py-2 px-2 bg-gradient-to-r from-red-500/5 via-purple-500/10 to-lime-500/5 border-y border-white/10 my-1'>
-          <div className='flex items-center justify-between text-xs'>
-            <span className='text-gray-400'>스프레드</span>
-            <div className='flex items-center gap-2'>
-              <span className='text-purple-400 font-mono font-semibold'>{spread.toFixed(2)}</span>
-              <span className='text-gray-400'>({spreadPercent.toFixed(3)}%)</span>
+        {(() => {
+          // 스프레드 상태 판단
+          const getSpreadStatus = () => {
+            if (spreadPercent < 0.005) return { level: 'good', color: 'text-lime-400', bg: 'bg-lime-500/20', label: '좋음', advice: '시장가 OK' };
+            if (spreadPercent < 0.01) return { level: 'normal', color: 'text-yellow-400', bg: 'bg-yellow-500/20', label: '보통', advice: '지정가 권장' };
+            if (spreadPercent < 0.03) return { level: 'wide', color: 'text-orange-400', bg: 'bg-orange-500/20', label: '넓음', advice: '지정가 필수' };
+            return { level: 'danger', color: 'text-red-400', bg: 'bg-red-500/20', label: '위험', advice: '매매 자제' };
+          };
+          const status = getSpreadStatus();
+
+          return (
+            <div className='py-2 px-2 bg-gradient-to-r from-red-500/5 via-purple-500/10 to-lime-500/5 border-y border-white/10 my-1 group relative'>
+              <div className='flex items-center justify-between text-xs'>
+                <div className='flex items-center gap-1'>
+                  <span className='text-gray-400'>스프레드</span>
+                  <span className={`${status.bg} ${status.color} px-1.5 py-0.5 rounded text-[10px] font-semibold`}>
+                    {status.label}
+                  </span>
+                </div>
+                <div className='flex items-center gap-2'>
+                  <span className='text-purple-400 font-mono font-semibold'>${spread.toFixed(1)}</span>
+                  <span className='text-gray-400'>({spreadPercent.toFixed(4)}%)</span>
+                </div>
+              </div>
+              {/* 툴팁 */}
+              <div className='absolute left-0 right-0 top-full mt-1 z-50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none'>
+                <div className='bg-gray-900/95 border border-white/20 rounded-lg p-3 shadow-xl text-[10px]'>
+                  <p className='text-gray-300 font-semibold mb-2'>스프레드 = 최우선 매도가 - 최우선 매수가</p>
+                  <div className='space-y-1.5'>
+                    <div className='flex justify-between'>
+                      <span className='text-lime-400'>● 0.005% 미만</span>
+                      <span className='text-gray-400'>유동성 좋음, 시장가 가능</span>
+                    </div>
+                    <div className='flex justify-between'>
+                      <span className='text-yellow-400'>● 0.005~0.01%</span>
+                      <span className='text-gray-400'>보통, 지정가 권장</span>
+                    </div>
+                    <div className='flex justify-between'>
+                      <span className='text-orange-400'>● 0.01~0.03%</span>
+                      <span className='text-gray-400'>넓음, 지정가 필수</span>
+                    </div>
+                    <div className='flex justify-between'>
+                      <span className='text-red-400'>● 0.03% 이상</span>
+                      <span className='text-gray-400'>위험, 슬리피지 큼</span>
+                    </div>
+                  </div>
+                  <div className='mt-2 pt-2 border-t border-white/10'>
+                    <p className='text-yellow-400'>💡 현재: {status.advice}</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* 매수 호가 */}
         <div>

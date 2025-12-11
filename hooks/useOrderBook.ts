@@ -135,8 +135,8 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookPro
                 applyDelta(orderbookData.b || [], orderBookRef.current.bids);
                 applyDelta(orderbookData.a || [], orderBookRef.current.asks);
 
-                // throttle: 200ms마다만 UI 업데이트
-                if (now - lastUpdateTimeRef.current > 200) {
+                // throttle: 100ms마다만 UI 업데이트
+                if (now - lastUpdateTimeRef.current > 100) {
                   lastUpdateTimeRef.current = now;
                   setOrderBook({
                     bids: mapToSortedArray(orderBookRef.current.bids, false),
