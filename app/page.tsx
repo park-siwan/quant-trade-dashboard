@@ -51,7 +51,7 @@ export default function Home() {
               <span className='text-gray-400 font-semibold'>X (회색)</span>
               <span className='text-gray-300'>
                 {' '}
-                - 볼륨 부족. 평균의 1.2배 미만. 신뢰도 낮음
+                - 볼륨 부족. 평균 미만. 신뢰도 낮음
               </span>
             </div>
             <div>
