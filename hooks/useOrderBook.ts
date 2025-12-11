@@ -14,12 +14,12 @@ export interface OrderBookData {
 
 interface UseOrderBookProps {
   symbol?: string;
-  limit?: number; // 표시할 호가 단계 (1, 25, 50, 100, 200)
+  limit?: number; // 표시할 호가 단계 (1, 50, 200, 500)
 }
 
-export function useOrderBook({ symbol = 'BTCUSDT', limit = 25 }: UseOrderBookProps = {}) {
-  // Bybit이 지원하는 depth 레벨로 조정 (1, 25, 50, 100, 200)
-  const validLimit = limit <= 1 ? 1 : limit <= 25 ? 25 : limit <= 50 ? 50 : limit <= 100 ? 100 : 200;
+export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookProps = {}) {
+  // Bybit Linear가 지원하는 depth 레벨로 조정 (1, 50, 200, 500)
+  const validLimit = limit <= 1 ? 1 : limit <= 50 ? 50 : limit <= 200 ? 200 : 500;
   const [orderBook, setOrderBook] = useState<OrderBookData>({
     bids: [],
     asks: [],
@@ -29,7 +29,12 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 25 }: UseOrderBookPro
   const [error, setError] = useState<Error | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const lastUpdateIdRef = useRef<number>(0);
+  const lastUpdateTimeRef = useRef<number>(0);
+  // 오더북 데이터를 ref로 관리 (delta 병합용)
+  const orderBookRef = useRef<{ bids: Map<string, number>; asks: Map<string, number> }>({
+    bids: new Map(),
+    asks: new Map(),
+  });
 
   useEffect(() => {
     // SSR 방지 - 브라우저 환경에서만 실행
@@ -74,37 +79,72 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 25 }: UseOrderBookPro
 
         ws.onmessage = (event) => {
           try {
-            const data = JSON.parse(event.data);
+            const message = JSON.parse(event.data);
 
-            // Bybit orderbook 데이터 처리
-            if (data.topic && data.topic.startsWith('orderbook.') && data.data) {
-              const orderbookData = data.data;
+            // Bybit orderbook 데이터 처리 (snapshot 또는 delta)
+            if (message.topic && message.topic.startsWith('orderbook.') && message.data) {
+              const orderbookData = message.data;
+              const now = Date.now();
 
-              // 중복 업데이트 방지
-              if (orderbookData.u <= lastUpdateIdRef.current) {
-                return;
-              }
-
-              lastUpdateIdRef.current = orderbookData.u;
-
-              // 매수/매도 호가 누적 총량 계산
-              const processLevels = (levels: [string, string][]): OrderBookLevel[] => {
-                let cumulativeTotal = 0;
-                return levels.map(([price, quantity]) => {
-                  cumulativeTotal += parseFloat(quantity);
-                  return {
-                    price: parseFloat(price),
-                    quantity: parseFloat(quantity),
-                    total: cumulativeTotal,
-                  };
+              // delta 업데이트 적용 함수
+              const applyDelta = (levels: string[][], map: Map<string, number>) => {
+                levels.forEach((level: string[]) => {
+                  const price = level[0];
+                  const qty = parseFloat(level[1]);
+                  if (qty === 0) {
+                    map.delete(price);
+                  } else {
+                    map.set(price, qty);
+                  }
                 });
               };
 
-              setOrderBook({
-                bids: processLevels(orderbookData.b || []),
-                asks: processLevels(orderbookData.a || []),
-                lastUpdateId: orderbookData.u,
-              });
+              // Map을 정렬된 배열로 변환
+              const mapToSortedArray = (map: Map<string, number>, ascending: boolean): OrderBookLevel[] => {
+                const arr = Array.from(map.entries())
+                  .map(([price, qty]) => ({ price: parseFloat(price), quantity: qty, total: 0 }))
+                  .sort((a, b) => ascending ? a.price - b.price : b.price - a.price);
+
+                let total = 0;
+                arr.forEach(item => { total += item.quantity; item.total = total; });
+                return arr;
+              };
+
+              // snapshot: ref 초기화 + 즉시 렌더
+              if (message.type === 'snapshot') {
+                orderBookRef.current.bids.clear();
+                orderBookRef.current.asks.clear();
+
+                (orderbookData.b || []).forEach((level: string[]) => {
+                  orderBookRef.current.bids.set(level[0], parseFloat(level[1]));
+                });
+                (orderbookData.a || []).forEach((level: string[]) => {
+                  orderBookRef.current.asks.set(level[0], parseFloat(level[1]));
+                });
+
+                lastUpdateTimeRef.current = now;
+                setOrderBook({
+                  bids: mapToSortedArray(orderBookRef.current.bids, false),
+                  asks: mapToSortedArray(orderBookRef.current.asks, true),
+                  lastUpdateId: orderbookData.u || 0,
+                });
+              }
+              // delta: ref에 병합 + throttle 렌더
+              else if (message.type === 'delta') {
+                // ref에 delta 즉시 병합
+                applyDelta(orderbookData.b || [], orderBookRef.current.bids);
+                applyDelta(orderbookData.a || [], orderBookRef.current.asks);
+
+                // throttle: 200ms마다만 UI 업데이트
+                if (now - lastUpdateTimeRef.current > 200) {
+                  lastUpdateTimeRef.current = now;
+                  setOrderBook({
+                    bids: mapToSortedArray(orderBookRef.current.bids, false),
+                    asks: mapToSortedArray(orderBookRef.current.asks, true),
+                    lastUpdateId: orderbookData.u || 0,
+                  });
+                }
+              }
             }
           } catch (err) {
             // 파싱 에러 무시

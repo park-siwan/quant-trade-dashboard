@@ -31,6 +31,18 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
     );
   }
 
+  // 로딩 상태
+  if (!isConnected || (orderBook.bids.length === 0 && orderBook.asks.length === 0)) {
+    return (
+      <div className='backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl h-full flex items-center justify-center'>
+        <div className='text-center'>
+          <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-orange-400 mx-auto mb-3'></div>
+          <p className='text-gray-400 text-sm'>오더북 연결 중...</p>
+        </div>
+      </div>
+    );
+  }
+
   // 스프레드 계산
   const spread = orderBook.asks.length > 0 && orderBook.bids.length > 0
     ? orderBook.asks[0].price - orderBook.bids[0].price
@@ -117,7 +129,7 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
         </div>
       </div>
 
-      {/* 푸터 - 총 매수/매도량 */}
+      {/* 푸터 - 총 매수/매도량 + 매수/매도 비율 */}
       <div className='mt-3 pt-3 border-t border-white/10'>
         <div className='grid grid-cols-2 gap-4 text-xs'>
           <div>
@@ -133,6 +145,76 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
             </p>
           </div>
         </div>
+
+        {/* 매수/매도 비율 바 */}
+        {(() => {
+          const totalBid = orderBook.bids.reduce((sum, bid) => sum + bid.quantity, 0);
+          const totalAsk = orderBook.asks.reduce((sum, ask) => sum + ask.quantity, 0);
+          const total = totalBid + totalAsk;
+          const bidPercent = total > 0 ? (totalBid / total) * 100 : 50;
+          return (
+            <div className='mt-3'>
+              <div className='flex justify-between text-[10px] text-gray-400 mb-1'>
+                <span>매수 {bidPercent.toFixed(1)}%</span>
+                <span>매도 {(100 - bidPercent).toFixed(1)}%</span>
+              </div>
+              <div className='h-2 rounded-full overflow-hidden bg-red-500/30 flex'>
+                <div
+                  className='h-full bg-lime-500 transition-all duration-300'
+                  style={{ width: `${bidPercent}%` }}
+                />
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* 오더북 보는 법 설명 */}
+      <div className='mt-4 pt-3 border-t border-white/10'>
+        <details className='group'>
+          <summary className='text-xs text-orange-400 font-semibold cursor-pointer hover:text-orange-300 flex items-center gap-1'>
+            <span>📚 오더북 보는 법</span>
+            <span className='text-gray-500 group-open:rotate-180 transition-transform'>▼</span>
+          </summary>
+          <div className='mt-3 space-y-3 text-[10px] text-gray-300'>
+            {/* 기본 구조 */}
+            <div>
+              <p className='text-gray-400 font-semibold mb-1'>기본 구조</p>
+              <p><span className='text-red-400'>빨간색 (위)</span> = 매도 호가 (팔려는 물량)</p>
+              <p><span className='text-lime-400'>초록색 (아래)</span> = 매수 호가 (사려는 물량)</p>
+            </div>
+
+            {/* 스프레드 */}
+            <div>
+              <p className='text-gray-400 font-semibold mb-1'>스프레드</p>
+              <p>최우선 매도가 - 최우선 매수가</p>
+              <p className='text-gray-500'>좁으면 유동성 좋음, 넓으면 슬리피지 주의</p>
+            </div>
+
+            {/* 매수/매도 비율 해석 */}
+            <div>
+              <p className='text-gray-400 font-semibold mb-1'>비율 해석</p>
+              <p><span className='text-lime-400'>매수 &gt; 매도</span> → 지지력 강함, 상승 가능성</p>
+              <p><span className='text-red-400'>매도 &gt; 매수</span> → 저항력 강함, 하락 가능성</p>
+            </div>
+
+            {/* 벽 (Wall) */}
+            <div>
+              <p className='text-gray-400 font-semibold mb-1'>벽 (Wall)</p>
+              <p>특정 가격에 큰 물량이 쌓인 것</p>
+              <p className='text-lime-400'>매수벽 뚫림 → 급락 신호</p>
+              <p className='text-red-400'>매도벽 뚫림 → 급등 신호</p>
+            </div>
+
+            {/* 주의사항 */}
+            <div className='bg-yellow-500/10 border border-yellow-500/30 rounded p-2'>
+              <p className='text-yellow-400 font-semibold mb-1'>⚠️ 주의</p>
+              <p>• 스푸핑: 큰 주문 후 취소 (페이크)</p>
+              <p>• 오더북만 보고 매매 금지</p>
+              <p>• 차트 + 오더북 조합해서 판단</p>
+            </div>
+          </div>
+        </details>
       </div>
     </div>
   );
