@@ -373,10 +373,10 @@ export default function ChartRenderer({
       addCrossoverMarkers(candlestickSeries, crossoverEvents);
     }
 
-    // CVD + OI 신호 마커 추가
-    if (marketSignals && marketSignals.length > 0) {
-      addCvdOiMarkers(candlestickSeries, marketSignals);
-    }
+    // CVD + OI 신호 마커 - 커스텀 오버레이 방식으로 변경 (아래 JSX에서 처리)
+    // if (marketSignals && marketSignals.length > 0) {
+    //   addCvdOiMarkers(candlestickSeries, marketSignals);
+    // }
 
     // 패널 높이를 2:1:1로 설정 (v5.0.8+ API)
     // setStretchFactor를 사용하여 메인 패널은 2, RSI/OBV는 1로 설정
@@ -721,6 +721,14 @@ export default function ChartRenderer({
     type: 'golden_cross' | 'dead_cross';
   }>>([]);
 
+  // CVD+OI 신호 마커 좌표 상태
+  const [signalMarkers, setSignalMarkers] = useState<Array<{
+    x: number;
+    y: number;
+    text: string;
+    position: 'above' | 'below';
+  }>>([]);
+
   // 측정 박스를 위한 상태 (화면 좌표)
   const [measureBox, setMeasureBox] = useState<{
     left: number;
@@ -821,6 +829,54 @@ export default function ChartRenderer({
 
     setCrossoverMarkers(markers);
   }, [crossoverEvents, data, scaleUpdateTrigger]);
+
+  // CVD+OI 신호 마커 좌표 업데이트
+  useEffect(() => {
+    if (!chartRef.current || !candlestickSeriesRef.current || !marketSignals || marketSignals.length === 0) {
+      setSignalMarkers([]);
+      return;
+    }
+
+    // 신호 타입별 이모지와 위치 매핑
+    const signalConfig: Record<string, { text: string; position: 'above' | 'below' }> = {
+      REAL_BULL: { text: '🚀', position: 'below' },
+      SHORT_TRAP: { text: '📉', position: 'above' },
+      PUMP_DUMP: { text: '⚠️', position: 'above' },
+      MORE_DROP: { text: '🔻', position: 'above' },
+      LONG_ENTRY: { text: '💎', position: 'below' },
+    };
+
+    const markers: Array<{ x: number; y: number; text: string; position: 'above' | 'below' }> = [];
+
+    marketSignals.forEach((signal) => {
+      const config = signalConfig[signal.type];
+      if (!config) return;
+
+      const time = (signal.timestamp / 1000) as any;
+      const x = chartRef.current!.timeScale().timeToCoordinate(time);
+
+      if (x === null) return;
+
+      // 해당 시간의 캔들 데이터 찾기
+      const candleData = data.find((c) => c.time === time);
+      if (!candleData) return;
+
+      // 위치에 따라 high 또는 low 사용
+      const price = config.position === 'below' ? candleData.low : candleData.high;
+      const y = candlestickSeriesRef.current!.priceToCoordinate(price);
+
+      if (y === null) return;
+
+      markers.push({
+        x,
+        y: config.position === 'below' ? y + 20 : y - 20,
+        text: config.text,
+        position: config.position,
+      });
+    });
+
+    setSignalMarkers(markers);
+  }, [marketSignals, data, scaleUpdateTrigger]);
 
   const priceInfoContainer = typeof window !== 'undefined' ? document.getElementById('price-info-container') : null;
 
@@ -1056,6 +1112,25 @@ export default function ChartRenderer({
             }}
           >
             ✕
+          </div>
+        ))}
+
+        {/* CVD+OI 신호 마커 (커스텀 오버레이 - 이모지만 표시) */}
+        {signalMarkers.map((marker, index) => (
+          <div
+            key={`signal-${index}`}
+            style={{
+              position: 'absolute',
+              left: `${marker.x}px`,
+              top: `${marker.y}px`,
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              zIndex: 20,
+              fontSize: '18px',
+              textShadow: '0 0 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.6)',
+            }}
+          >
+            {marker.text}
           </div>
         ))}
       </div>

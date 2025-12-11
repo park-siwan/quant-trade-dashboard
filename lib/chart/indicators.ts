@@ -368,10 +368,10 @@ export function addDivergenceLines(
   divergencePairs.forEach((pair) => {
     // 필터링된 신호는 회색, 정상 신호는 오더북 색상 기준 (투명도 적용 - 겹치면 진해짐)
     const color = pair.isFiltered
-      ? 'rgba(156, 163, 175, 0.4)' // gray-400 (투명도 40%)
+      ? 'rgba(156, 163, 175, 0.5)' // gray-400 (투명도 50%)
       : pair.direction === 'bullish'
-      ? 'rgba(163, 230, 53, 0.4)' // lime-400 (롱 타점 - 투명도 40%)
-      : 'rgba(248, 113, 113, 0.4)'; // red-400 (숏 타점 - 투명도 40%)
+      ? 'rgba(163, 230, 53, 0.6)' // lime-400 (롱 타점 - 투명도 60%)
+      : 'rgba(248, 113, 113, 0.6)'; // red-400 (숏 타점 - 투명도 60%)
 
     // 1. 가격 패널에 선 그리기
     const startCandle = candleData.find(
@@ -600,38 +600,38 @@ export function addCvdOiMarkers(
 ): void {
   if (marketSignals.length === 0) return;
 
-  // 신호 타입별 색상 및 모양 매핑
+  // 신호 타입별 색상 및 모양 매핑 (원형 도형 + 이모지)
   const signalConfig: Record<
     MarketSignal['type'],
-    { color: string; shape: 'arrowUp' | 'arrowDown' | 'circle'; text: string; position: 'aboveBar' | 'belowBar' }
+    { color: string; shape: 'circle'; text: string; position: 'aboveBar' | 'belowBar' }
   > = {
     REAL_BULL: {
-      color: '#22c55e', // 초록색 (강한 매수)
-      shape: 'arrowUp',
+      color: '#22c55e',
+      shape: 'circle',
       text: '🚀',
       position: 'belowBar',
     },
     SHORT_TRAP: {
-      color: '#f97316', // 주황색
-      shape: 'arrowDown',
+      color: '#f97316',
+      shape: 'circle',
       text: '📉',
       position: 'aboveBar',
     },
     PUMP_DUMP: {
-      color: '#ef4444', // 빨간색 (위험)
-      shape: 'arrowDown',
+      color: '#ef4444',
+      shape: 'circle',
       text: '⚠️',
       position: 'aboveBar',
     },
     MORE_DROP: {
-      color: '#dc2626', // 진한 빨간색
-      shape: 'arrowDown',
+      color: '#dc2626',
+      shape: 'circle',
       text: '🔻',
       position: 'aboveBar',
     },
     LONG_ENTRY: {
-      color: '#10b981', // 에메랄드 (매수 기회)
-      shape: 'arrowUp',
+      color: '#10b981',
+      shape: 'circle',
       text: '💎',
       position: 'belowBar',
     },
