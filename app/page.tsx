@@ -19,15 +19,82 @@ export default function Home() {
         </div> */}
 
         {/* 그리드 레이아웃: 차트(좌) + 오더북(우) */}
-        <div className='grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6'>
+        <div className='grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-stretch'>
           {/* 메인 차트 */}
-          <div>
-            <ChartAdapter symbol='BTC/USDT' initialTimeframe='5m' limit={1000} />
-          </div>
+          <ChartAdapter symbol='BTC/USDT' initialTimeframe='5m' limit={1000} />
 
-          {/* 오더북 사이드바 */}
-          <div className='h-[800px]'>
-            <OrderBook symbol='BTCUSDT' limit={20} />
+          {/* 오더북 사이드바 - 차트와 동일한 높이 */}
+          <OrderBook symbol='BTCUSDT' limit={10} />
+        </div>
+
+        {/* 초보자를 위한 용어 설명 - 스크롤 시 보임 */}
+        <div className='backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl p-4'>
+          <h3 className='text-sm font-bold text-orange-400 mb-3'>
+            📚 차트 용어 설명
+          </h3>
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs'>
+            <div>
+              <span className='text-lime-400 font-semibold'>X (초록)</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 골든크로스. EMA 20이 EMA 50 상향돌파. 롱 신호
+              </span>
+            </div>
+            <div>
+              <span className='text-red-400 font-semibold'>X (빨강)</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 데드크로스. EMA 20이 EMA 50 하향돌파. 숏 신호
+              </span>
+            </div>
+            <div>
+              <span className='text-yellow-400 font-semibold'>
+                EMA (지수이동평균)
+              </span>
+              <span className='text-gray-300'>
+                {' '}
+                - 최근 가격에 더 높은 가중치를 둔 이동평균선. 추세 파악용
+              </span>
+            </div>
+            <div>
+              <span className='text-amber-400 font-semibold'>
+                RSI (상대강도지수)
+              </span>
+              <span className='text-gray-300'>
+                {' '}
+                - 0~100 범위. 70 이상 과매수, 30 이하 과매도
+              </span>
+            </div>
+            <div>
+              <span className='text-purple-400 font-semibold'>다이버전스</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 가격과 지표의 방향이 반대. 추세 전환 가능성 신호
+              </span>
+            </div>
+            <div>
+              <span className='text-lime-400 font-semibold'>강세 다이버전스</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 가격 하락, RSI 상승. 상승 반전 가능성
+              </span>
+            </div>
+            <div>
+              <span className='text-orange-400 font-semibold'>
+                약세 다이버전스
+              </span>
+              <span className='text-gray-300'>
+                {' '}
+                - 가격 상승, RSI 하락. 하락 반전 가능성
+              </span>
+            </div>
+            <div>
+              <span className='text-gray-400 font-semibold'>필터링된 신호</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 신뢰도가 낮아 회색 점선으로 표시
+              </span>
+            </div>
           </div>
         </div>
       </div>

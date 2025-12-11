@@ -75,13 +75,13 @@ export default function ChartTooltip({
         <>
           <div
             style={{
-              color: crossover.type === 'golden_cross' ? '#a3e635' : '#fb923c',
+              color: crossover.type === 'golden_cross' ? '#a3e635' : '#f87171',
               fontWeight: 'bold',
               marginBottom: '8px',
               fontSize: '14px',
             }}
           >
-            {crossover.type === 'golden_cross' ? '🟢 골든크로스 (GC)' : '🟠 데드크로스 (DC)'}
+            {crossover.type === 'golden_cross' ? '✕ 골든크로스' : '✕ 데드크로스'}
           </div>
           <div style={{ lineHeight: '1.6', color: '#d1d5db', marginBottom: '12px' }}>
             {crossover.analysis}

@@ -22,7 +22,7 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
   // 에러 상태
   if (error) {
     return (
-      <div className='backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-2xl p-6 shadow-2xl'>
+      <div className='backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-2xl p-6 shadow-2xl h-full flex items-center justify-center'>
         <div className='text-center'>
           <p className='text-red-400 mb-2'>오더북 연결 실패</p>
           <p className='text-sm text-gray-400'>{error.message}</p>
@@ -74,9 +74,9 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
         <div className='text-right'>총량</div>
       </div>
 
-      <div className='flex-1 flex flex-col overflow-hidden'>
+      <div className='flex flex-col'>
         {/* 매도 호가 (위에서부터 역순) */}
-        <div className='flex-1 flex flex-col-reverse overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent'>
+        <div className='flex flex-col-reverse'>
           {orderBook.asks.slice(0, limit).reverse().map((ask, index) => {
             const widthPercent = maxTotal > 0 ? (ask.total / maxTotal) * 100 : 0;
             return (
@@ -108,7 +108,7 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
         </div>
 
         {/* 매수 호가 */}
-        <div className='flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent'>
+        <div>
           {orderBook.bids.slice(0, limit).map((bid, index) => {
             const widthPercent = maxTotal > 0 ? (bid.total / maxTotal) * 100 : 0;
             return (
@@ -130,17 +130,17 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
       </div>
 
       {/* 푸터 - 총 매수/매도량 + 매수/매도 비율 */}
-      <div className='mt-3 pt-3 border-t border-white/10'>
-        <div className='grid grid-cols-2 gap-4 text-xs'>
-          <div>
-            <p className='text-gray-400 mb-1'>총 매수량</p>
-            <p className='text-lime-400 font-mono font-semibold'>
+      <div className='flex-1 mt-4 pt-4 border-t border-white/10 flex flex-col justify-center'>
+        <div className='grid grid-cols-2 gap-6 text-sm mb-6'>
+          <div className='text-center'>
+            <p className='text-gray-400 mb-2 text-xs'>총 매수량</p>
+            <p className='text-lime-400 font-mono font-bold text-lg'>
               {orderBook.bids.reduce((sum, bid) => sum + bid.quantity, 0).toFixed(2)} BTC
             </p>
           </div>
-          <div>
-            <p className='text-gray-400 mb-1'>총 매도량</p>
-            <p className='text-red-400 font-mono font-semibold'>
+          <div className='text-center'>
+            <p className='text-gray-400 mb-2 text-xs'>총 매도량</p>
+            <p className='text-red-400 font-mono font-bold text-lg'>
               {orderBook.asks.reduce((sum, ask) => sum + ask.quantity, 0).toFixed(2)} BTC
             </p>
           </div>
@@ -153,12 +153,12 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
           const total = totalBid + totalAsk;
           const bidPercent = total > 0 ? (totalBid / total) * 100 : 50;
           return (
-            <div className='mt-3'>
-              <div className='flex justify-between text-[10px] text-gray-400 mb-1'>
-                <span>매수 {bidPercent.toFixed(1)}%</span>
-                <span>매도 {(100 - bidPercent).toFixed(1)}%</span>
+            <div>
+              <div className='flex justify-between text-xs text-gray-400 mb-2'>
+                <span className='font-semibold'>매수 {bidPercent.toFixed(1)}%</span>
+                <span className='font-semibold'>매도 {(100 - bidPercent).toFixed(1)}%</span>
               </div>
-              <div className='h-2 rounded-full overflow-hidden bg-red-500/30 flex'>
+              <div className='h-3 rounded-full overflow-hidden bg-red-500/30 flex'>
                 <div
                   className='h-full bg-lime-500 transition-all duration-300'
                   style={{ width: `${bidPercent}%` }}

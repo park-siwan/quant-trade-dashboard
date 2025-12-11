@@ -203,7 +203,7 @@ export default function ChartRenderer({
     const hasCvd = cvdData && cvdData.length > 0;
     const hasOi = oiData && oiData.length > 0;
     const panelCount = 1 + (hasRsi ? 1 : 0) + (hasObv ? 1 : 0) + (hasCvd ? 1 : 0) + (hasOi ? 1 : 0); // 메인 + RSI + OBV + CVD + OI
-    const panelHeight = 100; // 각 패널당 동일한 높이 (한 화면에 맞춤)
+    const panelHeight = 140; // 각 패널당 동일한 높이 (더 큰 차트)
     const chartHeight = panelCount * panelHeight; // 1:1:1:1:1 비율
 
     const chart = createChart(chartContainerRef.current, {
@@ -714,6 +714,13 @@ export default function ChartRenderer({
     marketSignals?.length,
   ]);
 
+  // 크로스오버 X 마커 좌표 상태
+  const [crossoverMarkers, setCrossoverMarkers] = useState<Array<{
+    x: number;
+    y: number;
+    type: 'golden_cross' | 'dead_cross';
+  }>>([]);
+
   // 측정 박스를 위한 상태 (화면 좌표)
   const [measureBox, setMeasureBox] = useState<{
     left: number;
@@ -776,6 +783,44 @@ export default function ChartRenderer({
       isPreview: false, // 확정된 박스
     });
   }, [measurePoints, scaleUpdateTrigger, timeframe]);
+
+  // 크로스오버 X 마커 좌표 업데이트
+  useEffect(() => {
+    if (!chartRef.current || !candlestickSeriesRef.current || !crossoverEvents || crossoverEvents.length === 0) {
+      setCrossoverMarkers([]);
+      return;
+    }
+
+    const markers: Array<{ x: number; y: number; type: 'golden_cross' | 'dead_cross' }> = [];
+
+    crossoverEvents.forEach((event) => {
+      // 'none' 타입은 스킵 (실제로 발생하지 않아야 함)
+      if (event.type === 'none') return;
+
+      const time = (event.timestamp / 1000) as any;
+      const x = chartRef.current!.timeScale().timeToCoordinate(time);
+
+      if (x === null) return;
+
+      // 해당 시간의 캔들 데이터 찾기
+      const candleData = data.find((c) => c.time === time);
+      if (!candleData) return;
+
+      // 골든크로스는 캔들 아래, 데드크로스는 캔들 위에 표시
+      const price = event.type === 'golden_cross' ? candleData.low : candleData.high;
+      const y = candlestickSeriesRef.current!.priceToCoordinate(price);
+
+      if (y === null) return;
+
+      markers.push({
+        x,
+        y: event.type === 'golden_cross' ? y + 15 : y - 15, // 캔들과 간격
+        type: event.type,
+      });
+    });
+
+    setCrossoverMarkers(markers);
+  }, [crossoverEvents, data, scaleUpdateTrigger]);
 
   const priceInfoContainer = typeof window !== 'undefined' ? document.getElementById('price-info-container') : null;
 
@@ -840,20 +885,20 @@ export default function ChartRenderer({
           )}
           {trendAnalysis.crossover === 'golden_cross' && (
             <div
-              className='backdrop-blur-md bg-lime-500/20 text-lime-400 border border-lime-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-lime-500/10 cursor-help relative'
-              onMouseEnter={() => setTrendTooltip('EMA 20이 EMA 50을 상향 돌파했습니다 (강력한 상승 신호)')}
+              className='backdrop-blur-md bg-lime-500/20 text-lime-400 border border-lime-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-lime-500/10 cursor-help relative flex items-center gap-1'
+              onMouseEnter={() => setTrendTooltip('EMA 20이 EMA 50을 상향 돌파 (롱 신호)')}
               onMouseLeave={() => setTrendTooltip(null)}
             >
-              🟢 골든크로스
+              <span className='text-base font-bold'>✕</span> 골든
             </div>
           )}
           {trendAnalysis.crossover === 'dead_cross' && (
             <div
-              className='backdrop-blur-md bg-orange-500/20 text-orange-400 border border-orange-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-orange-500/10 cursor-help relative'
-              onMouseEnter={() => setTrendTooltip('EMA 20이 EMA 50을 하향 돌파했습니다 (하락 추세 전환 신호)')}
+              className='backdrop-blur-md bg-red-500/20 text-red-400 border border-red-400/50 px-3 py-1 rounded-lg text-sm font-medium shadow-lg shadow-red-500/10 cursor-help relative flex items-center gap-1'
+              onMouseEnter={() => setTrendTooltip('EMA 20이 EMA 50을 하향 돌파 (숏 신호)')}
               onMouseLeave={() => setTrendTooltip(null)}
             >
-              🟠 데드크로스
+              <span className='text-base font-bold'>✕</span> 데드
             </div>
           )}
 
@@ -992,6 +1037,27 @@ export default function ChartRenderer({
           }
           return null;
         })()}
+
+        {/* 크로스오버 X 마커 (커스텀 오버레이) */}
+        {crossoverMarkers.map((marker, index) => (
+          <div
+            key={`crossover-${index}`}
+            style={{
+              position: 'absolute',
+              left: `${marker.x}px`,
+              top: `${marker.y}px`,
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              zIndex: 20,
+              fontSize: '16px',
+              fontWeight: 'bold',
+              color: marker.type === 'golden_cross' ? '#a3e635' : '#f87171',
+              textShadow: '0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.5)',
+            }}
+          >
+            ✕
+          </div>
+        ))}
       </div>
 
       {/* 통합 툴팁 (RSI + 필터링 정보 + 크로스오버 + 다이버전스 + CVD+OI) */}

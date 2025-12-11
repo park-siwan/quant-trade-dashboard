@@ -93,7 +93,7 @@ export default function ChartAdapter({
         low: candle[3],
         close: candle[4],
       })) || [],
-    [data]
+    [data],
   );
 
   // RSI 데이터 변환 (null 값 제외)
@@ -108,7 +108,7 @@ export default function ChartAdapter({
           };
         })
         .filter((item): item is LineData => item !== null) || [],
-    [data]
+    [data],
   );
 
   // OBV 데이터 변환 (null 값 제외)
@@ -123,7 +123,7 @@ export default function ChartAdapter({
           };
         })
         .filter((item): item is LineData => item !== null) || [],
-    [data]
+    [data],
   );
 
   // CVD 데이터 변환
@@ -131,14 +131,19 @@ export default function ChartAdapter({
     () =>
       data?.data?.indicators?.cvd
         ?.map((cvd, index) => {
-          if (cvd === null || cvd === undefined || !data?.data?.candles?.[index]) return null;
+          if (
+            cvd === null ||
+            cvd === undefined ||
+            !data?.data?.candles?.[index]
+          )
+            return null;
           return {
             time: (data.data.candles[index][0] / 1000) as LineData['time'],
             value: cvd,
           };
         })
         .filter((item): item is LineData => item !== null) || [],
-    [data]
+    [data],
   );
 
   // OI 데이터 변환
@@ -146,14 +151,15 @@ export default function ChartAdapter({
     () =>
       data?.data?.indicators?.oi
         ?.map((oi, index) => {
-          if (oi === null || oi === undefined || !data?.data?.candles?.[index]) return null;
+          if (oi === null || oi === undefined || !data?.data?.candles?.[index])
+            return null;
           return {
             time: (data.data.candles[index][0] / 1000) as LineData['time'],
             value: oi,
           };
         })
         .filter((item): item is LineData => item !== null) || [],
-    [data]
+    [data],
   );
 
   // EMA 데이터
@@ -179,50 +185,93 @@ export default function ChartAdapter({
 
   // 다이버전스 방향별 개수 계산 (start 신호만 카운트)
   const bullishCount = divergenceSignals.filter(
-    (signal) => signal.phase === 'start' && signal.direction === 'bullish'
+    (signal) => signal.phase === 'start' && signal.direction === 'bullish',
   ).length;
   const bearishCount = divergenceSignals.filter(
-    (signal) => signal.phase === 'start' && signal.direction === 'bearish'
+    (signal) => signal.phase === 'start' && signal.direction === 'bearish',
   ).length;
+
+  // 스켈레톤 로딩 UI
+  const ChartSkeleton = () => (
+    <div className='backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl'>
+      {/* 헤더 스켈레톤 */}
+      <div className='flex items-center gap-3 mb-4'>
+        <div className='w-10 h-10 rounded-full bg-white/10 animate-pulse' />
+        <div className='space-y-2'>
+          <div className='w-24 h-4 bg-white/10 rounded animate-pulse' />
+          <div className='w-16 h-3 bg-white/10 rounded animate-pulse' />
+        </div>
+        <div className='ml-auto flex gap-2'>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              className='w-10 h-6 bg-white/10 rounded animate-pulse'
+            />
+          ))}
+        </div>
+      </div>
+      {/* 차트 스켈레톤 */}
+      <div className='h-[700px] bg-white/5 rounded-xl overflow-hidden relative'>
+        <div className='absolute inset-0 flex items-end justify-around px-4 pb-8'>
+          {/* 고정된 높이 패턴 (hydration 에러 방지) */}
+          {[45, 62, 38, 71, 55, 33, 68, 42, 58, 75, 48, 35, 65, 52, 40, 72, 56, 30, 63, 47].map((h, i) => (
+            <div
+              key={i}
+              className='w-2 bg-white/10 rounded-sm animate-pulse'
+              style={{
+                height: `${h}%`,
+                animationDelay: `${i * 100}ms`,
+              }}
+            />
+          ))}
+        </div>
+        <div className='absolute inset-0 flex items-center justify-center'>
+          <div className='text-center'>
+            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-orange-400 mx-auto mb-3' />
+            <p className='text-gray-400 text-sm'>차트 로딩 중...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   // 에러 상태 처리 (훅 호출 이후에 배치)
   if (error) {
     return (
-      <div className='flex items-center justify-center h-[600px] backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-2xl shadow-2xl'>
-        <div className='text-center'>
-          <p className='text-red-400 mb-4'>데이터 로딩 실패</p>
-          <button
-            onClick={() => refetch()}
-            className='px-4 py-2 bg-red-500/30 backdrop-blur-md text-white rounded-lg hover:bg-red-500/40 transition-all duration-200 border border-red-400/50'
-          >
-            다시 시도
-          </button>
+      <div className='backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-2xl p-6 shadow-2xl'>
+        <div className='h-[700px] flex items-center justify-center'>
+          <div className='text-center'>
+            <p className='text-red-400 mb-4'>데이터 로딩 실패</p>
+            <button
+              onClick={() => refetch()}
+              className='px-4 py-2 bg-red-500/30 backdrop-blur-md text-white rounded-lg hover:bg-red-500/40 transition-all duration-200 border border-red-400/50'
+            >
+              다시 시도
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
+  // 로딩 상태 - 스켈레톤 표시
+  if (isLoading) {
+    return <ChartSkeleton />;
+  }
+
   // 데이터 없음 상태 처리 (훅 호출 이후에 배치)
-  if (!isLoading && (!data?.success || !data?.data?.candles)) {
+  if (!data?.success || !data?.data?.candles) {
     return (
-      <div className='flex items-center justify-center h-[600px] backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl'>
-        <p className='text-gray-300'>데이터가 없습니다</p>
+      <div className='backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl'>
+        <div className='h-[700px] flex items-center justify-center'>
+          <p className='text-gray-300'>데이터가 없습니다</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className='relative backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl'>
-      {/* 로딩 오버레이 */}
-      {isLoading && (
-        <div className='absolute inset-0 z-50 flex items-center justify-center backdrop-blur-md bg-black/50 rounded-2xl'>
-          <div className='text-center'>
-            <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-orange-400 mx-auto mb-4'></div>
-            <p className='text-gray-300'>데이터 로딩 중...</p>
-          </div>
-        </div>
-      )}
-
       <div className='flex flex-col md:flex-row md:items-center md:justify-between mb-4'>
         {/* 헤더: 한 줄로 표시, 반응형으로 줄바꿈 */}
         <div className='flex flex-wrap items-center gap-3'>
@@ -259,7 +308,7 @@ export default function ChartAdapter({
           </div>
 
           {/* 가격 정보 표시 */}
-          <div id="price-info-container"></div>
+          <div id='price-info-container'></div>
         </div>
         <div className='flex items-center gap-4'>
           <>
@@ -323,79 +372,6 @@ export default function ChartAdapter({
         timeframe={selectedTimeframe}
         realtimeCandle={realtimeCandle}
       />
-
-      {/* 초보자를 위한 용어 설명 */}
-      <div className='mt-4 backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl p-4'>
-        <h3 className='text-sm font-bold text-orange-400 mb-3'>
-          📚 차트 용어 설명
-        </h3>
-        <div className='grid grid-cols-1 md:grid-cols-2 gap-3 text-xs'>
-          <div>
-            <span className='text-lime-400 font-semibold'>GC (골든크로스)</span>
-            <span className='text-gray-300'>
-              {' '}
-              - 단기 이평선이 장기 이평선을 상향 돌파. 상승 추세 신호
-            </span>
-          </div>
-          <div>
-            <span className='text-orange-400 font-semibold'>
-              DC (데드크로스)
-            </span>
-            <span className='text-gray-300'>
-              {' '}
-              - 단기 이평선이 장기 이평선을 하향 돌파. 하락 추세 신호
-            </span>
-          </div>
-          <div>
-            <span className='text-yellow-400 font-semibold'>
-              EMA (지수이동평균)
-            </span>
-            <span className='text-gray-300'>
-              {' '}
-              - 최근 가격에 더 높은 가중치를 둔 이동평균선. 추세 파악용
-            </span>
-          </div>
-          <div>
-            <span className='text-amber-400 font-semibold'>
-              RSI (상대강도지수)
-            </span>
-            <span className='text-gray-300'>
-              {' '}
-              - 0~100 범위. 70 이상 과매수, 30 이하 과매도
-            </span>
-          </div>
-          <div>
-            <span className='text-purple-400 font-semibold'>다이버전스</span>
-            <span className='text-gray-300'>
-              {' '}
-              - 가격과 지표의 방향이 반대. 추세 전환 가능성 신호
-            </span>
-          </div>
-          <div>
-            <span className='text-lime-400 font-semibold'>강세 다이버전스</span>
-            <span className='text-gray-300'>
-              {' '}
-              - 가격 하락, RSI 상승. 상승 반전 가능성
-            </span>
-          </div>
-          <div>
-            <span className='text-orange-400 font-semibold'>
-              약세 다이버전스
-            </span>
-            <span className='text-gray-300'>
-              {' '}
-              - 가격 상승, RSI 하락. 하락 반전 가능성
-            </span>
-          </div>
-          <div>
-            <span className='text-gray-400 font-semibold'>필터링된 신호</span>
-            <span className='text-gray-300'>
-              {' '}
-              - 신뢰도가 낮아 회색 점선으로 표시
-            </span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

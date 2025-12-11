@@ -578,33 +578,15 @@ export function addDivergenceLines(
 }
 
 /**
- * 크로스오버 마커를 차트에 추가합니다
- * @param candlestickSeries - 캔들스틱 시리즈 인스턴스
- * @param crossoverEvents - 크로스오버 이벤트 배열
+ * 크로스오버 마커를 차트에 추가합니다 (비활성화 - 커스텀 오버레이 사용)
+ * @deprecated ChartRenderer에서 커스텀 X 마커로 대체됨
  */
 export function addCrossoverMarkers(
   candlestickSeries: ISeriesApi<'Candlestick'>,
   crossoverEvents: CrossoverEvent[],
 ): void {
-  if (crossoverEvents.length === 0) return;
-
-  // 모든 크로스오버 이벤트를 마커로 변환
-  const markers: SeriesMarker<Time>[] = crossoverEvents.map((event) => {
-    const isGoldenCross = event.type === 'golden_cross';
-
-    return {
-      time: (event.timestamp / 1000) as Time,
-      position: isGoldenCross ? 'belowBar' : 'aboveBar',
-      color: isGoldenCross ? '#a3e635' : '#f87171', // lime-400 (롱) / red-400 (숏)
-      shape: isGoldenCross ? 'arrowUp' : 'arrowDown',
-      text: isGoldenCross ? 'GC' : 'DC',
-    };
-  });
-
-  // 한 번에 모든 마커 추가
-  createSeriesMarkers(candlestickSeries, markers);
-
-  console.log(`✅ ${crossoverEvents.length}개의 크로스오버 마커 추가됨`);
+  // 커스텀 오버레이 방식으로 변경 - ChartRenderer에서 처리
+  // 기본 마커는 사용하지 않음
 }
 
 /**
