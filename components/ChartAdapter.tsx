@@ -271,39 +271,8 @@ export default function ChartAdapter({
   // 추세 분석
   const trendAnalysis: TrendAnalysis | undefined = data?.data?.trendAnalysis;
 
-  // 크로스오버 이벤트 (볼륨 기반 필터링 적용)
-  const crossoverEvents: CrossoverEvent[] = useMemo(() => {
-    const events = data?.data?.crossoverEvents || [];
-    const candles = data?.data?.candles || [];
-
-    console.log('📊 크로스오버 이벤트:', events.length, '개', events);
-
-    if (events.length === 0 || candles.length === 0) return events;
-
-    // 평균 볼륨 계산
-    const volumes = candles.map((c: number[]) => c[5] || 0);
-    const avgVolume = volumes.reduce((sum: number, v: number) => sum + v, 0) / volumes.length;
-
-    // 각 크로스오버 이벤트에 볼륨 필터링 적용
-    const result = events.map((event: CrossoverEvent) => {
-      // 해당 타임스탬프의 캔들 찾기
-      const candle = candles.find((c: number[]) => c[0] === event.timestamp);
-      const volume = candle ? candle[5] || 0 : 0;
-
-      // 볼륨이 평균의 1.2배 미만이면 필터링 (기준 완화)
-      const isFiltered = volume < avgVolume * 1.2;
-
-      return {
-        ...event,
-        isFiltered,
-        volume,
-        avgVolume,
-      };
-    });
-
-    console.log('📊 필터링 결과:', result.filter(e => !e.isFiltered).length, '개 신뢰, ', result.filter(e => e.isFiltered).length, '개 회색');
-    return result;
-  }, [data?.data?.crossoverEvents, data?.data?.candles]);
+  // 크로스오버 이벤트 (백엔드에서 볼륨 필터링 처리)
+  const crossoverEvents: CrossoverEvent[] = data?.data?.crossoverEvents || [];
 
   // 다이버전스 시그널
   const divergenceSignals: DivergenceSignal[] =
