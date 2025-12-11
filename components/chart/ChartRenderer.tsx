@@ -135,6 +135,9 @@ export default function ChartRenderer({
   const chartRef = useRef<IChartApi | null>(null);
   const measureLineRef = useRef<ISeriesApi<'Line'> | null>(null);
 
+  // 청산 구간 표시 토글 (useEffect보다 먼저 선언해야 함)
+  const [showLiquidationZones, setShowLiquidationZones] = useState(true);
+
   // measurePoints가 변경될 때마다 ref도 업데이트
   useEffect(() => {
     measurePointsRef.current = measurePoints;
@@ -377,6 +380,46 @@ export default function ChartRenderer({
     // if (marketSignals && marketSignals.length > 0) {
     //   addCvdOiMarkers(candlestickSeries, marketSignals);
     // }
+
+    // 청산 가격 라인 추가 (현재가 기준, Y축 변경 시 자동 반영)
+    if (showLiquidationZones && data.length > 0) {
+      const currentPrice = data[data.length - 1].close;
+      const leverages = [10, 25, 50, 100];
+
+      leverages.forEach((lev) => {
+        // 롱 청산가: 현재가 * (1 - 1/레버리지)
+        const longLiqPrice = currentPrice * (1 - 1 / lev);
+        // 숏 청산가: 현재가 * (1 + 1/레버리지)
+        const shortLiqPrice = currentPrice * (1 + 1 / lev);
+
+        // 레버리지별 투명도 (100x가 가장 진하게)
+        const opacity = lev === 100 ? 0.8 : lev === 50 ? 0.6 : lev === 25 ? 0.4 : 0.25;
+
+        // 롱 청산 라인 (노란색)
+        candlestickSeries.createPriceLine({
+          price: longLiqPrice,
+          color: `rgba(250, 204, 21, ${opacity})`,
+          lineWidth: 1,
+          lineStyle: lev === 100 ? 0 : 2, // 100x는 실선, 나머지는 점선
+          axisLabelVisible: true,
+          title: `${lev}x L`,
+          axisLabelColor: `rgba(250, 204, 21, ${opacity})`,
+          axisLabelTextColor: '#000',
+        });
+
+        // 숏 청산 라인 (민트색)
+        candlestickSeries.createPriceLine({
+          price: shortLiqPrice,
+          color: `rgba(45, 212, 191, ${opacity})`,
+          lineWidth: 1,
+          lineStyle: lev === 100 ? 0 : 2, // 100x는 실선, 나머지는 점선
+          axisLabelVisible: true,
+          title: `${lev}x S`,
+          axisLabelColor: `rgba(45, 212, 191, ${opacity})`,
+          axisLabelTextColor: '#000',
+        });
+      });
+    }
 
     // 패널 높이를 2:1:1로 설정 (v5.0.8+ API)
     // setStretchFactor를 사용하여 메인 패널은 2, RSI/OBV는 1로 설정
@@ -712,6 +755,7 @@ export default function ChartRenderer({
     trendAnalysis !== undefined,
     crossoverEvents?.length,
     marketSignals?.length,
+    showLiquidationZones, // 청산맵 토글 시 재렌더링
   ]);
 
   // 크로스오버 X 마커 좌표 상태
@@ -966,6 +1010,18 @@ export default function ChartRenderer({
           )}
         </>
       )}
+
+        {/* 청산 구간 토글 버튼 */}
+        <button
+          onClick={() => setShowLiquidationZones(!showLiquidationZones)}
+          className={`backdrop-blur-md px-3 py-1 rounded-lg text-sm font-medium shadow-lg cursor-pointer transition-all ${
+            showLiquidationZones
+              ? 'bg-purple-500/20 text-purple-400 border border-purple-400/50 shadow-purple-500/10'
+              : 'bg-gray-500/20 text-gray-400 border border-gray-400/50 shadow-gray-500/10'
+          }`}
+        >
+          💥 청산맵
+        </button>
       </div>
       <div
         ref={chartContainerRef}
@@ -1133,6 +1189,7 @@ export default function ChartRenderer({
             {marker.text}
           </div>
         ))}
+
       </div>
 
       {/* 통합 툴팁 (RSI + 필터링 정보 + 크로스오버 + 다이버전스 + CVD+OI) */}
