@@ -861,14 +861,19 @@ export default function ChartRenderer({
     });
   }, [measurePoints, scaleUpdateTrigger, timeframe]);
 
-  // 크로스오버 X 마커 좌표 업데이트
+  // 데이터 변경 시 마커 숨기기 (로딩 중 이상한 위치 방지)
+  useEffect(() => {
+    setCrossoverMarkers([]);
+  }, [crossoverEvents, data]);
+
+  // 차트 준비 완료 후 마커 표시 (scaleUpdateTrigger로 감지)
   useEffect(() => {
     if (!chartRef.current || !candlestickSeriesRef.current || !crossoverEvents || crossoverEvents.length === 0) {
-      setCrossoverMarkers([]);
       return;
     }
 
-    const calculateMarkers = () => {
+    // 차트 렌더링 완료 후 좌표 계산
+    const timeoutId = setTimeout(() => {
       if (!chartRef.current || !candlestickSeriesRef.current) return;
 
       const markers: Array<{ x: number; y: number; type: 'golden_cross' | 'dead_cross'; isFiltered?: boolean }> = [];
@@ -879,7 +884,6 @@ export default function ChartRenderer({
         const time = (event.timestamp / 1000) as any;
         const x = chartRef.current!.timeScale().timeToCoordinate(time);
 
-        // 유효하지 않은 좌표 스킵
         if (x === null || x < 0 || x > 5000) return;
 
         const candleData = data.find((c) => c.time === time);
@@ -898,23 +902,20 @@ export default function ChartRenderer({
         });
       });
 
-      // 유효한 마커가 있을 때만 업데이트 (깜빡임 방지)
-      if (markers.length > 0) {
-        setCrossoverMarkers(markers);
-      }
-    };
-
-    // 즉시 계산 시도, 실패하면 딜레이 후 재시도
-    calculateMarkers();
-    const timeoutId = setTimeout(calculateMarkers, 50);
+      setCrossoverMarkers(markers);
+    }, 150);
 
     return () => clearTimeout(timeoutId);
-  }, [crossoverEvents, data, scaleUpdateTrigger]);
+  }, [scaleUpdateTrigger]);
 
-  // CVD+OI 신호 마커 좌표 업데이트
+  // 데이터 변경 시 CVD+OI 마커 숨기기
+  useEffect(() => {
+    setSignalMarkers([]);
+  }, [marketSignals, data]);
+
+  // 차트 준비 완료 후 CVD+OI 마커 표시
   useEffect(() => {
     if (!chartRef.current || !candlestickSeriesRef.current || !marketSignals || marketSignals.length === 0) {
-      setSignalMarkers([]);
       return;
     }
 
@@ -926,7 +927,7 @@ export default function ChartRenderer({
       LONG_ENTRY: { text: '💎', position: 'below' },
     };
 
-    const calculateMarkers = () => {
+    const timeoutId = setTimeout(() => {
       if (!chartRef.current || !candlestickSeriesRef.current) return;
 
       const markers: Array<{ x: number; y: number; text: string; position: 'above' | 'below' }> = [];
@@ -956,16 +957,11 @@ export default function ChartRenderer({
         });
       });
 
-      if (markers.length > 0) {
-        setSignalMarkers(markers);
-      }
-    };
-
-    calculateMarkers();
-    const timeoutId = setTimeout(calculateMarkers, 50);
+      setSignalMarkers(markers);
+    }, 150);
 
     return () => clearTimeout(timeoutId);
-  }, [marketSignals, data, scaleUpdateTrigger]);
+  }, [scaleUpdateTrigger]);
 
   const priceInfoContainer = typeof window !== 'undefined' ? document.getElementById('price-info-container') : null;
 
