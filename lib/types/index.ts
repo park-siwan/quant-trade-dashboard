@@ -99,7 +99,7 @@ export interface MarketSignal {
 
 export interface CvdOiData {
   cvd: number[];
-  oi: number[];
+  oi: (number | null)[]; // Binance API 30일 제한으로 오래된 데이터는 null
   signals: MarketSignal[];
 }
 
@@ -111,7 +111,7 @@ export interface ApiResponse {
       rsi: (number | null)[];
       obv: number[];
       cvd?: number[]; // CVD 데이터
-      oi?: number[]; // OI 데이터
+      oi?: (number | null)[]; // OI 데이터 (Binance API 30일 제한으로 오래된 데이터는 null)
       ema?: EmaData;
     };
     signals: {
