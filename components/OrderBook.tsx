@@ -184,7 +184,7 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
     : 0;
 
   return (
-    <div className='backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-4 shadow-2xl h-full flex flex-col'>
+    <div className='backdrop-blur-xl bg-white/[0.07] border border-white/10 rounded-2xl p-4 shadow-2xl h-full flex flex-col'>
       {/* 헤더 */}
       <div className='flex items-center justify-between mb-3'>
         <div className='flex items-center gap-2'>
@@ -213,10 +213,14 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
             const widthPercent = maxTotal > 0 ? (ask.total / maxTotal) * 100 : 0;
             return (
               <div key={`ask-${index}`} className='relative px-2 py-0.5 hover:bg-white/5 transition-colors'>
-                {/* 백그라운드 바 (매도 = 빨강) */}
+                {/* 백그라운드 바 (매도 = 빨강) + 글로우 */}
                 <div
-                  className='absolute right-0 top-0 h-full bg-red-500/10 transition-all duration-300'
-                  style={{ width: `${widthPercent}%` }}
+                  className='absolute right-0 top-0 h-full transition-all duration-300'
+                  style={{
+                    width: `${widthPercent}%`,
+                    background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.25), rgba(239,68,68,0.4))',
+                    boxShadow: '0 0 15px rgba(239,68,68,0.4), inset 0 0 10px rgba(239,68,68,0.2)'
+                  }}
                 />
                 <div className='relative grid grid-cols-3 gap-2 text-[11px]'>
                   <div className='text-red-400 font-mono font-semibold'>{ask.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
@@ -290,10 +294,14 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
             const widthPercent = maxTotal > 0 ? (bid.total / maxTotal) * 100 : 0;
             return (
               <div key={`bid-${index}`} className='relative px-2 py-0.5 hover:bg-white/5 transition-colors'>
-                {/* 백그라운드 바 (매수 = 초록) */}
+                {/* 백그라운드 바 (매수 = 초록) + 글로우 */}
                 <div
-                  className='absolute right-0 top-0 h-full bg-lime-500/10 transition-all duration-300'
-                  style={{ width: `${widthPercent}%` }}
+                  className='absolute right-0 top-0 h-full transition-all duration-300'
+                  style={{
+                    width: `${widthPercent}%`,
+                    background: 'linear-gradient(90deg, transparent, rgba(163,230,53,0.25), rgba(163,230,53,0.4))',
+                    boxShadow: '0 0 15px rgba(163,230,53,0.4), inset 0 0 10px rgba(163,230,53,0.2)'
+                  }}
                 />
                 <div className='relative grid grid-cols-3 gap-2 text-[11px]'>
                   <div className='text-lime-400 font-mono font-semibold'>{bid.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
@@ -335,10 +343,21 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
                 <span className='font-semibold'>매수 {bidPercent.toFixed(1)}%</span>
                 <span className='font-semibold'>매도 {(100 - bidPercent).toFixed(1)}%</span>
               </div>
-              <div className='h-3 rounded-full overflow-hidden bg-red-500/30 flex'>
+              <div
+                className='relative h-3 rounded-full'
+                style={{
+                  background: 'linear-gradient(90deg, rgba(239,68,68,0.3), rgba(239,68,68,0.5))',
+                  boxShadow: '0 0 15px rgba(239,68,68,0.4), inset 0 0 8px rgba(239,68,68,0.2)'
+                }}
+              >
+                {/* 초록 (매수) - 빨강 배경 위에 덮음 */}
                 <div
-                  className='h-full bg-lime-500 transition-all duration-300'
-                  style={{ width: `${bidPercent}%` }}
+                  className='absolute left-0 top-0 h-full rounded-l-full transition-all duration-300'
+                  style={{
+                    width: `${bidPercent}%`,
+                    background: 'linear-gradient(90deg, rgba(163,230,53,0.5), rgba(163,230,53,0.7))',
+                    boxShadow: '0 0 15px rgba(163,230,53,0.5), inset 0 0 8px rgba(163,230,53,0.3)'
+                  }}
                 />
               </div>
             </div>

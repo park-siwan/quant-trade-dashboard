@@ -242,7 +242,7 @@ export default function ChartRenderer({
       width: chartContainerRef.current.clientWidth,
       height: chartHeight,
       layout: {
-        background: { type: ColorType.Solid, color: '#1a1410' }, // 황금빛 도는 다크 블랙
+        background: { type: ColorType.Solid, color: '#0c0908' }, // 따뜻한 블랙
         textColor: '#d1d5db',
         panes: {
           separatorColor: 'rgba(255, 255, 255, 0.3)', // 연한 회색 구분선
@@ -262,8 +262,8 @@ export default function ChartRenderer({
         vertTouchDrag: true,
       },
       grid: {
-        vertLines: { color: 'rgba(58, 48, 38, 0.3)' }, // 황금빛 도는 그리드
-        horzLines: { color: 'rgba(58, 48, 38, 0.3)' },
+        vertLines: { color: 'rgba(45, 38, 32, 0.25)' }, // 어두운 배경에 맞춘 미세한 그리드
+        horzLines: { color: 'rgba(45, 38, 32, 0.25)' },
       },
       timeScale: {
         timeVisible: true,

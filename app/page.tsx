@@ -3,11 +3,11 @@ import OrderBook from '@/components/OrderBook';
 
 export default function Home() {
   return (
-    <div className='min-h-screen p-8 bg-gradient-to-br from-amber-950 via-orange-950 to-yellow-950 relative overflow-hidden'>
-      {/* 배경 장식 - 글래스모피즘 효과를 위한 그라데이션 원들 */}
-      <div className='absolute top-0 left-0 w-96 h-96 bg-orange-500/30 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2'></div>
-      <div className='absolute bottom-0 right-0 w-96 h-96 bg-amber-500/25 rounded-full blur-3xl translate-x-1/2 translate-y-1/2'></div>
-      <div className='absolute top-1/2 left-1/2 w-96 h-96 bg-yellow-500/15 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2'></div>
+    <div className='min-h-screen p-8 bg-[#0c0908] bg-pattern relative overflow-hidden'>
+      {/* 배경 장식 - 따뜻한 블러 글로우 */}
+      <div className='absolute top-0 left-0 w-[500px] h-[500px] bg-orange-500/15 rounded-full blur-[120px] -translate-x-1/3 -translate-y-1/3'></div>
+      <div className='absolute bottom-0 right-0 w-[400px] h-[400px] bg-amber-600/12 rounded-full blur-[100px] translate-x-1/4 translate-y-1/4'></div>
+      <div className='absolute top-1/2 left-1/2 w-[300px] h-[300px] bg-orange-400/8 rounded-full blur-[80px] -translate-x-1/2 -translate-y-1/2'></div>
 
       {/* 메인 콘텐츠 */}
       <div className='relative z-10 space-y-6'>
@@ -28,7 +28,7 @@ export default function Home() {
         </div>
 
         {/* 초보자를 위한 용어 설명 - 스크롤 시 보임 */}
-        <div className='backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl p-4'>
+        <div className='backdrop-blur-xl bg-white/[0.07] border border-white/10 rounded-xl p-4'>
           <h3 className='text-sm font-bold text-orange-400 mb-3'>
             📚 차트 용어 설명
           </h3>

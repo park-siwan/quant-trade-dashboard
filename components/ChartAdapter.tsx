@@ -335,7 +335,7 @@ export default function ChartAdapter({
   }
 
   return (
-    <div className='relative backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl'>
+    <div className='relative backdrop-blur-xl bg-white/[0.07] border border-white/10 rounded-2xl p-6 shadow-2xl'>
       <div className='flex flex-col md:flex-row md:items-center md:justify-between mb-4'>
         {/* 헤더: 한 줄로 표시, 반응형으로 줄바꿈 */}
         <div className='flex flex-wrap items-center gap-3'>
