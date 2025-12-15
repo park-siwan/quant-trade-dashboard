@@ -28,7 +28,7 @@ export default function Home() {
         </div>
 
         {/* 초보자를 위한 용어 설명 - 스크롤 시 보임 */}
-        <div className='backdrop-blur-xl bg-white/[0.07] border border-white/10 rounded-xl p-4'>
+        <div className='backdrop-blur-sm bg-white/[0.1] border border-white/10 rounded-xl p-4'>
           <h3 className='text-sm font-bold text-orange-400 mb-3'>
             📚 차트 용어 설명
           </h3>

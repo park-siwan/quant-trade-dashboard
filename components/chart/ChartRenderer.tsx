@@ -783,11 +783,16 @@ export default function ChartRenderer({
 
     chart.timeScale().subscribeVisibleLogicalRangeChange(handleScaleChange);
 
-    // 차트 렌더링 완료 후 마커 좌표 업데이트 트리거
+    // 차트 렌더링 완료 후 마커 좌표 업데이트 트리거 + 초기 visible range 설정
     // requestAnimationFrame을 두 번 사용하여 차트가 완전히 렌더링된 후 실행
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setScaleUpdateTrigger((prev) => prev + 1);
+        // 초기 visible range 설정
+        const initialRange = chart.timeScale().getVisibleLogicalRange();
+        if (initialRange) {
+          setVisibleRange({ from: Math.floor(initialRange.from), to: Math.ceil(initialRange.to) });
+        }
       });
     });
 

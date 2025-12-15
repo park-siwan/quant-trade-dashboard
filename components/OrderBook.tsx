@@ -184,7 +184,7 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
     : 0;
 
   return (
-    <div className='backdrop-blur-xl bg-white/[0.07] border border-white/10 rounded-2xl p-4 shadow-2xl h-full flex flex-col'>
+    <div className='backdrop-blur-sm bg-white/[0.1] border border-white/10 rounded-2xl p-4 shadow-2xl h-full flex flex-col'>
       {/* 헤더 */}
       <div className='flex items-center justify-between mb-3'>
         <div className='flex items-center gap-2'>
