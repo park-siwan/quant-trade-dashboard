@@ -106,10 +106,10 @@ export default function RefreshCountdown({
         onClick={onManualRefresh}
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
-        className='flex items-center gap-2 px-4 py-2 backdrop-blur-md bg-orange-500/20 text-orange-300 rounded-lg text-sm font-mono border border-orange-400/30 shadow-lg shadow-orange-500/10 hover:bg-orange-500/30 hover:border-orange-400/50 hover:shadow-orange-500/20 transition-all duration-200 cursor-pointer active:scale-95'
+        className='flex items-center gap-1.5 px-2 py-1 backdrop-blur-md bg-orange-500/20 text-orange-300 rounded-lg text-xs font-mono border border-orange-400/30 shadow-lg shadow-orange-500/10 hover:bg-orange-500/30 hover:border-orange-400/50 hover:shadow-orange-500/20 transition-all duration-200 cursor-pointer active:scale-95'
       >
         <RefreshCw
-          className='w-4 h-4 text-orange-400 animate-spin'
+          className='w-3 h-3 text-orange-400 animate-spin'
           style={{ animationDuration: '3s' }}
         />
         <span className='font-medium'>{countdown}</span>

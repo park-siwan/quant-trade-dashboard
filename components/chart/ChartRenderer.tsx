@@ -33,6 +33,47 @@ import {
 import ChartTooltip from './ChartTooltip';
 import { LongShortRatio } from '@/hooks/useLongShortRatio';
 
+// 타임프레임을 분 단위로 변환
+function timeframeToMinutes(timeframe: string): number {
+  const value = parseInt(timeframe.slice(0, -1));
+  const unit = timeframe.slice(-1);
+  switch (unit) {
+    case 'm': return value;
+    case 'h': return value * 60;
+    case 'd': return value * 24 * 60;
+    case 'w': return value * 7 * 24 * 60;
+    default: return value;
+  }
+}
+
+// 분을 "X일 X시간 X분" 형식으로 변환
+function formatTimeRange(totalMinutes: number): string {
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days}일`);
+  if (hours > 0) parts.push(`${hours}시간`);
+  if (minutes > 0) parts.push(`${minutes}분`);
+
+  return parts.length > 0 ? parts.join(' ') : '0분';
+}
+
+// 캔들 개수와 타임프레임으로 시간 범위 계산
+function calculateTimeRange(candleCount: number, timeframe: string): string {
+  const totalMinutes = candleCount * timeframeToMinutes(timeframe);
+  if (totalMinutes < 60) return `${totalMinutes}분`;
+  if (totalMinutes < 24 * 60) {
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    return mins > 0 ? `${hours}시간 ${mins}분` : `${hours}시간`;
+  }
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  return hours > 0 ? `${days}일 ${hours}시간` : `${days}일`;
+}
+
 // Volume Profile 타입
 export interface VolumeProfileData {
   buckets: Array<{ price: number; volume: number; buyVolume: number; sellVolume: number }>;
@@ -67,39 +108,6 @@ interface ChartRendererProps {
   } | null;
   longShortRatio?: LongShortRatio | null; // 롱/숏 비율 (Bybit API)
   volumeProfile?: VolumeProfileData | null; // 가격대별 거래량
-}
-
-// 타임프레임을 분 단위로 변환
-function timeframeToMinutes(timeframe: string): number {
-  const value = parseInt(timeframe.slice(0, -1));
-  const unit = timeframe.slice(-1);
-
-  switch (unit) {
-    case 'm':
-      return value;
-    case 'h':
-      return value * 60;
-    case 'd':
-      return value * 60 * 24;
-    case 'w':
-      return value * 60 * 24 * 7;
-    default:
-      return 5; // 기본값 5분
-  }
-}
-
-// 분을 "X일 X시간 X분" 형식으로 변환
-function formatTimeRange(totalMinutes: number): string {
-  const days = Math.floor(totalMinutes / (60 * 24));
-  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-  const minutes = totalMinutes % 60;
-
-  const parts = [];
-  if (days > 0) parts.push(`${days}일`);
-  if (hours > 0) parts.push(`${hours}시간`);
-  if (minutes > 0) parts.push(`${minutes}분`);
-
-  return parts.length > 0 ? parts.join(' ') : '0분';
 }
 
 export default function ChartRenderer({
@@ -155,6 +163,9 @@ export default function ChartRenderer({
 
   // Volume Profile 표시 토글 (useEffect보다 먼저 선언해야 함)
   const [showVolumeProfile, setShowVolumeProfile] = useState(true);
+
+  // Visible range 상태 (차트에 보이는 캔들 범위)
+  const [visibleRange, setVisibleRange] = useState<{ from: number; to: number } | null>(null);
 
   // measurePoints가 변경될 때마다 ref도 업데이트
   useEffect(() => {
@@ -234,8 +245,8 @@ export default function ChartRenderer({
         background: { type: ColorType.Solid, color: '#1a1410' }, // 황금빛 도는 다크 블랙
         textColor: '#d1d5db',
         panes: {
-          separatorColor: '#3754bc70', // 패널 구분선 제거
-          separatorHoverColor: 'transparent', // 호버 시에도 표시 안함
+          separatorColor: 'rgba(255, 255, 255, 0.3)', // 연한 회색 구분선
+          separatorHoverColor: 'rgba(255, 255, 255, 0.5)', // 호버 시 더 밝게
           enableResize: false, // 패널 크기 조절 비활성화
         },
       },
@@ -340,28 +351,39 @@ export default function ChartRenderer({
       addEmaIndicators(chart, emaData, candleData);
     }
 
+    // 동적 paneIndex 계산 (데이터가 있는 지표만 순차적으로 패널 배치)
+    let currentPaneIndex = 1; // 메인 패널은 0, 지표는 1부터 시작
+
     // RSI 지표 추가
     let rsiSeries = null;
+    let rsiPaneIndex = 0;
     if (rsiData && rsiData.length > 0) {
-      rsiSeries = addRsiIndicator(chart, rsiData);
+      rsiPaneIndex = currentPaneIndex++;
+      rsiSeries = addRsiIndicator(chart, rsiData, rsiPaneIndex);
     }
 
     // OBV 지표 추가
     let obvSeries = null;
+    let obvPaneIndex = 0;
     if (obvData && obvData.length > 0) {
-      obvSeries = addObvIndicator(chart, obvData);
+      obvPaneIndex = currentPaneIndex++;
+      obvSeries = addObvIndicator(chart, obvData, obvPaneIndex);
     }
 
     // CVD 지표 추가
     let cvdSeries = null;
+    let cvdPaneIndex = 0;
     if (cvdData && cvdData.length > 0) {
-      cvdSeries = addCvdIndicator(chart, cvdData);
+      cvdPaneIndex = currentPaneIndex++;
+      cvdSeries = addCvdIndicator(chart, cvdData, cvdPaneIndex);
     }
 
     // OI 지표 추가
     let oiSeries = null;
+    let oiPaneIndex = 0;
     if (oiData && oiData.length > 0) {
-      oiSeries = addOiIndicator(chart, oiData);
+      oiPaneIndex = currentPaneIndex++;
+      oiSeries = addOiIndicator(chart, oiData, oiPaneIndex);
     }
 
     // 다이버전스 선 추가
@@ -386,6 +408,12 @@ export default function ChartRenderer({
         obvData || [],
         cvdData || [],
         oiData || [],
+        {
+          rsi: rsiPaneIndex || undefined,
+          obv: obvPaneIndex || undefined,
+          cvd: cvdPaneIndex || undefined,
+          oi: oiPaneIndex || undefined,
+        },
       );
     }
 
@@ -745,9 +773,12 @@ export default function ChartRenderer({
 
     window.addEventListener('resize', handleResize);
 
-    // 차트 스케일 변경 감지 (줌/스크롤 시 측정 박스 위치 업데이트)
-    const handleScaleChange = () => {
+    // 차트 스케일 변경 감지 (줌/스크롤 시 측정 박스 위치 업데이트 + visible range 저장)
+    const handleScaleChange = (newRange: { from: number; to: number } | null) => {
       setScaleUpdateTrigger((prev) => prev + 1);
+      if (newRange) {
+        setVisibleRange({ from: Math.floor(newRange.from), to: Math.ceil(newRange.to) });
+      }
     };
 
     chart.timeScale().subscribeVisibleLogicalRangeChange(handleScaleChange);
@@ -971,22 +1002,8 @@ export default function ChartRenderer({
     return () => clearTimeout(timeoutId);
   }, [scaleUpdateTrigger]);
 
-  const priceInfoContainer = typeof window !== 'undefined' ? document.getElementById('price-info-container') : null;
-
   return (
     <div className='w-full'>
-      {/* 가격 정보 (헤더에 포털로 렌더링) */}
-      {currentPriceInfo && priceInfoContainer && createPortal(
-        <div className='flex items-center gap-2 text-sm font-medium'>
-          <span style={{ color: currentPriceInfo.changePercent >= 0 ? '#a3e635' : '#fb923c' }}>
-            ${currentPriceInfo.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-          <span style={{ color: currentPriceInfo.changePercent >= 0 ? '#a3e635' : '#fb923c' }}>
-            {currentPriceInfo.changePercent >= 0 ? '▲' : '▼'} {Math.abs(currentPriceInfo.changePercent).toFixed(2)}%
-          </span>
-        </div>,
-        priceInfoContainer
-      )}
 
       {/* 추세 인디케이터 + 측정 결과 (차트 상단) */}
       <div className='flex gap-2 mb-2 flex-wrap items-center'>
@@ -1099,7 +1116,7 @@ export default function ChartRenderer({
 
           {/* Volume Profile 목표가 표시 - 현재가 < 목표가면 롱(초록), 아니면 숏(빨강) */}
           {showVolumeProfile && volumeProfile && (() => {
-            const currentPrice = realtimeCandle?.close ?? candles[candles.length - 1]?.close ?? 0;
+            const currentPrice = realtimeCandle?.close ?? data[data.length - 1]?.close ?? 0;
             const isLongSignal = currentPrice < volumeProfile.poc;
             const diffPercent = ((volumeProfile.poc - currentPrice) / currentPrice * 100).toFixed(2);
             return (
@@ -1137,6 +1154,26 @@ export default function ChartRenderer({
         className='rounded-xl overflow-hidden shadow-inner'
         style={{ position: 'relative' }}
       >
+        {/* 차트 정보 오버레이 (왼쪽 상단) - 시간 범위, 가격, 변화율 */}
+        <div className='absolute top-2 left-2 z-10 backdrop-blur-md bg-black/40 px-2 py-1 rounded-lg text-xs font-mono border border-white/10 flex items-center gap-3'>
+          {/* 시간 범위 (visible range 기반) */}
+          <span className='text-gray-300'>
+            {visibleRange ? calculateTimeRange(visibleRange.to - visibleRange.from, timeframe) : '-'}
+          </span>
+          {/* 현재가 및 변화율 */}
+          {currentPriceInfo && (
+            <>
+              <span className='text-gray-500'>|</span>
+              <span style={{ color: currentPriceInfo.changePercent >= 0 ? '#a3e635' : '#f87171' }}>
+                ${currentPriceInfo.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span style={{ color: currentPriceInfo.changePercent >= 0 ? '#a3e635' : '#f87171' }}>
+                {currentPriceInfo.changePercent >= 0 ? '▲' : '▼'} {Math.abs(currentPriceInfo.changePercent).toFixed(2)}%
+              </span>
+            </>
+          )}
+        </div>
+
         {/* 측정 박스 오버레이 (트레이딩뷰 스타일) */}
         {measureBox && (() => {
           const isPositive = measureBox.pricePercent >= 0;

@@ -29,45 +29,6 @@ const TIMEFRAMES = [
   { value: '1d', label: '1일' },
 ];
 
-// 타임프레임을 분 단위로 변환
-function timeframeToMinutes(timeframe: string): number {
-  const value = parseInt(timeframe.slice(0, -1));
-  const unit = timeframe.slice(-1);
-
-  switch (unit) {
-    case 'm':
-      return value;
-    case 'h':
-      return value * 60;
-    case 'd':
-      return value * 60 * 24;
-    default:
-      return 0;
-  }
-}
-
-// 캔들 개수와 타임프레임으로 시간 범위 계산
-function calculateTimeRange(candleCount: number, timeframe: string): string {
-  const totalMinutes = candleCount * timeframeToMinutes(timeframe);
-  const days = Math.floor(totalMinutes / (60 * 24));
-  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-
-  if (days > 0) {
-    if (hours > 0) {
-      return `${days}일 ${hours}시간`;
-    }
-    return `${days}일`;
-  } else if (hours > 0) {
-    const minutes = totalMinutes % 60;
-    if (minutes > 0) {
-      return `${hours}시간 ${minutes}분`;
-    }
-    return `${hours}시간`;
-  } else {
-    return `${totalMinutes}분`;
-  }
-}
-
 export default function ChartAdapter({
   symbol = 'BTC/USDT',
   initialTimeframe = '5m',
@@ -387,19 +348,18 @@ export default function ChartAdapter({
               <h2 className='text-xl font-bold bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-400 bg-clip-text text-transparent'>
                 {symbol}
               </h2>
-              <p className='text-xs text-gray-400'>
-                {calculateTimeRange(chartData.length, selectedTimeframe)}
-              </p>
             </div>
           </div>
 
+        </div>
+        <div className='flex items-center gap-2'>
           {/* 타임프레임 버튼 */}
-          <div className='flex items-center gap-1.5 flex-wrap'>
+          <div className='flex items-center gap-1'>
             {TIMEFRAMES.map((tf) => (
               <button
                 key={tf.value}
                 onClick={() => setSelectedTimeframe(tf.value)}
-                className={`px-2.5 py-1 rounded-lg text-xs transition-all duration-200 ${
+                className={`px-2 py-1 rounded-lg text-xs transition-all duration-200 ${
                   selectedTimeframe === tf.value
                     ? 'bg-orange-500/30 backdrop-blur-md text-white border border-orange-400/50 shadow-lg shadow-orange-500/20'
                     : 'bg-white/5 backdrop-blur-sm text-gray-300 hover:text-white hover:bg-white/10 border border-white/5'
@@ -409,24 +369,17 @@ export default function ChartAdapter({
               </button>
             ))}
           </div>
-
-          {/* 가격 정보 표시 */}
-          <div id='price-info-container'></div>
-        </div>
-        <div className='flex items-center gap-4'>
           {/* 새로고침 카운트다운 */}
-          <div className='flex items-center'>
-            <RefreshCountdown
-              timeframe={selectedTimeframe}
-              lastCandleTime={
-                chartData.length > 0
-                  ? (chartData[chartData.length - 1].time as number)
-                  : 0
-              }
-              onRefresh={refetch}
-              onManualRefresh={refetch}
-            />
-          </div>
+          <RefreshCountdown
+            timeframe={selectedTimeframe}
+            lastCandleTime={
+              chartData.length > 0
+                ? (chartData[chartData.length - 1].time as number)
+                : 0
+            }
+            onRefresh={refetch}
+            onManualRefresh={refetch}
+          />
         </div>
       </div>
 

@@ -24,6 +24,7 @@ import {
 export function addRsiIndicator(
   chart: IChartApi,
   rsiData: LineData[],
+  paneIndex: number = 1,
 ): ISeriesApi<'Line'> {
   // RSI 라인 (메인) - 황금색
   const rsiSeries = chart.addSeries(
@@ -36,41 +37,17 @@ export function addRsiIndicator(
       crosshairMarkerRadius: 4,
       title: 'RSI',
       lastValueVisible: true,
+      autoscaleInfoProvider: () => ({
+        priceRange: {
+          minValue: 0,
+          maxValue: 100,
+        },
+      }),
     },
-    1, // paneIndex: 1 (별도 패널)
+    paneIndex,
   );
 
   rsiSeries.setData(rsiData);
-
-  // 과매수 기준선 (70)
-  rsiSeries.createPriceLine({
-    price: 70,
-    color: 'rgba(239, 68, 68, 0.4)', // 빨간색 (투명도)
-    lineWidth: 1,
-    lineStyle: 2, // dashed
-    axisLabelVisible: true,
-    title: '과매수',
-  });
-
-  // 중심선 (50)
-  rsiSeries.createPriceLine({
-    price: 50,
-    color: 'rgba(161, 161, 170, 0.25)', // 부드러운 회색
-    lineWidth: 1,
-    lineStyle: 2, // dashed
-    axisLabelVisible: true,
-    title: '',
-  });
-
-  // 과매도 기준선 (30)
-  rsiSeries.createPriceLine({
-    price: 30,
-    color: 'rgba(163, 230, 53, 0.4)', // 초록색 (투명도)
-    lineWidth: 1,
-    lineStyle: 2, // dashed
-    axisLabelVisible: true,
-    title: '과매도',
-  });
 
   // RSI 패널 스케일 설정
   rsiSeries.priceScale().applyOptions({
@@ -93,6 +70,7 @@ export function addRsiIndicator(
 export function addObvIndicator(
   chart: IChartApi,
   obvData: LineData[],
+  paneIndex: number = 2,
 ): ISeriesApi<'Line'> {
   // OBV 라인 - 노란계열 (복숭아빛 오렌지)
   const obvSeries = chart.addSeries(
@@ -106,7 +84,7 @@ export function addObvIndicator(
       title: 'OBV',
       lastValueVisible: true,
     },
-    2, // paneIndex: 2 (세 번째 패널)
+    paneIndex,
   );
 
   obvSeries.setData(obvData);
@@ -132,6 +110,7 @@ export function addObvIndicator(
 export function addCvdIndicator(
   chart: IChartApi,
   cvdData: LineData[],
+  paneIndex: number = 3,
 ): ISeriesApi<'Line'> {
   // CVD 라인 - 파란계열 (하늘색, 투명도 50%)
   const cvdSeries = chart.addSeries(
@@ -145,7 +124,7 @@ export function addCvdIndicator(
       title: 'CVD',
       lastValueVisible: true,
     },
-    3, // paneIndex: 3 (네 번째 패널)
+    paneIndex,
   );
 
   cvdSeries.setData(cvdData);
@@ -172,6 +151,7 @@ export function addCvdIndicator(
 export function addOiIndicator(
   chart: IChartApi,
   oiData: LineData[],
+  paneIndex: number = 4,
 ): ISeriesApi<'Line'> {
   // OI 라인 - 보라계열 (자주색, 투명도 50%)
   const oiSeries = chart.addSeries(
@@ -185,7 +165,7 @@ export function addOiIndicator(
       title: 'OI',
       lastValueVisible: true,
     },
-    4, // paneIndex: 4 (다섯 번째 패널)
+    paneIndex,
   );
 
   oiSeries.setData(oiData);
@@ -323,6 +303,7 @@ export function addDivergenceLines(
   obvData: LineData[],
   cvdData: LineData[],
   oiData: LineData[],
+  paneIndices?: { rsi?: number; obv?: number; cvd?: number; oi?: number },
 ): void {
   // start와 end를 쌍으로 그룹화
   const divergencePairs: Array<{
@@ -430,7 +411,7 @@ export function addDivergenceLines(
             priceScaleId: 'rsi', // RSI 스케일 사용 (중요!)
             lineStyle: pair.isFiltered ? 2 : 0, // 필터링된 신호는 점선 (2 = dashed)
           },
-          1,
+          paneIndices?.rsi ?? 1,
         ); // RSI 패널
 
         rsiLineSeries.setData([
@@ -472,7 +453,7 @@ export function addDivergenceLines(
             priceScaleId: 'obv', // OBV 스케일 사용 (중요!)
             lineStyle: pair.isFiltered ? 2 : 0, // 필터링된 신호는 점선 (2 = dashed)
           },
-          2,
+          paneIndices?.obv ?? 2,
         ); // OBV 패널
 
         obvLineSeries.setData([
@@ -514,7 +495,7 @@ export function addDivergenceLines(
             priceScaleId: 'cvd', // CVD 스케일 사용
             lineStyle: pair.isFiltered ? 2 : 0,
           },
-          3,
+          paneIndices?.cvd ?? 3,
         ); // CVD 패널
 
         cvdLineSeries.setData([
@@ -556,7 +537,7 @@ export function addDivergenceLines(
             priceScaleId: 'oi', // OI 스케일 사용
             lineStyle: pair.isFiltered ? 2 : 0,
           },
-          4,
+          paneIndices?.oi ?? 4,
         ); // OI 패널
 
         oiLineSeries.setData([
