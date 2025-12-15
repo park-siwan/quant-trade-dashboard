@@ -414,37 +414,6 @@ export default function ChartAdapter({
           <div id='price-info-container'></div>
         </div>
         <div className='flex items-center gap-4'>
-          <>
-            {/* 다이버전스 정보 */}
-            {summary.total.total > 0 && (
-              <p className='text-xs text-gray-300'>
-                <span className='text-yellow-400 font-medium'>
-                  다이버전스 {summary.total.total}개
-                </span>
-                {' ('}
-                {bullishCount > 0 && (
-                  <span className='text-lime-400 font-medium'>
-                    상승 {bullishCount}
-                  </span>
-                )}
-                {bullishCount > 0 && bearishCount > 0 && ', '}
-                {bearishCount > 0 && (
-                  <span className='text-orange-400 font-medium'>
-                    하락 {bearishCount}
-                  </span>
-                )}
-                {summary.total.filtered > 0 && (
-                  <>
-                    {', '}
-                    <span className='text-gray-400'>
-                      필터링 {summary.total.filtered}
-                    </span>
-                  </>
-                )}
-                {')'}
-              </p>
-            )}
-          </>
           {/* 새로고침 카운트다운 */}
           <div className='flex items-center'>
             <RefreshCountdown
