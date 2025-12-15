@@ -1,6 +1,6 @@
 import { ApiResponse } from '@/lib/types/index';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const BYBIT_API_URL = 'https://api.bybit.com';
 
 interface FetchCandlesParams {

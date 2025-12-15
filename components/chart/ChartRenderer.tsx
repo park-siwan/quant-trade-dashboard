@@ -11,6 +11,7 @@ import {
   LineSeries,
   IChartApi,
   ISeriesApi,
+  IPriceLine,
 } from 'lightweight-charts';
 import {
   addRsiIndicator,
@@ -150,6 +151,7 @@ export default function ChartRenderer({
   } | null>(null); // 논리적 스크롤 범위 저장 (바 인덱스 기반)
   const chartRef = useRef<IChartApi | null>(null);
   const measureLineRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const volumeProfileLinesRef = useRef<IPriceLine[]>([]); // Volume Profile 라인 ref
 
   // Volume Profile 표시 토글 (useEffect보다 먼저 선언해야 함)
   const [showVolumeProfile, setShowVolumeProfile] = useState(true);
@@ -397,43 +399,50 @@ export default function ChartRenderer({
     //   addCvdOiMarkers(candlestickSeries, marketSignals);
     // }
 
-    // Volume Profile 라인 (핵심가, 상단저항, 하단지지)
-    if (showVolumeProfile && volumeProfile) {
+    // Volume Profile 라인 (핵심가, 상단저항, 하단지지) - ref에 저장하여 토글 가능하게
+    volumeProfileLinesRef.current = []; // 초기화
+    if (volumeProfile) {
       // 핵심가 (POC) - 가장 많이 거래된 가격 = 목표가 (가격이 여기로 돌아옴)
-      candlestickSeries.createPriceLine({
+      const pocLine = candlestickSeries.createPriceLine({
         price: volumeProfile.poc,
         color: 'rgba(250, 204, 21, 0.9)', // yellow-400 - 목표가
         lineWidth: 2,
         lineStyle: 0, // 실선
-        axisLabelVisible: true,
+        axisLabelVisible: showVolumeProfile,
         title: '목표(POC)',
         axisLabelColor: 'rgba(250, 204, 21, 1)',
         axisLabelTextColor: '#000',
+        lineVisible: showVolumeProfile,
       });
+      volumeProfileLinesRef.current.push(pocLine);
 
       // 상단저항 (VAH) - 저항선 = 숏 진입 구간
-      candlestickSeries.createPriceLine({
+      const vahLine = candlestickSeries.createPriceLine({
         price: volumeProfile.vah,
         color: 'rgba(251, 146, 60, 0.7)', // orange-400 - 숏 구간
         lineWidth: 1,
         lineStyle: 2, // 점선
-        axisLabelVisible: true,
+        axisLabelVisible: showVolumeProfile,
         title: '숏(VAH)',
         axisLabelColor: 'rgba(251, 146, 60, 0.9)',
         axisLabelTextColor: '#000',
+        lineVisible: showVolumeProfile,
       });
+      volumeProfileLinesRef.current.push(vahLine);
 
       // 하단지지 (VAL) - 지지선 = 롱 진입 구간
-      candlestickSeries.createPriceLine({
+      const valLine = candlestickSeries.createPriceLine({
         price: volumeProfile.val,
         color: 'rgba(163, 230, 53, 0.7)', // lime-400 - 롱 구간
         lineWidth: 1,
         lineStyle: 2, // 점선
-        axisLabelVisible: true,
+        axisLabelVisible: showVolumeProfile,
         title: '롱(VAL)',
         axisLabelColor: 'rgba(163, 230, 53, 0.9)',
         axisLabelTextColor: '#000',
+        lineVisible: showVolumeProfile,
       });
+      volumeProfileLinesRef.current.push(valLine);
     }
 
     // 패널 높이를 4:1:1:1 비율로 설정 (즉시 실행)
@@ -768,9 +777,18 @@ export default function ChartRenderer({
     trendAnalysis !== undefined,
     crossoverEvents?.length,
     marketSignals?.length,
-    showVolumeProfile, // Volume Profile 토글 시 재렌더링
     volumeProfile?.poc, // Volume Profile 변경 시 재렌더링
   ]);
+
+  // Volume Profile 라인 토글 (차트 재생성 없이 라인만 숨김/표시)
+  useEffect(() => {
+    volumeProfileLinesRef.current.forEach((line) => {
+      line.applyOptions({
+        lineVisible: showVolumeProfile,
+        axisLabelVisible: showVolumeProfile,
+      });
+    });
+  }, [showVolumeProfile]);
 
   // 크로스오버 X 마커 좌표 상태
   const [crossoverMarkers, setCrossoverMarkers] = useState<Array<{
@@ -1053,7 +1071,7 @@ export default function ChartRenderer({
                 : 'bg-gray-500/20 text-gray-400 border border-gray-400/50 shadow-gray-500/10'
             }`}
           >
-            📊 거래량
+            📊 매물대
           </button>
 
           {/* Long/Short 비율 표시 */}
