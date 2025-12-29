@@ -13,6 +13,7 @@ import {
   EmaData,
   CrossoverEvent,
   MarketSignal,
+  ConsolidationZone,
 } from '@/lib/types/index';
 
 /**
@@ -632,4 +633,91 @@ export function addCvdOiMarkers(
   createSeriesMarkers(candlestickSeries, markers);
 
   console.log(`✅ ${marketSignals.length}개의 CVD+OI 신호 마커 추가됨`);
+}
+
+/**
+ * 횡보 구간을 차트에 박스로 표시합니다
+ * @param chart - lightweight-charts 인스턴스
+ * @param zones - 횡보 구간 배열
+ * @returns 생성된 시리즈 배열 (정리용)
+ */
+export function addConsolidationZones(
+  chart: IChartApi,
+  zones: ConsolidationZone[],
+): ISeriesApi<'Line'>[] {
+  const series: ISeriesApi<'Line'>[] = [];
+
+  // 현재 진행 중인 횡보만 표시 (과거 횡보는 스킵)
+  const activeZones = zones.filter((zone) => zone.isActive);
+
+  activeZones.forEach((zone) => {
+    const color = 'rgba(251, 191, 36, 0.3)'; // amber-400 (현재 횡보 - 주의!)
+    const borderColor = 'rgba(251, 191, 36, 0.8)'; // amber-400
+
+    const startTime = (zone.startTimestamp / 1000) as Time;
+    const endTime = (zone.endTimestamp / 1000) as Time;
+
+    // 상단 라인
+    const topLine = chart.addSeries(
+      LineSeries,
+      {
+        color: borderColor,
+        lineWidth: 2,
+        lineStyle: 2, // dashed
+        lastValueVisible: false,
+        priceLineVisible: false,
+      },
+      0,
+    );
+    topLine.setData([
+      { time: startTime, value: zone.high },
+      { time: endTime, value: zone.high },
+    ]);
+    series.push(topLine);
+
+    // 하단 라인
+    const bottomLine = chart.addSeries(
+      LineSeries,
+      {
+        color: borderColor,
+        lineWidth: 2,
+        lineStyle: 2, // dashed
+        lastValueVisible: false,
+        priceLineVisible: false,
+      },
+      0,
+    );
+    bottomLine.setData([
+      { time: startTime, value: zone.low },
+      { time: endTime, value: zone.low },
+    ]);
+    series.push(bottomLine);
+
+    // Area로 채우기 (상단과 하단 사이)
+    const fillArea = chart.addSeries(
+      AreaSeries,
+      {
+        topColor: color,
+        bottomColor: color,
+        lineColor: 'transparent',
+        lineWidth: 1,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      },
+      0,
+    );
+    fillArea.setData([
+      { time: startTime, value: zone.high },
+      { time: endTime, value: zone.high },
+    ]);
+
+    console.log(
+      `⚠️ 현재 횡보 중! ${zone.candleCount}캔들, 범위 ${zone.rangePercent.toFixed(2)}% - Breakout 주의!`,
+    );
+  });
+
+  if (activeZones.length > 0) {
+    console.log(`✅ ${activeZones.length}개의 현재 횡보 구간 표시됨`);
+  }
+  return series;
 }

@@ -103,6 +103,25 @@ export interface CvdOiData {
   signals: MarketSignal[];
 }
 
+// 횡보 구간 타입
+export interface ConsolidationZone {
+  startIndex: number;
+  endIndex: number;
+  startTimestamp: number;
+  endTimestamp: number;
+  high: number; // 횡보 구간 최고가
+  low: number; // 횡보 구간 최저가
+  rangePercent: number; // 변동폭 (%)
+  candleCount: number; // 캔들 개수
+  isActive: boolean; // 현재 진행 중인 횡보인지
+}
+
+export interface ConsolidationData {
+  zones: ConsolidationZone[];
+  isCurrentlyConsolidating: boolean;
+  currentZone: ConsolidationZone | null;
+}
+
 export interface ApiResponse {
   success: boolean;
   data: {
@@ -139,5 +158,6 @@ export interface ApiResponse {
     trendAnalysis?: TrendAnalysis;
     crossoverEvents?: CrossoverEvent[];
     cvdOi?: CvdOiData; // CVD + OI 3중 조합 신호
+    consolidation?: ConsolidationData; // 횡보 구간 데이터
   };
 }

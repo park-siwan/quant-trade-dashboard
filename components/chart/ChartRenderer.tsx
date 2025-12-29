@@ -22,6 +22,7 @@ import {
   addEmaIndicators,
   addCrossoverMarkers,
   addCvdOiMarkers,
+  addConsolidationZones,
 } from '@/lib/chart/indicators';
 import {
   DivergenceSignal,
@@ -29,6 +30,7 @@ import {
   TrendAnalysis,
   CrossoverEvent,
   MarketSignal,
+  ConsolidationData,
 } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
 import { LongShortRatio } from '@/hooks/useLongShortRatio';
@@ -108,6 +110,7 @@ interface ChartRendererProps {
   } | null;
   longShortRatio?: LongShortRatio | null; // 롱/숏 비율 (Bybit API)
   volumeProfile?: VolumeProfileData | null; // 가격대별 거래량
+  consolidationData?: ConsolidationData | null; // 횡보 구간 데이터
 }
 
 export default function ChartRenderer({
@@ -125,6 +128,7 @@ export default function ChartRenderer({
   realtimeCandle,
   longShortRatio,
   volumeProfile,
+  consolidationData,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -473,6 +477,11 @@ export default function ChartRenderer({
       volumeProfileLinesRef.current.push(valLine);
     }
 
+    // 횡보 구간 표시
+    if (consolidationData && consolidationData.zones.length > 0) {
+      addConsolidationZones(chart, consolidationData.zones);
+    }
+
     // 패널 높이를 4:1:1:1 비율로 설정 (즉시 실행)
     const panes = chart.panes();
     if (panes.length > 0) {
@@ -814,6 +823,7 @@ export default function ChartRenderer({
     crossoverEvents?.length,
     marketSignals?.length,
     volumeProfile?.poc, // Volume Profile 변경 시 재렌더링
+    consolidationData?.zones?.length, // 횡보 구간 변경 시 재렌더링
   ]);
 
   // Volume Profile 라인 토글 (차트 재생성 없이 라인만 숨김/표시)
@@ -1134,6 +1144,13 @@ export default function ChartRenderer({
               </div>
             );
           })()}
+
+          {/* 횡보 경고 칩 - 현재 횡보 중일 때 표시 */}
+          {consolidationData?.isCurrentlyConsolidating && consolidationData.currentZone && (
+            <div className='backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border border-amber-400/50 bg-amber-500/30 text-amber-300 animate-pulse'>
+              ⚠️ 횡보 {consolidationData.currentZone.candleCount}봉 ({consolidationData.currentZone.rangePercent.toFixed(1)}%) - Breakout 주의!
+            </div>
+          )}
 
           {/* 다이버전스 칩 - 상승 다이버전스가 많으면 초록, 하락이 많으면 빨강 */}
           {divergenceSignals && divergenceSignals.length > 0 && (() => {

@@ -11,6 +11,7 @@ import {
   EmaData,
   TrendAnalysis,
   CrossoverEvent,
+  ConsolidationData,
 } from '@/lib/types/index';
 import { Bitcoin } from 'lucide-react';
 
@@ -247,6 +248,9 @@ export default function ChartAdapter({
   // CVD + OI 신호
   const marketSignals = data?.data?.cvdOi?.signals || [];
 
+  // 횡보 구간 데이터
+  const consolidationData: ConsolidationData | null = data?.data?.consolidation || null;
+
   // 다이버전스 방향별 개수 계산 (start 신호만 카운트)
   const bullishCount = divergenceSignals.filter(
     (signal) => signal.phase === 'start' && signal.direction === 'bullish',
@@ -398,6 +402,7 @@ export default function ChartAdapter({
         realtimeCandle={realtimeCandle}
         longShortRatio={longShortRatio}
         volumeProfile={volumeProfile}
+        consolidationData={consolidationData}
       />
     </div>
   );
