@@ -122,6 +122,19 @@ export interface ConsolidationData {
   currentZone: ConsolidationZone | null;
 }
 
+// VWAP + ATR 데이터 타입
+export interface VwapAtrData {
+  vwap: number[]; // VWAP 배열
+  atr: (number | null)[]; // ATR 배열 (period 이전은 null)
+  currentVwap: number; // 현재 VWAP
+  currentAtr: number | null; // 현재 ATR
+  atrPercent: number | null; // ATR을 현재가 대비 %로 표현
+  suggestedStopLoss: {
+    long: number; // 롱 포지션 손절가 (현재가 - 2*ATR)
+    short: number; // 숏 포지션 손절가 (현재가 + 2*ATR)
+  } | null;
+}
+
 export interface ApiResponse {
   success: boolean;
   data: {
@@ -159,5 +172,6 @@ export interface ApiResponse {
     crossoverEvents?: CrossoverEvent[];
     cvdOi?: CvdOiData; // CVD + OI 3중 조합 신호
     consolidation?: ConsolidationData; // 횡보 구간 데이터
+    vwapAtr?: VwapAtrData; // VWAP + ATR 데이터
   };
 }

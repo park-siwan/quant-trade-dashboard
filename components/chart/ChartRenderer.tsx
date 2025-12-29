@@ -31,6 +31,7 @@ import {
   CrossoverEvent,
   MarketSignal,
   ConsolidationData,
+  VwapAtrData,
 } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
 import { LongShortRatio } from '@/hooks/useLongShortRatio';
@@ -111,6 +112,7 @@ interface ChartRendererProps {
   longShortRatio?: LongShortRatio | null; // 롱/숏 비율 (Bybit API)
   volumeProfile?: VolumeProfileData | null; // 가격대별 거래량
   consolidationData?: ConsolidationData | null; // 횡보 구간 데이터
+  vwapAtrData?: VwapAtrData | null; // VWAP + ATR 데이터
 }
 
 export default function ChartRenderer({
@@ -129,6 +131,7 @@ export default function ChartRenderer({
   longShortRatio,
   volumeProfile,
   consolidationData,
+  vwapAtrData,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -514,6 +517,47 @@ export default function ChartRenderer({
       });
     }
 
+    // VWAP 라인 표시 (기관 트레이딩 기준선)
+    if (vwapAtrData && vwapAtrData.currentVwap > 0) {
+      candlestickSeries.createPriceLine({
+        price: vwapAtrData.currentVwap,
+        color: 'rgba(168, 85, 247, 0.9)', // purple-500
+        lineWidth: 2,
+        lineStyle: 0, // solid
+        axisLabelVisible: true,
+        title: 'VWAP',
+        axisLabelColor: 'rgba(168, 85, 247, 1)',
+        axisLabelTextColor: '#fff',
+      });
+    }
+
+    // ATR 기반 손절가 라인 표시
+    if (vwapAtrData?.suggestedStopLoss) {
+      // 롱 손절가 (현재가 - 2*ATR)
+      candlestickSeries.createPriceLine({
+        price: vwapAtrData.suggestedStopLoss.long,
+        color: 'rgba(239, 68, 68, 0.6)', // red-500
+        lineWidth: 1,
+        lineStyle: 2, // dotted
+        axisLabelVisible: true,
+        title: 'ATR↓',
+        axisLabelColor: 'rgba(239, 68, 68, 0.9)',
+        axisLabelTextColor: '#fff',
+      });
+
+      // 숏 손절가 (현재가 + 2*ATR)
+      candlestickSeries.createPriceLine({
+        price: vwapAtrData.suggestedStopLoss.short,
+        color: 'rgba(34, 197, 94, 0.6)', // green-500
+        lineWidth: 1,
+        lineStyle: 2, // dotted
+        axisLabelVisible: true,
+        title: 'ATR↑',
+        axisLabelColor: 'rgba(34, 197, 94, 0.9)',
+        axisLabelTextColor: '#fff',
+      });
+    }
+
     // 패널 높이를 4:1:1:1 비율로 설정 (즉시 실행)
     const panes = chart.panes();
     if (panes.length > 0) {
@@ -856,6 +900,7 @@ export default function ChartRenderer({
     marketSignals?.length,
     volumeProfile?.poc, // Volume Profile 변경 시 재렌더링
     consolidationData?.zones?.length, // 횡보 구간 변경 시 재렌더링
+    vwapAtrData?.currentVwap, // VWAP 변경 시 재렌더링
   ]);
 
   // Volume Profile 라인 토글 (차트 재생성 없이 라인만 숨김/표시)
@@ -880,7 +925,9 @@ export default function ChartRenderer({
   const [signalMarkers, setSignalMarkers] = useState<Array<{
     x: number;
     y: number;
-    text: string;
+    type: string;
+    label: string;
+    color: string;
     position: 'above' | 'below';
   }>>([]);
 
@@ -1005,18 +1052,18 @@ export default function ChartRenderer({
       return;
     }
 
-    const signalConfig: Record<string, { text: string; position: 'above' | 'below' }> = {
-      REAL_BULL: { text: '🚀', position: 'below' },
-      SHORT_TRAP: { text: '📉', position: 'above' },
-      PUMP_DUMP: { text: '⚠️', position: 'above' },
-      MORE_DROP: { text: '🔻', position: 'above' },
-      LONG_ENTRY: { text: '💎', position: 'below' },
+    const signalConfig: Record<string, { label: string; color: string; position: 'above' | 'below' }> = {
+      REAL_BULL: { label: '진짜상승', color: 'rgba(163, 230, 53, 0.9)', position: 'below' },
+      SHORT_TRAP: { label: '숏트랩', color: 'rgba(163, 230, 53, 0.9)', position: 'above' },
+      PUMP_DUMP: { label: '펌프', color: 'rgba(251, 146, 60, 0.9)', position: 'above' },
+      MORE_DROP: { label: '하락', color: 'rgba(248, 113, 113, 0.9)', position: 'above' },
+      LONG_ENTRY: { label: '롱진입', color: 'rgba(34, 211, 238, 0.9)', position: 'below' },
     };
 
     const timeoutId = setTimeout(() => {
       if (!chartRef.current || !candlestickSeriesRef.current) return;
 
-      const markers: Array<{ x: number; y: number; text: string; position: 'above' | 'below' }> = [];
+      const markers: Array<{ x: number; y: number; type: string; label: string; color: string; position: 'above' | 'below' }> = [];
 
       marketSignals.forEach((signal) => {
         const config = signalConfig[signal.type];
@@ -1037,8 +1084,10 @@ export default function ChartRenderer({
 
         markers.push({
           x,
-          y: config.position === 'below' ? y + 20 : y - 20,
-          text: config.text,
+          y: config.position === 'below' ? y + 18 : y - 18,
+          type: signal.type,
+          label: config.label,
+          color: config.color,
           position: config.position,
         });
       });
@@ -1184,7 +1233,7 @@ export default function ChartRenderer({
             const timeRange = formatTimeRange(totalMinutes);
             return (
               <div className='backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border border-amber-400/50 bg-amber-500/30 text-amber-300 animate-pulse'>
-                ⚠️ 횡보 {timeRange}
+                ⚠️ 횡보 {timeRange} ({zone.rangePercent.toFixed(1)}%)
               </div>
             );
           })()}
@@ -1201,6 +1250,20 @@ export default function ChartRenderer({
                   : 'border-red-400/50 bg-red-500/30 text-red-300'
               }`}>
                 다이버전스 {bullishCount}↑ {bearishCount}↓
+              </div>
+            );
+          })()}
+
+          {/* ATR 변동성 칩 - 변동성 높으면 주황색, 낮으면 회색 */}
+          {vwapAtrData?.atrPercent && (() => {
+            const isHighVolatility = vwapAtrData.atrPercent > 2; // 2% 이상이면 높은 변동성
+            return (
+              <div className={`backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border ${
+                isHighVolatility
+                  ? 'border-orange-400/50 bg-orange-500/30 text-orange-300'
+                  : 'border-gray-400/50 bg-gray-500/20 text-gray-300'
+              }`}>
+                ATR {vwapAtrData.atrPercent.toFixed(2)}%
               </div>
             );
           })()}
@@ -1382,7 +1445,7 @@ export default function ChartRenderer({
           </div>
         ))}
 
-        {/* CVD+OI 신호 마커 (커스텀 오버레이 - 이모지만 표시) */}
+        {/* CVD+OI 신호 마커 (세련된 칩 스타일) */}
         {signalMarkers.map((marker, index) => (
           <div
             key={`signal-${index}`}
@@ -1393,11 +1456,17 @@ export default function ChartRenderer({
               transform: 'translate(-50%, -50%)',
               pointerEvents: 'none',
               zIndex: 20,
-              fontSize: '18px',
-              textShadow: '0 0 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.6)',
+              backgroundColor: marker.color,
+              color: '#000',
+              fontSize: '10px',
+              fontWeight: 'bold',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
             }}
           >
-            {marker.text}
+            {marker.label}
           </div>
         ))}
 

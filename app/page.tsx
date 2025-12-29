@@ -142,6 +142,34 @@ export default function Home() {
                 - 숏 포지션 보유자 비율. 높으면 상승 주의
               </span>
             </div>
+            <div>
+              <span className='text-purple-400 font-semibold'>VWAP 보라선</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 거래량 가중 평균가. 기관 기준선. 위면 롱, 아래면 숏
+              </span>
+            </div>
+            <div>
+              <span className='text-orange-400 font-semibold'>ATR %</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 평균 변동폭. 2% 이상이면 변동성 높음 주의
+              </span>
+            </div>
+            <div>
+              <span className='text-red-400 font-semibold'>ATR↓ 빨간 점선</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 롱 손절가. ATR 2배 아래
+              </span>
+            </div>
+            <div>
+              <span className='text-green-400 font-semibold'>ATR↑ 초록 점선</span>
+              <span className='text-gray-300'>
+                {' '}
+                - 숏 손절가. ATR 2배 위
+              </span>
+            </div>
           </div>
         </div>
       </div>
