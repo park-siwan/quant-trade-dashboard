@@ -1146,11 +1146,15 @@ export default function ChartRenderer({
           })()}
 
           {/* 횡보 경고 칩 - 현재 횡보 중일 때 표시 */}
-          {consolidationData?.isCurrentlyConsolidating && consolidationData.currentZone && (
-            <div className='backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border border-amber-400/50 bg-amber-500/30 text-amber-300 animate-pulse'>
-              ⚠️ 횡보 {consolidationData.currentZone.candleCount}봉 ({consolidationData.currentZone.rangePercent.toFixed(1)}%) - Breakout 주의!
-            </div>
-          )}
+          {consolidationData?.isCurrentlyConsolidating && consolidationData.currentZone && (() => {
+            const totalMinutes = consolidationData.currentZone.candleCount * timeframeToMinutes(timeframe);
+            const timeRange = formatTimeRange(totalMinutes);
+            return (
+              <div className='backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border border-amber-400/50 bg-amber-500/30 text-amber-300 animate-pulse'>
+                ⚠️ 횡보 {timeRange} - Breakout 주의!
+              </div>
+            );
+          })()}
 
           {/* 다이버전스 칩 - 상승 다이버전스가 많으면 초록, 하락이 많으면 빨강 */}
           {divergenceSignals && divergenceSignals.length > 0 && (() => {
