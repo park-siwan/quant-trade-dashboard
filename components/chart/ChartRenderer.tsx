@@ -482,6 +482,38 @@ export default function ChartRenderer({
       addConsolidationZones(chart, consolidationData.zones);
     }
 
+    // 횡보 목표가 라인 표시 (현재 횡보 중일 때만)
+    if (consolidationData?.isCurrentlyConsolidating && consolidationData.currentZone) {
+      const zone = consolidationData.currentZone;
+      const range = zone.high - zone.low;
+      const targetUp = zone.high + range;
+      const targetDown = zone.low - range;
+
+      // 상방 목표가 라인
+      candlestickSeries.createPriceLine({
+        price: targetUp,
+        color: 'rgba(163, 230, 53, 0.8)', // lime-400
+        lineWidth: 1,
+        lineStyle: 1, // dashed
+        axisLabelVisible: true,
+        title: '횡보↑',
+        axisLabelColor: 'rgba(163, 230, 53, 1)',
+        axisLabelTextColor: '#000',
+      });
+
+      // 하방 목표가 라인
+      candlestickSeries.createPriceLine({
+        price: targetDown,
+        color: 'rgba(248, 113, 113, 0.8)', // red-400
+        lineWidth: 1,
+        lineStyle: 1, // dashed
+        axisLabelVisible: true,
+        title: '횡보↓',
+        axisLabelColor: 'rgba(248, 113, 113, 1)',
+        axisLabelTextColor: '#000',
+      });
+    }
+
     // 패널 높이를 4:1:1:1 비율로 설정 (즉시 실행)
     const panes = chart.panes();
     if (panes.length > 0) {
@@ -1147,11 +1179,12 @@ export default function ChartRenderer({
 
           {/* 횡보 경고 칩 - 현재 횡보 중일 때 표시 */}
           {consolidationData?.isCurrentlyConsolidating && consolidationData.currentZone && (() => {
-            const totalMinutes = consolidationData.currentZone.candleCount * timeframeToMinutes(timeframe);
+            const zone = consolidationData.currentZone;
+            const totalMinutes = zone.candleCount * timeframeToMinutes(timeframe);
             const timeRange = formatTimeRange(totalMinutes);
             return (
               <div className='backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border border-amber-400/50 bg-amber-500/30 text-amber-300 animate-pulse'>
-                ⚠️ 횡보 {timeRange} - Breakout 주의!
+                ⚠️ 횡보 {timeRange}
               </div>
             );
           })()}
