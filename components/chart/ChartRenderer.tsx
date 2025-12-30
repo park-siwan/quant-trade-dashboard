@@ -975,6 +975,7 @@ export default function ChartRenderer({
   }>>([]);
 
   // 측정 박스를 위한 상태 (화면 좌표)
+  const [measureBox, setMeasureBox] = useState<{
     left: number;
     top: number;
     width: number;
