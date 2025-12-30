@@ -1587,43 +1587,109 @@ export default function ChartRenderer({
           </div>
         ))}
 
-        {/* 오더북 깊이 시각화 (호가창 물량 막대) - 캔들 우측에 배치 */}
-        {orderBookBars.map((bar, index) => (
+        {/* 오더북 깊이 시각화 (DOM 스타일) - 우측 패널 */}
+        {orderBookData && orderBookBars.length > 0 && (
           <div
-            key={`orderbook-${index}`}
             style={{
               position: 'absolute',
-              left: '70%', // 캔들 영역 우측
-              top: `${bar.y}px`,
-              width: `${Math.max(bar.width * 0.8, 15)}px`, // 최대 80px
-              height: '4px',
-              backgroundColor: bar.type === 'bid'
-                ? 'rgba(34, 197, 94, 0.5)' // green
-                : 'rgba(239, 68, 68, 0.5)', // red
+              right: '65px', // 가격축 왼쪽
+              top: '50%',
               transform: 'translateY(-50%)',
+              width: '120px',
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              borderRadius: '8px',
+              padding: '8px',
               pointerEvents: 'none',
-              zIndex: 5,
-              borderRadius: '1px',
+              zIndex: 25,
+              border: '1px solid rgba(255,255,255,0.1)',
             }}
           >
-            {/* 물량 라벨 (큰 물량만 표시) */}
-            {bar.width > 60 && (
-              <span
-                style={{
-                  position: 'absolute',
-                  left: '100%',
-                  marginLeft: '2px',
-                  fontSize: '8px',
-                  color: bar.type === 'bid' ? '#22c55e' : '#ef4444',
-                  whiteSpace: 'nowrap',
-                  fontWeight: 'bold',
-                }}
-              >
-                {bar.size >= 1000 ? `${(bar.size / 1000).toFixed(0)}K` : bar.size.toFixed(0)}
+            {/* 매도 호가 (위에서 아래로) */}
+            <div style={{ marginBottom: '4px' }}>
+              {orderBookData.asks.slice(0, 8).reverse().map((level, index) => {
+                const maxSize = Math.max(
+                  ...orderBookData.asks.slice(0, 8).map(a => a.size),
+                  ...orderBookData.bids.slice(0, 8).map(b => b.size)
+                );
+                const widthPercent = (level.size / maxSize) * 100;
+                return (
+                  <div
+                    key={`ask-${index}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      marginBottom: '2px',
+                      height: '14px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${widthPercent}%`,
+                        minWidth: '4px',
+                        height: '10px',
+                        backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                        borderRadius: '2px',
+                        marginRight: '4px',
+                      }}
+                    />
+                    <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 'bold' }}>
+                      {level.size >= 1000 ? `${(level.size / 1000).toFixed(1)}K` : level.size.toFixed(1)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 현재가 구분선 */}
+            <div style={{
+              borderTop: '1px solid rgba(255,255,255,0.3)',
+              borderBottom: '1px solid rgba(255,255,255,0.3)',
+              padding: '2px 0',
+              marginBottom: '4px',
+              textAlign: 'center',
+            }}>
+              <span style={{ fontSize: '9px', color: '#fbbf24', fontWeight: 'bold' }}>
+                {orderBookData.bidAskRatio > 1 ? '▲ 매수우세' : '▼ 매도우세'} {orderBookData.bidAskRatio.toFixed(2)}x
               </span>
-            )}
+            </div>
+
+            {/* 매수 호가 (위에서 아래로) */}
+            <div>
+              {orderBookData.bids.slice(0, 8).map((level, index) => {
+                const maxSize = Math.max(
+                  ...orderBookData.asks.slice(0, 8).map(a => a.size),
+                  ...orderBookData.bids.slice(0, 8).map(b => b.size)
+                );
+                const widthPercent = (level.size / maxSize) * 100;
+                return (
+                  <div
+                    key={`bid-${index}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      marginBottom: '2px',
+                      height: '14px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${widthPercent}%`,
+                        minWidth: '4px',
+                        height: '10px',
+                        backgroundColor: 'rgba(34, 197, 94, 0.7)',
+                        borderRadius: '2px',
+                        marginRight: '4px',
+                      }}
+                    />
+                    <span style={{ fontSize: '9px', color: '#22c55e', fontWeight: 'bold' }}>
+                      {level.size >= 1000 ? `${(level.size / 1000).toFixed(1)}K` : level.size.toFixed(1)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        ))}
+        )}
 
       </div>
 
