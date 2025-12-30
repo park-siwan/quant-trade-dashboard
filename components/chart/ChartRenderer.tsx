@@ -1587,42 +1587,39 @@ export default function ChartRenderer({
           </div>
         ))}
 
-        {/* 오더북 깊이 시각화 (호가창 물량 막대) */}
+        {/* 오더북 깊이 시각화 (호가창 물량 막대) - 캔들 우측에 배치 */}
         {orderBookBars.map((bar, index) => (
           <div
             key={`orderbook-${index}`}
             style={{
               position: 'absolute',
-              right: '60px', // 가격 축 왼쪽
+              left: '70%', // 캔들 영역 우측
               top: `${bar.y}px`,
-              width: `${Math.max(bar.width * 1.5, 20)}px`, // 최소 20px
-              height: '6px',
+              width: `${Math.max(bar.width * 0.8, 15)}px`, // 최대 80px
+              height: '4px',
               backgroundColor: bar.type === 'bid'
-                ? 'rgba(34, 197, 94, 0.6)' // green
-                : 'rgba(239, 68, 68, 0.6)', // red
+                ? 'rgba(34, 197, 94, 0.5)' // green
+                : 'rgba(239, 68, 68, 0.5)', // red
               transform: 'translateY(-50%)',
               pointerEvents: 'none',
               zIndex: 5,
-              borderRadius: '2px',
-              boxShadow: bar.type === 'bid'
-                ? '0 0 4px rgba(34, 197, 94, 0.4)'
-                : '0 0 4px rgba(239, 68, 68, 0.4)',
+              borderRadius: '1px',
             }}
           >
             {/* 물량 라벨 (큰 물량만 표시) */}
-            {bar.width > 50 && (
+            {bar.width > 60 && (
               <span
                 style={{
                   position: 'absolute',
-                  right: '100%',
-                  marginRight: '4px',
-                  fontSize: '9px',
+                  left: '100%',
+                  marginLeft: '2px',
+                  fontSize: '8px',
                   color: bar.type === 'bid' ? '#22c55e' : '#ef4444',
                   whiteSpace: 'nowrap',
                   fontWeight: 'bold',
                 }}
               >
-                {bar.size >= 1000 ? `${(bar.size / 1000).toFixed(1)}K` : bar.size.toFixed(1)}
+                {bar.size >= 1000 ? `${(bar.size / 1000).toFixed(0)}K` : bar.size.toFixed(0)}
               </span>
             )}
           </div>
