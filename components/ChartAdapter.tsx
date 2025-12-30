@@ -14,6 +14,7 @@ import {
   ConsolidationData,
   VwapAtrData,
   OrderBlockData,
+  OrderBookData,
 } from '@/lib/types/index';
 import { Bitcoin } from 'lucide-react';
 
@@ -259,6 +260,9 @@ export default function ChartAdapter({
   // 오더블록 데이터
   const orderBlockData: OrderBlockData | null = data?.data?.orderBlocks || null;
 
+  // 오더북 데이터 (매수/매도벽)
+  const orderBookData: OrderBookData | null = data?.data?.orderBook || null;
+
   // 다이버전스 방향별 개수 계산 (start 신호만 카운트)
   const bullishCount = divergenceSignals.filter(
     (signal) => signal.phase === 'start' && signal.direction === 'bullish',
@@ -413,6 +417,7 @@ export default function ChartAdapter({
         consolidationData={consolidationData}
         vwapAtrData={vwapAtrData}
         orderBlockData={orderBlockData}
+        orderBookData={orderBookData}
       />
     </div>
   );

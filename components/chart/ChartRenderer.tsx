@@ -33,6 +33,7 @@ import {
   ConsolidationData,
   VwapAtrData,
   OrderBlockData,
+  OrderBookData,
 } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
 import { LongShortRatio } from '@/hooks/useLongShortRatio';
@@ -115,6 +116,7 @@ interface ChartRendererProps {
   consolidationData?: ConsolidationData | null; // 횡보 구간 데이터
   vwapAtrData?: VwapAtrData | null; // VWAP + ATR 데이터
   orderBlockData?: OrderBlockData | null; // 오더블록 데이터
+  orderBookData?: OrderBookData | null; // 오더북 매수/매도벽 데이터
 }
 
 export default function ChartRenderer({
@@ -135,6 +137,7 @@ export default function ChartRenderer({
   consolidationData,
   vwapAtrData,
   orderBlockData,
+  orderBookData,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -588,6 +591,45 @@ export default function ChartRenderer({
       console.log(`✅ ${orderBlockData.activeBlocks.length}개의 오더블록 표시됨`);
     }
 
+    // 오더북 매수/매도벽 표시 (실제 호가창 물량)
+    if (orderBookData) {
+      // 매수벽 (Bid Walls) - 초록색 점선
+      orderBookData.bidWalls.forEach((wall) => {
+        const lineStyle = wall.strength === 'major' ? 0 : 2; // major=실선, minor=점선
+        const lineWidth = wall.strength === 'major' ? 2 : 1;
+
+        candlestickSeries.createPriceLine({
+          price: wall.price,
+          color: 'rgba(34, 197, 94, 0.7)', // green-500
+          lineWidth: lineWidth,
+          lineStyle: lineStyle,
+          axisLabelVisible: true,
+          title: `매수벽 ${(wall.size).toFixed(1)}`,
+          axisLabelColor: 'rgba(34, 197, 94, 0.9)',
+          axisLabelTextColor: '#000',
+        });
+      });
+
+      // 매도벽 (Ask Walls) - 빨간색 점선
+      orderBookData.askWalls.forEach((wall) => {
+        const lineStyle = wall.strength === 'major' ? 0 : 2; // major=실선, minor=점선
+        const lineWidth = wall.strength === 'major' ? 2 : 1;
+
+        candlestickSeries.createPriceLine({
+          price: wall.price,
+          color: 'rgba(239, 68, 68, 0.7)', // red-500
+          lineWidth: lineWidth,
+          lineStyle: lineStyle,
+          axisLabelVisible: true,
+          title: `매도벽 ${(wall.size).toFixed(1)}`,
+          axisLabelColor: 'rgba(239, 68, 68, 0.9)',
+          axisLabelTextColor: '#000',
+        });
+      });
+
+      console.log(`📊 매수벽 ${orderBookData.bidWalls.length}개, 매도벽 ${orderBookData.askWalls.length}개 표시됨`);
+    }
+
     // 패널 높이를 4:1:1:1 비율로 설정 (즉시 실행)
     const panes = chart.panes();
     if (panes.length > 0) {
@@ -932,6 +974,8 @@ export default function ChartRenderer({
     consolidationData?.zones?.length, // 횡보 구간 변경 시 재렌더링
     vwapAtrData?.currentVwap, // VWAP 변경 시 재렌더링
     orderBlockData?.activeBlocks?.length, // 오더블록 변경 시 재렌더링
+    orderBookData?.bidWalls?.length, // 오더북 변경 시 재렌더링
+    orderBookData?.askWalls?.length,
   ]);
 
   // Volume Profile 라인 토글 (차트 재생성 없이 라인만 숨김/표시)
@@ -1295,6 +1339,21 @@ export default function ChartRenderer({
                   : 'border-gray-400/50 bg-gray-500/20 text-gray-300'
               }`}>
                 ATR {vwapAtrData.atrPercent.toFixed(2)}%
+              </div>
+            );
+          })()}
+
+          {/* 오더북 매수/매도 비율 칩 - 매수 우세면 초록, 매도 우세면 빨강 */}
+          {orderBookData && (() => {
+            const isBidDominant = orderBookData.bidAskRatio > 1;
+            const ratio = orderBookData.bidAskRatio;
+            return (
+              <div className={`backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border ${
+                isBidDominant
+                  ? 'border-lime-400/50 bg-lime-500/30 text-lime-300'
+                  : 'border-red-400/50 bg-red-500/30 text-red-300'
+              }`}>
+                호가 {isBidDominant ? '매수' : '매도'} {ratio.toFixed(2)}x
               </div>
             );
           })()}

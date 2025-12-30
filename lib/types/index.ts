@@ -151,6 +151,33 @@ export interface OrderBlockData {
   activeBlocks: OrderBlock[];
 }
 
+// 오더북 타입 (호가창 매수/매도벽)
+export interface OrderBookLevel {
+  price: number;
+  size: number;
+  total: number; // 누적 물량
+}
+
+export interface OrderWall {
+  price: number;
+  size: number;
+  type: 'bid' | 'ask';
+  strength: 'major' | 'minor'; // 물량 크기에 따른 강도
+  percentFromPrice: number; // 현재가 대비 %
+}
+
+export interface OrderBookData {
+  symbol: string;
+  timestamp: number;
+  bids: OrderBookLevel[]; // 매수 호가
+  asks: OrderBookLevel[]; // 매도 호가
+  bidWalls: OrderWall[]; // 감지된 매수벽
+  askWalls: OrderWall[]; // 감지된 매도벽
+  totalBidVolume: number; // 총 매수 물량
+  totalAskVolume: number; // 총 매도 물량
+  bidAskRatio: number; // 매수/매도 비율 (>1 = 매수 우세)
+}
+
 export interface ApiResponse {
   success: boolean;
   data: {
@@ -190,5 +217,6 @@ export interface ApiResponse {
     consolidation?: ConsolidationData; // 횡보 구간 데이터
     vwapAtr?: VwapAtrData; // VWAP + ATR 데이터
     orderBlocks?: OrderBlockData; // 오더블록 데이터
+    orderBook?: OrderBookData; // 오더북 매수/매도벽 데이터
   };
 }
