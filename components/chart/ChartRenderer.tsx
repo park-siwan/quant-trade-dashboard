@@ -249,10 +249,8 @@ export default function ChartRenderer({
 
     // 차트 생성 (패널 개수에 따라 높이 조정 - 1:1:1 비율)
     const hasRsi = rsiData && rsiData.length > 0;
-    const hasObv = obvData && obvData.length > 0;
-    const hasCvd = cvdData && cvdData.length > 0;
     const hasOi = oiData && oiData.length > 0;
-    const panelCount = 1 + (hasRsi ? 1 : 0) + (hasObv ? 1 : 0) + (hasCvd ? 1 : 0) + (hasOi ? 1 : 0); // 메인 + RSI + OBV + CVD + OI
+    const panelCount = 1 + (hasRsi ? 1 : 0) + (hasOi ? 1 : 0); // 메인 + RSI + OI (OBV, CVD 숨김)
     const panelHeight = 140; // 각 패널당 동일한 높이 (더 큰 차트)
     const chartHeight = panelCount * panelHeight; // 1:1:1:1:1 비율
 
@@ -380,21 +378,11 @@ export default function ChartRenderer({
       rsiSeries = addRsiIndicator(chart, rsiData, rsiPaneIndex);
     }
 
-    // OBV 지표 추가
-    let obvSeries = null;
-    let obvPaneIndex = 0;
-    if (obvData && obvData.length > 0) {
-      obvPaneIndex = currentPaneIndex++;
-      obvSeries = addObvIndicator(chart, obvData, obvPaneIndex);
-    }
-
-    // CVD 지표 추가
-    let cvdSeries = null;
-    let cvdPaneIndex = 0;
-    if (cvdData && cvdData.length > 0) {
-      cvdPaneIndex = currentPaneIndex++;
-      cvdSeries = addCvdIndicator(chart, cvdData, cvdPaneIndex);
-    }
+    // OBV, CVD 지표 숨김 (패널 비활성화)
+    const obvSeries = null;
+    const obvPaneIndex = 0;
+    const cvdSeries = null;
+    const cvdPaneIndex = 0;
 
     // OI 지표 추가
     let oiSeries = null;
@@ -891,8 +879,6 @@ export default function ChartRenderer({
   }, [
     data.length, // 캔들 개수만 체크 (데이터 내용 변경은 무시)
     rsiData?.length,
-    obvData?.length,
-    cvdData?.length,
     oiData?.length,
     emaData !== undefined,
     divergenceSignals?.length,
