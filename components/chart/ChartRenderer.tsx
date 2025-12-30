@@ -1209,215 +1209,166 @@ export default function ChartRenderer({
   return (
     <div className='w-full'>
 
-      {/* 추세 인디케이터 + 측정 결과 (차트 상단) */}
-      <div className='flex gap-2 mb-2 flex-wrap items-center'>
-        {/* 측정 결과 표시 (헤더) */}
-        {measureBox && (
-          <div className='backdrop-blur-md bg-blue-500/20 text-blue-300 border border-blue-400/50 px-2 py-1 rounded-lg text-xs font-medium shadow-lg shadow-blue-500/10'>
-            <span style={{ color: measureBox.pricePercent >= 0 ? '#a3e635' : '#fb923c' }}>
-              {measureBox.pricePercent >= 0 ? '▲' : '▼'} {Math.abs(measureBox.pricePercent).toFixed(2)}%
-            </span>
-            <span className='ml-2 text-gray-300'>
-              (${Math.abs(measureBox.priceDiff).toFixed(2)})
-            </span>
-          </div>
-        )}
-
-        {/* 추세 인디케이터 */}
-        {trendAnalysis && (
-          <>
-          {trendAnalysis.trend === 'bullish' && (
-            <div
-              className='backdrop-blur-md bg-lime-500/40 text-lime-300 border border-lime-400/70 px-2 py-1 rounded-lg text-xs font-medium shadow-lg shadow-lime-500/20 cursor-help relative'
-              onMouseEnter={() => setTrendTooltip('현재 가격이 EMA 200 위에 있어 상승 추세입니다')}
-              onMouseLeave={() => setTrendTooltip(null)}
-            >
-              추세 ↑상승
-            </div>
-          )}
-          {trendAnalysis.trend === 'bearish' && (
-            <div
-              className='backdrop-blur-md bg-red-500/40 text-red-300 border border-red-400/70 px-2 py-1 rounded-lg text-xs font-medium shadow-lg shadow-red-500/20 cursor-help relative'
-              onMouseEnter={() => setTrendTooltip('현재 가격이 EMA 200 아래에 있어 하락 추세입니다')}
-              onMouseLeave={() => setTrendTooltip(null)}
-            >
-              추세 ↓하락
-            </div>
-          )}
-          {trendAnalysis.trend === 'neutral' && (
-            <div
-              className='backdrop-blur-md bg-gray-500/20 text-gray-300 border border-gray-400/50 px-2 py-1 rounded-lg text-xs font-medium shadow-lg shadow-gray-500/10 cursor-help relative'
-              onMouseEnter={() => setTrendTooltip('현재 가격이 EMA 200 근처에 있어 중립 상태입니다')}
-              onMouseLeave={() => setTrendTooltip(null)}
-            >
-              추세 →중립
-            </div>
-          )}
-          {trendAnalysis.crossover === 'golden_cross' && (
-            <div
-              className='backdrop-blur-md bg-lime-500/40 text-lime-300 border border-lime-400/70 px-2 py-1 rounded-lg text-xs font-medium shadow-lg shadow-lime-500/20 cursor-help relative flex items-center gap-1'
-              onMouseEnter={() => setTrendTooltip('EMA 20이 EMA 50을 상향 돌파 (롱 신호)')}
-              onMouseLeave={() => setTrendTooltip(null)}
-            >
-              <span className='font-bold'>✕</span> 골든
-            </div>
-          )}
-          {trendAnalysis.crossover === 'dead_cross' && (
-            <div
-              className='backdrop-blur-md bg-red-500/40 text-red-300 border border-red-400/70 px-2 py-1 rounded-lg text-xs font-medium shadow-lg shadow-red-500/20 cursor-help relative flex items-center gap-1'
-              onMouseEnter={() => setTrendTooltip('EMA 20이 EMA 50을 하향 돌파 (숏 신호)')}
-              onMouseLeave={() => setTrendTooltip(null)}
-            >
-              <span className='font-bold'>✕</span> 데드
-            </div>
-          )}
-
-          {/* 커스텀 툴팁 */}
-          {trendTooltip && (
-            <div className='absolute top-full left-0 mt-2 px-3 py-2 backdrop-blur-xl bg-black/80 text-white text-xs rounded-lg shadow-xl border border-white/20 whitespace-nowrap z-50'>
-              {trendTooltip}
-            </div>
-          )}
-        </>
+      {/* 측정 결과 표시 */}
+      {measureBox && (
+        <div className='mb-2 backdrop-blur-md bg-blue-500/20 text-blue-300 border border-blue-400/50 px-3 py-2 rounded-lg text-sm font-medium'>
+          <span style={{ color: measureBox.pricePercent >= 0 ? '#a3e635' : '#fb923c' }}>
+            {measureBox.pricePercent >= 0 ? '▲' : '▼'} {Math.abs(measureBox.pricePercent).toFixed(2)}%
+          </span>
+          <span className='ml-2 text-gray-300'>
+            (${Math.abs(measureBox.priceDiff).toFixed(2)})
+          </span>
+        </div>
       )}
 
-          {/* Volume Profile 토글 버튼 - 주석 처리 (항상 표시)
-          <button
-            onClick={() => setShowVolumeProfile(!showVolumeProfile)}
-            className={`backdrop-blur-md px-3 py-1 rounded-lg text-sm font-medium shadow-lg cursor-pointer transition-all ${
-              showVolumeProfile
-                ? 'bg-red-500/20 text-red-400 border border-red-400/50 shadow-red-500/10'
-                : 'bg-gray-500/20 text-gray-400 border border-gray-400/50 shadow-gray-500/10'
-            }`}
-          >
-            📊 매물대
-          </button>
-          */}
+      {/* 추세 지표 Row - EMA, 크로스, 펀비, 목표가, 청산 */}
+      <div className='flex items-center justify-between mb-2 backdrop-blur-md bg-black/40 px-3 py-2 rounded-lg border border-white/10'>
+        {/* 좌측: 추세 라벨 + EMA 추세 + 크로스 */}
+        <div className='flex items-center gap-3'>
+          <span className='text-cyan-400 text-xs font-bold'>추세</span>
 
-          {/* 펀딩비 기반 롱/숏 비율 - 반대매매 추천 */}
+          {/* EMA 추세 */}
+          {trendAnalysis && (
+            <>
+              {trendAnalysis.trend === 'bullish' && (
+                <span className='text-lime-400 text-sm font-bold'>↑상승</span>
+              )}
+              {trendAnalysis.trend === 'bearish' && (
+                <span className='text-red-400 text-sm font-bold'>↓하락</span>
+              )}
+              {trendAnalysis.trend === 'neutral' && (
+                <span className='text-gray-400 text-sm font-bold'>→중립</span>
+              )}
+              {trendAnalysis.crossover === 'golden_cross' && (
+                <span className='text-lime-400 text-sm font-bold'>✕골든</span>
+              )}
+              {trendAnalysis.crossover === 'dead_cross' && (
+                <span className='text-red-400 text-sm font-bold'>✕데드</span>
+              )}
+            </>
+          )}
+
+          <span className='text-gray-600'>|</span>
+
+          {/* 펀딩비 */}
           {longShortRatio && (() => {
-            const recommendLong = longShortRatio.dominant === 'short'; // 숏이 많으면 롱 추천
+            const recommendLong = longShortRatio.dominant === 'short';
             const isNeutral = longShortRatio.dominant === 'neutral';
-            const colorClass = isNeutral
-              ? 'border-white/10 bg-white/5 text-gray-400'
-              : recommendLong
-                ? 'border-lime-400/50 bg-lime-500/30 text-lime-300'
-                : 'border-red-400/50 bg-red-500/30 text-red-300';
-            const barColor = isNeutral ? 'bg-gray-400' : recommendLong ? 'bg-lime-400' : 'bg-red-400';
+            const textColor = isNeutral ? 'text-gray-400' : recommendLong ? 'text-lime-400' : 'text-red-400';
             return (
-              <div className={`backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border flex items-center gap-1.5 ${colorClass}`}>
-                <span className='font-bold'>펀비(롱/숏)</span>
-                <span className='font-bold'>
-                  {(longShortRatio.longRatio * 100).toFixed(1)}%
-                </span>
-                <span className='opacity-60'>vs</span>
-                <span className='font-bold'>
-                  {(longShortRatio.shortRatio * 100).toFixed(1)}%
-                </span>
+              <div className={`flex items-center gap-1 text-sm font-mono ${textColor}`}>
+                <span className='text-gray-500'>펀비</span>
+                <span className='font-bold'>{(longShortRatio.longRatio * 100).toFixed(0)}:{(longShortRatio.shortRatio * 100).toFixed(0)}</span>
               </div>
             );
           })()}
 
-          {/* Volume Profile 목표가 표시 - 현재가 < 목표가면 롱(초록), 아니면 숏(빨강) */}
+          <span className='text-gray-600'>|</span>
+
+          {/* 목표가 */}
           {showVolumeProfile && volumeProfile && (() => {
             const currentPrice = realtimeCandle?.close ?? data[data.length - 1]?.close ?? 0;
             const isLongSignal = currentPrice < volumeProfile.poc;
-            const diffPercent = ((volumeProfile.poc - currentPrice) / currentPrice * 100).toFixed(2);
+            const diffPercent = ((volumeProfile.poc - currentPrice) / currentPrice * 100).toFixed(1);
             return (
-              <div className={`backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border ${
-                isLongSignal
-                  ? 'border-lime-400/50 bg-lime-500/30 text-lime-300'
-                  : 'border-red-400/50 bg-red-500/30 text-red-300'
-              }`}>
-                목표가: {volumeProfile.poc.toLocaleString()} ({isLongSignal ? '+' : ''}{diffPercent}%)
+              <div className={`flex items-center gap-1 text-sm font-mono ${isLongSignal ? 'text-lime-400' : 'text-red-400'}`}>
+                <span className='text-gray-500'>목표</span>
+                <span className='font-bold'>{(volumeProfile.poc / 1000).toFixed(1)}K</span>
+                <span className='text-xs opacity-70'>({isLongSignal ? '+' : ''}{diffPercent}%)</span>
               </div>
             );
           })()}
+        </div>
 
-          {/* 횡보 경고 칩 - 현재 횡보 중일 때 표시 */}
-          {consolidationData?.isCurrentlyConsolidating && consolidationData.currentZone && (() => {
+        {/* 우측: 청산 */}
+        {(() => {
+          const recentLiqs = liquidationData?.recentLiquidations || [];
+          const now = Date.now();
+          const fiveMinAgo = now - 5 * 60 * 1000;
+          const recentFiveMin = recentLiqs.filter(l => l.timestamp >= fiveMinAgo);
+
+          const longLiqs = recentFiveMin.filter(l => l.side === 'Sell');
+          const shortLiqs = recentFiveMin.filter(l => l.side === 'Buy');
+
+          const avgLongPrice = longLiqs.length > 0
+            ? longLiqs.reduce((sum, l) => sum + l.price, 0) / longLiqs.length
+            : null;
+          const avgShortPrice = shortLiqs.length > 0
+            ? shortLiqs.reduce((sum, l) => sum + l.price, 0) / shortLiqs.length
+            : null;
+
+          const formatPrice = (price: number) => {
+            if (price >= 1000) return `${(price / 1000).toFixed(1)}K`;
+            return price.toFixed(0);
+          };
+
+          return (
+            <div className='flex items-center gap-2 text-sm font-mono'>
+              <span className='text-gray-500'>청산</span>
+              {avgLongPrice ? (
+                <span className='text-red-400 font-bold'>↓{formatPrice(avgLongPrice)}</span>
+              ) : (
+                <span className='text-gray-600'>-</span>
+              )}
+              <span className='text-gray-600'>|</span>
+              {avgShortPrice ? (
+                <span className='text-lime-400 font-bold'>↑{formatPrice(avgShortPrice)}</span>
+              ) : (
+                <span className='text-gray-600'>-</span>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* 역추세 지표 Row - 횡보, 다이버전스, ATR */}
+      <div className='flex items-center justify-between mb-2 backdrop-blur-md bg-black/40 px-3 py-2 rounded-lg border border-amber-500/20'>
+        {/* 좌측: 역추세 라벨 + 횡보 + 다이버전스 */}
+        <div className='flex items-center gap-3'>
+          <span className='text-amber-400 text-xs font-bold'>역추세</span>
+
+          {/* 횡보 */}
+          {consolidationData?.isCurrentlyConsolidating && consolidationData.currentZone ? (() => {
             const zone = consolidationData.currentZone;
             const totalMinutes = zone.candleCount * timeframeToMinutes(timeframe);
             const timeRange = formatTimeRange(totalMinutes);
             return (
-              <div className='backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border border-amber-400/50 bg-amber-500/30 text-amber-300 animate-pulse'>
-                ⚠️ 횡보 {timeRange} ({zone.rangePercent.toFixed(1)}%)
-              </div>
+              <span className='text-amber-300 text-sm font-bold animate-pulse'>
+                ⚠️횡보 {timeRange} ({zone.rangePercent.toFixed(1)}%)
+              </span>
             );
-          })()}
+          })() : (
+            <span className='text-gray-600 text-sm'>횡보 없음</span>
+          )}
 
-          {/* 다이버전스 칩 - 상승 다이버전스가 많으면 초록, 하락이 많으면 빨강 */}
-          {divergenceSignals && divergenceSignals.length > 0 && (() => {
+          <span className='text-gray-600'>|</span>
+
+          {/* 다이버전스 */}
+          {divergenceSignals && divergenceSignals.length > 0 ? (() => {
             const bullishCount = divergenceSignals.filter(s => s.direction === 'bullish').length;
             const bearishCount = divergenceSignals.filter(s => s.direction === 'bearish').length;
             const isBullishDominant = bullishCount >= bearishCount;
             return (
-              <div className={`backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border ${
-                isBullishDominant
-                  ? 'border-lime-400/50 bg-lime-500/30 text-lime-300'
-                  : 'border-red-400/50 bg-red-500/30 text-red-300'
-              }`}>
+              <div className={`text-sm font-bold ${isBullishDominant ? 'text-lime-400' : 'text-red-400'}`}>
                 다이버전스 {bullishCount}↑ {bearishCount}↓
               </div>
             );
-          })()}
+          })() : (
+            <span className='text-gray-600 text-sm'>다이버전스 없음</span>
+          )}
+        </div>
 
-          {/* ATR 변동성 칩 - 변동성 높으면 주황색, 낮으면 회색 */}
-          {vwapAtrData?.atrPercent && (() => {
-            const isHighVolatility = vwapAtrData.atrPercent > 2; // 2% 이상이면 높은 변동성
-            return (
-              <div className={`backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border ${
-                isHighVolatility
-                  ? 'border-orange-400/50 bg-orange-500/30 text-orange-300'
-                  : 'border-gray-400/50 bg-gray-500/20 text-gray-300'
-              }`}>
-                ATR {vwapAtrData.atrPercent.toFixed(2)}%
-              </div>
-            );
-          })()}
-
-          {/* 청산 데이터 */}
-          {(() => {
-            const recentLiqs = liquidationData?.recentLiquidations || [];
-            const now = Date.now();
-            const fiveMinAgo = now - 5 * 60 * 1000;
-            const recentFiveMin = recentLiqs.filter(l => l.timestamp >= fiveMinAgo);
-
-            const longLiqs = recentFiveMin.filter(l => l.side === 'Sell');
-            const shortLiqs = recentFiveMin.filter(l => l.side === 'Buy');
-
-            const avgLongPrice = longLiqs.length > 0
-              ? longLiqs.reduce((sum, l) => sum + l.price, 0) / longLiqs.length
-              : null;
-            const avgShortPrice = shortLiqs.length > 0
-              ? shortLiqs.reduce((sum, l) => sum + l.price, 0) / shortLiqs.length
-              : null;
-
-            const formatPrice = (price: number) => {
-              if (price >= 1000) return `${(price / 1000).toFixed(1)}K`;
-              return price.toFixed(0);
-            };
-
-            return (
-              <div className='flex items-center gap-2 backdrop-blur-md bg-black/40 px-3 py-1.5 rounded-lg border border-white/10'>
-                <span className='text-gray-400 text-xs font-bold'>청산</span>
-                <div className='flex items-center gap-1.5 text-sm font-mono'>
-                  {avgLongPrice ? (
-                    <span className='text-red-400 font-bold'>↓{formatPrice(avgLongPrice)}</span>
-                  ) : (
-                    <span className='text-gray-600'>-</span>
-                  )}
-                  <span className='text-gray-600'>|</span>
-                  {avgShortPrice ? (
-                    <span className='text-lime-400 font-bold'>↑{formatPrice(avgShortPrice)}</span>
-                  ) : (
-                    <span className='text-gray-600'>-</span>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-
+        {/* 우측: ATR */}
+        {vwapAtrData?.atrPercent ? (() => {
+          const isHighVolatility = vwapAtrData.atrPercent > 2;
+          return (
+            <div className={`text-sm font-mono font-bold ${isHighVolatility ? 'text-orange-400' : 'text-gray-400'}`}>
+              ATR {vwapAtrData.atrPercent.toFixed(2)}%
+            </div>
+          );
+        })() : (
+          <span className='text-gray-600 text-sm'>ATR -</span>
+        )}
       </div>
 
       {/* 고래 프로그레스바 - 전체 너비 */}
