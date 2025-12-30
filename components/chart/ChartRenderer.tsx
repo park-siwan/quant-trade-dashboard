@@ -1160,11 +1160,10 @@ export default function ChartRenderer({
         </div>
       )}
 
-      {/* 추세 지표 Row - EMA, 크로스, 펀비, 목표가, 청산 */}
-      <div className='flex items-center justify-between mb-2 backdrop-blur-md bg-black/40 px-3 py-2 rounded-lg border border-white/10'>
-        {/* 좌측: 추세 라벨 + EMA 추세 + 크로스 */}
+      {/* 추세 지표 Row - EMA, 크로스, 펀비, 목표가 */}
+      <div className='flex items-center justify-between mb-2 backdrop-blur-md bg-black/40 px-3 py-2 rounded-lg border border-cyan-500/20'>
         <div className='flex items-center gap-3'>
-          <span className='text-cyan-400 text-xs font-bold'>추세</span>
+          <span className='text-cyan-400 text-xs font-bold border border-cyan-400/50 px-1.5 py-0.5 rounded'>추세</span>
 
           {/* EMA 추세 */}
           {trendAnalysis && (
@@ -1218,53 +1217,12 @@ export default function ChartRenderer({
             );
           })()}
         </div>
-
-        {/* 우측: 청산 */}
-        {(() => {
-          const recentLiqs = liquidationData?.recentLiquidations || [];
-          const now = Date.now();
-          const fiveMinAgo = now - 5 * 60 * 1000;
-          const recentFiveMin = recentLiqs.filter(l => l.timestamp >= fiveMinAgo);
-
-          const longLiqs = recentFiveMin.filter(l => l.side === 'Sell');
-          const shortLiqs = recentFiveMin.filter(l => l.side === 'Buy');
-
-          const avgLongPrice = longLiqs.length > 0
-            ? longLiqs.reduce((sum, l) => sum + l.price, 0) / longLiqs.length
-            : null;
-          const avgShortPrice = shortLiqs.length > 0
-            ? shortLiqs.reduce((sum, l) => sum + l.price, 0) / shortLiqs.length
-            : null;
-
-          const formatPrice = (price: number) => {
-            if (price >= 1000) return `${(price / 1000).toFixed(1)}K`;
-            return price.toFixed(0);
-          };
-
-          return (
-            <div className='flex items-center gap-2 text-sm font-mono'>
-              <span className='text-gray-500'>청산</span>
-              {avgLongPrice ? (
-                <span className='text-red-400 font-bold'>↓{formatPrice(avgLongPrice)}</span>
-              ) : (
-                <span className='text-gray-600'>-</span>
-              )}
-              <span className='text-gray-600'>|</span>
-              {avgShortPrice ? (
-                <span className='text-lime-400 font-bold'>↑{formatPrice(avgShortPrice)}</span>
-              ) : (
-                <span className='text-gray-600'>-</span>
-              )}
-            </div>
-          );
-        })()}
       </div>
 
       {/* 역추세 지표 Row - 횡보, 다이버전스, ATR */}
       <div className='flex items-center justify-between mb-2 backdrop-blur-md bg-black/40 px-3 py-2 rounded-lg border border-amber-500/20'>
-        {/* 좌측: 역추세 라벨 + 횡보 + 다이버전스 */}
         <div className='flex items-center gap-3'>
-          <span className='text-amber-400 text-xs font-bold'>역추세</span>
+          <span className='text-amber-400 text-xs font-bold border border-amber-400/50 px-1.5 py-0.5 rounded'>역추세</span>
 
           {/* 횡보 */}
           {consolidationData?.isCurrentlyConsolidating && consolidationData.currentZone ? (() => {
@@ -1310,35 +1268,81 @@ export default function ChartRenderer({
         )}
       </div>
 
-      {/* 고래 프로그레스바 - 전체 너비 */}
-      {(() => {
-        const stats = whaleData?.stats?.last5m;
-        const buyVol = stats?.buyVolume || 0;
-        const sellVol = stats?.sellVolume || 0;
-        const totalVol = buyVol + sellVol;
+      {/* 고래/기관 Row - 고래 프로그레스바 + 청산 */}
+      <div className='flex items-center gap-3 mb-2 backdrop-blur-md bg-black/40 px-3 py-2 rounded-lg border border-purple-500/20'>
+        <span className='text-purple-400 text-xs font-bold border border-purple-400/50 px-1.5 py-0.5 rounded'>고래/기관</span>
 
-        const formatUsd = (value: number) => {
-          if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-          if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-          return '0';
-        };
+        {/* 고래 프로그레스바 */}
+        {(() => {
+          const stats = whaleData?.stats?.last5m;
+          const buyVol = stats?.buyVolume || 0;
+          const sellVol = stats?.sellVolume || 0;
+          const totalVol = buyVol + sellVol;
 
-        const buyPercent = totalVol > 0 ? (buyVol / totalVol) * 100 : 50;
+          const formatUsd = (value: number) => {
+            if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+            if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
+            return '0';
+          };
 
-        return (
-          <div className='flex items-center gap-3 mb-2 backdrop-blur-md bg-black/40 px-3 py-2 rounded-lg border border-white/10'>
-            <span className='text-gray-400 text-sm font-bold'>🐋 고래</span>
-            <span className='text-lime-400 text-sm font-mono font-bold min-w-[50px]'>{formatUsd(buyVol)}</span>
-            <div className='flex-1 h-3 bg-red-500/40 rounded-full overflow-hidden'>
-              <div
-                className='h-full bg-lime-500/80 rounded-full transition-all'
-                style={{ width: `${buyPercent}%` }}
-              />
+          const buyPercent = totalVol > 0 ? (buyVol / totalVol) * 100 : 50;
+
+          return (
+            <>
+              <span className='text-lime-400 text-sm font-mono font-bold min-w-[50px]'>{formatUsd(buyVol)}</span>
+              <div className='flex-1 h-3 bg-red-500/40 rounded-full overflow-hidden'>
+                <div
+                  className='h-full bg-lime-500/80 rounded-full transition-all'
+                  style={{ width: `${buyPercent}%` }}
+                />
+              </div>
+              <span className='text-red-400 text-sm font-mono font-bold min-w-[50px] text-right'>{formatUsd(sellVol)}</span>
+            </>
+          );
+        })()}
+
+        <span className='text-gray-600'>|</span>
+
+        {/* 청산 */}
+        {(() => {
+          const recentLiqs = liquidationData?.recentLiquidations || [];
+          const now = Date.now();
+          const fiveMinAgo = now - 5 * 60 * 1000;
+          const recentFiveMin = recentLiqs.filter(l => l.timestamp >= fiveMinAgo);
+
+          const longLiqs = recentFiveMin.filter(l => l.side === 'Sell');
+          const shortLiqs = recentFiveMin.filter(l => l.side === 'Buy');
+
+          const avgLongPrice = longLiqs.length > 0
+            ? longLiqs.reduce((sum, l) => sum + l.price, 0) / longLiqs.length
+            : null;
+          const avgShortPrice = shortLiqs.length > 0
+            ? shortLiqs.reduce((sum, l) => sum + l.price, 0) / shortLiqs.length
+            : null;
+
+          const formatPrice = (price: number) => {
+            if (price >= 1000) return `${(price / 1000).toFixed(1)}K`;
+            return price.toFixed(0);
+          };
+
+          return (
+            <div className='flex items-center gap-2 text-sm font-mono'>
+              <span className='text-gray-500'>청산</span>
+              {avgLongPrice ? (
+                <span className='text-red-400 font-bold'>↓{formatPrice(avgLongPrice)}</span>
+              ) : (
+                <span className='text-gray-600'>-</span>
+              )}
+              <span className='text-gray-600'>|</span>
+              {avgShortPrice ? (
+                <span className='text-lime-400 font-bold'>↑{formatPrice(avgShortPrice)}</span>
+              ) : (
+                <span className='text-gray-600'>-</span>
+              )}
             </div>
-            <span className='text-red-400 text-sm font-mono font-bold min-w-[50px] text-right'>{formatUsd(sellVol)}</span>
-          </div>
-        );
-      })()}
+          );
+        })()}
+      </div>
 
       {/* 차트 컨테이너 */}
       <div className='relative'>
