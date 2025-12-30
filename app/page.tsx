@@ -1,5 +1,4 @@
 import ChartAdapter from '@/components/ChartAdapter';
-import OrderBook from '@/components/OrderBook';
 
 export default function Home() {
   return (
@@ -11,21 +10,8 @@ export default function Home() {
 
       {/* 메인 콘텐츠 */}
       <div className='relative z-10 space-y-6'>
-        {/* <div className='backdrop-blur-sm bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl mb-6'>
-          <h1 className='text-4xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-2'>
-            Quant Trade Dashboard
-          </h1>
-          <p className='text-gray-300'>실시간 암호화폐 차트 대시보드</p>
-        </div> */}
-
-        {/* 그리드 레이아웃: 차트(좌) + 오더북(우) */}
-        <div className='grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-stretch'>
-          {/* 메인 차트 */}
-          <ChartAdapter symbol='BTC/USDT' initialTimeframe='5m' limit={1000} />
-
-          {/* 오더북 사이드바 - 차트와 동일한 높이 */}
-          <OrderBook symbol='BTCUSDT' limit={10} />
-        </div>
+        {/* 메인 차트 (전체 너비) - 오더북은 차트 내 DOM 패널로 대체 */}
+        <ChartAdapter symbol='BTC/USDT' initialTimeframe='5m' limit={1000} />
 
         {/* 초보자를 위한 용어 설명 - 스크롤 시 보임 */}
         <div className='backdrop-blur-sm bg-white/[0.1] border border-white/10 rounded-xl p-4'>
