@@ -251,8 +251,8 @@ export default function ChartRenderer({
     const hasRsi = rsiData && rsiData.length > 0;
     const hasOi = oiData && oiData.length > 0;
     const panelCount = 1 + (hasRsi ? 1 : 0) + (hasOi ? 1 : 0); // 메인 + RSI + OI (OBV, CVD 숨김)
-    const panelHeight = 140; // 각 패널당 동일한 높이 (더 큰 차트)
-    const chartHeight = panelCount * panelHeight; // 1:1:1:1:1 비율
+    const panelHeight = 220; // 각 패널당 높이 (더 큰 차트)
+    const chartHeight = panelCount * panelHeight;
 
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
