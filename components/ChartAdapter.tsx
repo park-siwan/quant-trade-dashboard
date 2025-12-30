@@ -3,6 +3,8 @@
 import { useState, useMemo } from 'react';
 import { useCandles } from '@/hooks/useCandles';
 import { useLongShortRatio } from '@/hooks/useLongShortRatio';
+import { useLiquidations } from '@/hooks/useLiquidations';
+import { useWhales } from '@/hooks/useWhales';
 import ChartRenderer from '@/components/chart/ChartRenderer';
 import RefreshCountdown from '@/components/chart/RefreshCountdown';
 import { CandlestickData, LineData } from 'lightweight-charts';
@@ -15,6 +17,8 @@ import {
   VwapAtrData,
   OrderBlockData,
   OrderBookData,
+  LiquidationSummary,
+  WhaleSummary,
 } from '@/lib/types/index';
 import { Bitcoin } from 'lucide-react';
 
@@ -52,6 +56,18 @@ export default function ChartAdapter({
   const { ratio: longShortRatio } = useLongShortRatio({
     symbol: symbol.replace('/', ''),
     period: '1h',
+  });
+
+  // 청산 데이터 가져오기 (Binance WebSocket)
+  const { data: liquidationData } = useLiquidations({
+    symbol,
+    refreshInterval: 3000, // 3초마다 갱신
+  });
+
+  // 고래 거래 데이터 가져오기 (Binance WebSocket)
+  const { data: whaleData } = useWhales({
+    symbol,
+    refreshInterval: 5000, // 5초마다 갱신
   });
 
   // API 응답을 CandlestickData 형식으로 변환 (데이터가 없으면 빈 배열)
@@ -418,6 +434,8 @@ export default function ChartAdapter({
         vwapAtrData={vwapAtrData}
         orderBlockData={orderBlockData}
         orderBookData={orderBookData}
+        liquidationData={liquidationData}
+        whaleData={whaleData}
       />
     </div>
   );

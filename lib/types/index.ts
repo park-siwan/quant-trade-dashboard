@@ -178,6 +178,60 @@ export interface OrderBookData {
   bidAskRatio: number; // 매수/매도 비율 (>1 = 매수 우세)
 }
 
+// 고래 거래 타입
+export interface WhaleTrade {
+  symbol: string;
+  side: 'buy' | 'sell';
+  price: number;
+  quantity: number;
+  usdValue: number;
+  timestamp: number;
+  tradeId: number;
+}
+
+export interface WhaleStats {
+  buyVolume: number;
+  sellVolume: number;
+  buyCount: number;
+  sellCount: number;
+}
+
+export interface WhaleSummary {
+  symbol: string;
+  recentTrades: WhaleTrade[];
+  stats: {
+    last5m: WhaleStats;
+    last15m: WhaleStats;
+    last1h: WhaleStats;
+  };
+}
+
+// 청산 데이터 타입
+export interface LiquidationEvent {
+  symbol: string;
+  side: 'Buy' | 'Sell'; // Buy = 숏청산(가격상승), Sell = 롱청산(가격하락)
+  price: number;
+  size: number;
+  timestamp: number;
+  usdValue: number; // USD 가치
+}
+
+export interface LiquidationStats {
+  longLiq: number; // 롱 청산 USD
+  shortLiq: number; // 숏 청산 USD
+  totalUsd: number;
+}
+
+export interface LiquidationSummary {
+  symbol: string;
+  recentLiquidations: LiquidationEvent[];
+  stats: {
+    last1m: LiquidationStats;
+    last5m: LiquidationStats;
+    last15m: LiquidationStats;
+  };
+}
+
 export interface ApiResponse {
   success: boolean;
   data: {

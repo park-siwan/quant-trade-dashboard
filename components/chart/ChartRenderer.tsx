@@ -34,6 +34,8 @@ import {
   VwapAtrData,
   OrderBlockData,
   OrderBookData,
+  LiquidationSummary,
+  WhaleSummary,
 } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
 import { LongShortRatio } from '@/hooks/useLongShortRatio';
@@ -117,6 +119,8 @@ interface ChartRendererProps {
   vwapAtrData?: VwapAtrData | null; // VWAP + ATR 데이터
   orderBlockData?: OrderBlockData | null; // 오더블록 데이터
   orderBookData?: OrderBookData | null; // 오더북 매수/매도벽 데이터
+  liquidationData?: LiquidationSummary | null; // 청산 데이터
+  whaleData?: WhaleSummary | null; // 고래 거래 데이터
 }
 
 export default function ChartRenderer({
@@ -138,6 +142,8 @@ export default function ChartRenderer({
   vwapAtrData,
   orderBlockData,
   orderBookData,
+  liquidationData,
+  whaleData,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -1370,6 +1376,70 @@ export default function ChartRenderer({
             );
           })()}
 
+          {/* 청산 데이터 칩 - 5분간 청산량 표시 (항상 표시) */}
+          {(() => {
+            const stats = liquidationData?.stats?.last5m;
+            const longLiq = stats?.longLiq || 0;
+            const shortLiq = stats?.shortLiq || 0;
+            const totalUsd = stats?.totalUsd || 0;
+            const isLongDominant = longLiq > shortLiq;
+
+            // USD 포맷팅 (K, M 단위)
+            const formatUsd = (value: number) => {
+              if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+              if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
+              return value.toFixed(0);
+            };
+
+            // 청산이 없으면 회색, 있으면 롱/숏 우세에 따라 색상 변경
+            const colorClass = totalUsd === 0
+              ? 'border-gray-400/30 bg-gray-500/20 text-gray-400'
+              : isLongDominant
+                ? 'border-red-400/50 bg-red-500/30 text-red-300'
+                : 'border-lime-400/50 bg-lime-500/30 text-lime-300';
+
+            return (
+              <div className={`backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border flex items-center gap-1.5 ${colorClass}`}>
+                <span className='font-bold'>청산</span>
+                <span className='text-red-400'>{formatUsd(longLiq)}</span>
+                <span className='opacity-60'>/</span>
+                <span className='text-lime-400'>{formatUsd(shortLiq)}</span>
+                <span className='opacity-60 text-[10px]'>5분</span>
+              </div>
+            );
+          })()}
+
+          {/* 고래 거래 칩 - 5분간 고래 매수/매도 표시 */}
+          {(() => {
+            const stats = whaleData?.stats?.last5m;
+            const buyVol = stats?.buyVolume || 0;
+            const sellVol = stats?.sellVolume || 0;
+            const totalVol = buyVol + sellVol;
+            const isBuyDominant = buyVol > sellVol;
+
+            const formatUsd = (value: number) => {
+              if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+              if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
+              return value.toFixed(0);
+            };
+
+            const colorClass = totalVol === 0
+              ? 'border-gray-400/30 bg-gray-500/20 text-gray-400'
+              : isBuyDominant
+                ? 'border-cyan-400/50 bg-cyan-500/30 text-cyan-300'
+                : 'border-purple-400/50 bg-purple-500/30 text-purple-300';
+
+            return (
+              <div className={`backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border flex items-center gap-1.5 ${colorClass}`}>
+                <span className='font-bold'>🐋</span>
+                <span className='text-cyan-400'>{formatUsd(buyVol)}</span>
+                <span className='opacity-60'>/</span>
+                <span className='text-purple-400'>{formatUsd(sellVol)}</span>
+                <span className='opacity-60 text-[10px]'>5분</span>
+              </div>
+            );
+          })()}
+
       </div>
 
       {/* 차트 컨테이너 */}
@@ -1572,6 +1642,95 @@ export default function ChartRenderer({
             {marker.label}
           </div>
         ))}
+
+        {/* 오더북 DOM 스타일 (최신 캔들 우측, 세로 스택) */}
+        {orderBookData && chartRef.current && candlestickSeriesRef.current && data.length > 0 && (() => {
+          // 최신 캔들의 X 좌표 구하기
+          const latestCandle = data[data.length - 1];
+          const latestX = chartRef.current!.timeScale().timeToCoordinate(latestCandle.time);
+          if (latestX === null) return null;
+
+          // 현재가 Y 좌표 (기준점)
+          const currentPrice = latestCandle.close;
+          const midY = candlestickSeriesRef.current!.priceToCoordinate(currentPrice);
+          if (midY === null) return null;
+
+          const barStartX = latestX + 12;
+          const maxBarWidth = 70;
+          const barHeight = 10; // 각 바 높이
+          const barGap = 1; // 바 간격
+
+          const asks = orderBookData.asks.slice(0, 8);
+          const bids = orderBookData.bids.slice(0, 8);
+
+          const allSizes = [...asks.map(a => a.size), ...bids.map(b => b.size)];
+          const maxSize = Math.max(...allSizes);
+          const avgSize = allSizes.reduce((a, b) => a + b, 0) / allSizes.length;
+
+          return (
+            <div
+              style={{
+                position: 'absolute',
+                left: `${barStartX}px`,
+                top: `${midY - (asks.length * (barHeight + barGap))}px`,
+                pointerEvents: 'none',
+                zIndex: 25,
+              }}
+            >
+              {/* 매도 호가 (위에서 아래로) */}
+              {asks.slice().reverse().map((level, index) => {
+                const isLargeWall = level.size >= avgSize * 2;
+                const widthRatio = level.size / maxSize;
+                const barWidth = Math.max(widthRatio * maxBarWidth, 8);
+
+                return (
+                  <div
+                    key={`ask-${index}`}
+                    style={{
+                      width: `${barWidth}px`,
+                      height: `${barHeight}px`,
+                      marginBottom: `${barGap}px`,
+                      backgroundColor: isLargeWall ? 'rgba(239, 68, 68, 0.8)' : 'rgba(239, 68, 68, 0.5)',
+                      borderRadius: '2px',
+                      borderLeft: isLargeWall ? '2px solid #ef4444' : 'none',
+                    }}
+                  />
+                );
+              })}
+
+              {/* 스프레드 구분선 */}
+              <div
+                style={{
+                  width: `${maxBarWidth}px`,
+                  height: '2px',
+                  backgroundColor: 'rgba(250, 204, 21, 0.6)',
+                  margin: '2px 0',
+                }}
+              />
+
+              {/* 매수 호가 (위에서 아래로) */}
+              {bids.map((level, index) => {
+                const isLargeWall = level.size >= avgSize * 2;
+                const widthRatio = level.size / maxSize;
+                const barWidth = Math.max(widthRatio * maxBarWidth, 8);
+
+                return (
+                  <div
+                    key={`bid-${index}`}
+                    style={{
+                      width: `${barWidth}px`,
+                      height: `${barHeight}px`,
+                      marginBottom: `${barGap}px`,
+                      backgroundColor: isLargeWall ? 'rgba(34, 197, 94, 0.8)' : 'rgba(34, 197, 94, 0.5)',
+                      borderRadius: '2px',
+                      borderLeft: isLargeWall ? '2px solid #22c55e' : 'none',
+                    }}
+                  />
+                );
+              })}
+            </div>
+          );
+        })()}
 
       </div>
 
