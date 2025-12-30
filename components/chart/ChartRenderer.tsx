@@ -591,45 +591,6 @@ export default function ChartRenderer({
       console.log(`✅ ${orderBlockData.activeBlocks.length}개의 오더블록 표시됨`);
     }
 
-    // 오더북 매수/매도벽 표시 (실제 호가창 물량)
-    if (orderBookData) {
-      // 매수벽 (Bid Walls) - 초록색 점선
-      orderBookData.bidWalls.forEach((wall) => {
-        const lineStyle = wall.strength === 'major' ? 0 : 2; // major=실선, minor=점선
-        const lineWidth = wall.strength === 'major' ? 2 : 1;
-
-        candlestickSeries.createPriceLine({
-          price: wall.price,
-          color: 'rgba(34, 197, 94, 0.7)', // green-500
-          lineWidth: lineWidth,
-          lineStyle: lineStyle,
-          axisLabelVisible: true,
-          title: `매수벽 ${(wall.size).toFixed(1)}`,
-          axisLabelColor: 'rgba(34, 197, 94, 0.9)',
-          axisLabelTextColor: '#000',
-        });
-      });
-
-      // 매도벽 (Ask Walls) - 빨간색 점선
-      orderBookData.askWalls.forEach((wall) => {
-        const lineStyle = wall.strength === 'major' ? 0 : 2; // major=실선, minor=점선
-        const lineWidth = wall.strength === 'major' ? 2 : 1;
-
-        candlestickSeries.createPriceLine({
-          price: wall.price,
-          color: 'rgba(239, 68, 68, 0.7)', // red-500
-          lineWidth: lineWidth,
-          lineStyle: lineStyle,
-          axisLabelVisible: true,
-          title: `매도벽 ${(wall.size).toFixed(1)}`,
-          axisLabelColor: 'rgba(239, 68, 68, 0.9)',
-          axisLabelTextColor: '#000',
-        });
-      });
-
-      console.log(`📊 매수벽 ${orderBookData.bidWalls.length}개, 매도벽 ${orderBookData.askWalls.length}개 표시됨`);
-    }
-
     // 패널 높이를 4:1:1:1 비율로 설정 (즉시 실행)
     const panes = chart.panes();
     if (panes.length > 0) {
@@ -974,8 +935,6 @@ export default function ChartRenderer({
     consolidationData?.zones?.length, // 횡보 구간 변경 시 재렌더링
     vwapAtrData?.currentVwap, // VWAP 변경 시 재렌더링
     orderBlockData?.activeBlocks?.length, // 오더블록 변경 시 재렌더링
-    orderBookData?.bidWalls?.length, // 오더북 변경 시 재렌더링
-    orderBookData?.askWalls?.length,
   ]);
 
   // Volume Profile 라인 토글 (차트 재생성 없이 라인만 숨김/표시)
@@ -1006,8 +965,16 @@ export default function ChartRenderer({
     position: 'above' | 'below';
   }>>([]);
 
+  // 오더북 깊이 시각화를 위한 상태
+  const [orderBookBars, setOrderBookBars] = useState<Array<{
+    y: number;
+    width: number; // 상대적 너비 (0-100%)
+    price: number;
+    size: number;
+    type: 'bid' | 'ask';
+  }>>([]);
+
   // 측정 박스를 위한 상태 (화면 좌표)
-  const [measureBox, setMeasureBox] = useState<{
     left: number;
     top: number;
     width: number;
@@ -1172,6 +1139,65 @@ export default function ChartRenderer({
 
     return () => clearTimeout(timeoutId);
   }, [scaleUpdateTrigger]);
+
+  // 오더북 깊이 바 계산 (scaleUpdateTrigger 변경 시)
+  useEffect(() => {
+    if (!chartRef.current || !candlestickSeriesRef.current || !orderBookData) {
+      setOrderBookBars([]);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      if (!chartRef.current || !candlestickSeriesRef.current) return;
+
+      const bars: Array<{
+        y: number;
+        width: number;
+        price: number;
+        size: number;
+        type: 'bid' | 'ask';
+      }> = [];
+
+      // 최대 물량 찾기 (정규화용)
+      const allSizes = [
+        ...orderBookData.bids.slice(0, 15).map(b => b.size),
+        ...orderBookData.asks.slice(0, 15).map(a => a.size),
+      ];
+      const maxSize = Math.max(...allSizes);
+
+      // 매수 호가 (상위 15개)
+      orderBookData.bids.slice(0, 15).forEach((level) => {
+        const y = candlestickSeriesRef.current!.priceToCoordinate(level.price);
+        if (y === null || y < 0 || y > 2000) return;
+
+        bars.push({
+          y,
+          width: (level.size / maxSize) * 100,
+          price: level.price,
+          size: level.size,
+          type: 'bid',
+        });
+      });
+
+      // 매도 호가 (상위 15개)
+      orderBookData.asks.slice(0, 15).forEach((level) => {
+        const y = candlestickSeriesRef.current!.priceToCoordinate(level.price);
+        if (y === null || y < 0 || y > 2000) return;
+
+        bars.push({
+          y,
+          width: (level.size / maxSize) * 100,
+          price: level.price,
+          size: level.size,
+          type: 'ask',
+        });
+      });
+
+      setOrderBookBars(bars);
+    }, 200);
+
+    return () => clearTimeout(timeoutId);
+  }, [scaleUpdateTrigger, orderBookData]);
 
   return (
     <div className='w-full'>
@@ -1557,6 +1583,47 @@ export default function ChartRenderer({
             }}
           >
             {marker.label}
+          </div>
+        ))}
+
+        {/* 오더북 깊이 시각화 (호가창 물량 막대) */}
+        {orderBookBars.map((bar, index) => (
+          <div
+            key={`orderbook-${index}`}
+            style={{
+              position: 'absolute',
+              right: '60px', // 가격 축 왼쪽
+              top: `${bar.y}px`,
+              width: `${Math.max(bar.width * 1.5, 20)}px`, // 최소 20px
+              height: '6px',
+              backgroundColor: bar.type === 'bid'
+                ? 'rgba(34, 197, 94, 0.6)' // green
+                : 'rgba(239, 68, 68, 0.6)', // red
+              transform: 'translateY(-50%)',
+              pointerEvents: 'none',
+              zIndex: 5,
+              borderRadius: '2px',
+              boxShadow: bar.type === 'bid'
+                ? '0 0 4px rgba(34, 197, 94, 0.4)'
+                : '0 0 4px rgba(239, 68, 68, 0.4)',
+            }}
+          >
+            {/* 물량 라벨 (큰 물량만 표시) */}
+            {bar.width > 50 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  right: '100%',
+                  marginRight: '4px',
+                  fontSize: '9px',
+                  color: bar.type === 'bid' ? '#22c55e' : '#ef4444',
+                  whiteSpace: 'nowrap',
+                  fontWeight: 'bold',
+                }}
+              >
+                {bar.size >= 1000 ? `${(bar.size / 1000).toFixed(1)}K` : bar.size.toFixed(1)}
+              </span>
+            )}
           </div>
         ))}
 
