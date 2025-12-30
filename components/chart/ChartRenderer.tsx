@@ -1370,20 +1370,6 @@ export default function ChartRenderer({
             );
           })()}
 
-          {/* 오더북 매수/매도 비율 칩 - 매수 우세면 초록, 매도 우세면 빨강 */}
-          {orderBookData && (() => {
-            const isBidDominant = orderBookData.bidAskRatio > 1;
-            const ratio = orderBookData.bidAskRatio;
-            return (
-              <div className={`backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border ${
-                isBidDominant
-                  ? 'border-lime-400/50 bg-lime-500/30 text-lime-300'
-                  : 'border-red-400/50 bg-red-500/30 text-red-300'
-              }`}>
-                호가 {isBidDominant ? '매수' : '매도'} {ratio.toFixed(2)}x
-              </div>
-            );
-          })()}
       </div>
 
       {/* 차트 컨테이너 */}
@@ -1587,29 +1573,28 @@ export default function ChartRenderer({
           </div>
         ))}
 
-        {/* 오더북 깊이 시각화 (DOM 스타일) - 우측 패널 */}
-        {orderBookData && orderBookBars.length > 0 && (
+        {/* 오더북 깊이 시각화 (DOM 스타일) - 우측 상단 패널 */}
+        {orderBookData && (
           <div
             style={{
               position: 'absolute',
-              right: '65px', // 가격축 왼쪽
-              top: '50%',
-              transform: 'translateY(-50%)',
-              width: '120px',
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              borderRadius: '8px',
-              padding: '8px',
+              right: '70px', // 가격축 왼쪽
+              top: '10px',
+              width: '110px',
+              backgroundColor: 'rgba(0, 0, 0, 0.85)',
+              borderRadius: '6px',
+              padding: '6px',
               pointerEvents: 'none',
               zIndex: 25,
-              border: '1px solid rgba(255,255,255,0.1)',
+              border: '1px solid rgba(255,255,255,0.15)',
             }}
           >
             {/* 매도 호가 (위에서 아래로) */}
-            <div style={{ marginBottom: '4px' }}>
-              {orderBookData.asks.slice(0, 8).reverse().map((level, index) => {
+            <div style={{ marginBottom: '3px' }}>
+              {orderBookData.asks.slice(0, 5).reverse().map((level, index) => {
                 const maxSize = Math.max(
-                  ...orderBookData.asks.slice(0, 8).map(a => a.size),
-                  ...orderBookData.bids.slice(0, 8).map(b => b.size)
+                  ...orderBookData.asks.slice(0, 5).map(a => a.size),
+                  ...orderBookData.bids.slice(0, 5).map(b => b.size)
                 );
                 const widthPercent = (level.size / maxSize) * 100;
                 return (
@@ -1618,22 +1603,22 @@ export default function ChartRenderer({
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      marginBottom: '2px',
-                      height: '14px',
+                      marginBottom: '1px',
+                      height: '12px',
                     }}
                   >
                     <div
                       style={{
                         width: `${widthPercent}%`,
-                        minWidth: '4px',
-                        height: '10px',
-                        backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                        borderRadius: '2px',
-                        marginRight: '4px',
+                        minWidth: '3px',
+                        height: '8px',
+                        backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                        borderRadius: '1px',
+                        marginRight: '3px',
                       }}
                     />
-                    <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 'bold' }}>
-                      {level.size >= 1000 ? `${(level.size / 1000).toFixed(1)}K` : level.size.toFixed(1)}
+                    <span style={{ fontSize: '8px', color: '#ef4444', fontWeight: 'bold' }}>
+                      {level.size >= 1000 ? `${(level.size / 1000).toFixed(0)}K` : level.size.toFixed(0)}
                     </span>
                   </div>
                 );
@@ -1645,20 +1630,20 @@ export default function ChartRenderer({
               borderTop: '1px solid rgba(255,255,255,0.3)',
               borderBottom: '1px solid rgba(255,255,255,0.3)',
               padding: '2px 0',
-              marginBottom: '4px',
+              marginBottom: '3px',
               textAlign: 'center',
             }}>
-              <span style={{ fontSize: '9px', color: '#fbbf24', fontWeight: 'bold' }}>
-                {orderBookData.bidAskRatio > 1 ? '▲ 매수우세' : '▼ 매도우세'} {orderBookData.bidAskRatio.toFixed(2)}x
+              <span style={{ fontSize: '8px', color: '#fbbf24', fontWeight: 'bold' }}>
+                {orderBookData.bidAskRatio > 1 ? '▲매수' : '▼매도'} {orderBookData.bidAskRatio.toFixed(2)}
               </span>
             </div>
 
             {/* 매수 호가 (위에서 아래로) */}
             <div>
-              {orderBookData.bids.slice(0, 8).map((level, index) => {
+              {orderBookData.bids.slice(0, 5).map((level, index) => {
                 const maxSize = Math.max(
-                  ...orderBookData.asks.slice(0, 8).map(a => a.size),
-                  ...orderBookData.bids.slice(0, 8).map(b => b.size)
+                  ...orderBookData.asks.slice(0, 5).map(a => a.size),
+                  ...orderBookData.bids.slice(0, 5).map(b => b.size)
                 );
                 const widthPercent = (level.size / maxSize) * 100;
                 return (
@@ -1667,22 +1652,22 @@ export default function ChartRenderer({
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      marginBottom: '2px',
-                      height: '14px',
+                      marginBottom: '1px',
+                      height: '12px',
                     }}
                   >
                     <div
                       style={{
                         width: `${widthPercent}%`,
-                        minWidth: '4px',
-                        height: '10px',
-                        backgroundColor: 'rgba(34, 197, 94, 0.7)',
-                        borderRadius: '2px',
-                        marginRight: '4px',
+                        minWidth: '3px',
+                        height: '8px',
+                        backgroundColor: 'rgba(34, 197, 94, 0.8)',
+                        borderRadius: '1px',
+                        marginRight: '3px',
                       }}
                     />
-                    <span style={{ fontSize: '9px', color: '#22c55e', fontWeight: 'bold' }}>
-                      {level.size >= 1000 ? `${(level.size / 1000).toFixed(1)}K` : level.size.toFixed(1)}
+                    <span style={{ fontSize: '8px', color: '#22c55e', fontWeight: 'bold' }}>
+                      {level.size >= 1000 ? `${(level.size / 1000).toFixed(0)}K` : level.size.toFixed(0)}
                     </span>
                   </div>
                 );
