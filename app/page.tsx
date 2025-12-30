@@ -13,148 +13,55 @@ export default function Home() {
         {/* 메인 차트 (오더북 플로팅 포함) */}
         <ChartAdapter symbol='BTC/USDT' initialTimeframe='5m' limit={1000} />
 
-        {/* 초보자를 위한 용어 설명 - 스크롤 시 보임 */}
-        <div className='backdrop-blur-sm bg-white/[0.1] border border-white/10 rounded-xl p-4'>
-          <h3 className='text-sm font-bold text-orange-400 mb-3'>
-            📚 차트 용어 설명
-          </h3>
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs'>
-            <div>
-              <span className='text-lime-400 font-semibold'>X (초록)</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 골든크로스. EMA 20이 EMA 50 상향돌파. 롱 신호
-              </span>
+        {/* 용어 설명 - 카테고리별 정리 */}
+        <div className='backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-4 space-y-4'>
+          <h3 className='text-sm font-bold text-gray-400 mb-3'>📚 용어 설명</h3>
+
+          {/* 추세 지표 */}
+          <div className='border border-cyan-500/20 rounded-lg p-3'>
+            <h4 className='text-xs font-bold text-cyan-400 mb-2 border border-cyan-400/50 px-1.5 py-0.5 rounded inline-block'>추세</h4>
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs mt-2'>
+              <div><span className='text-lime-400 font-semibold'>↑상승</span><span className='text-gray-400'> - 가격이 EMA 200 위. 롱 우세</span></div>
+              <div><span className='text-red-400 font-semibold'>↓하락</span><span className='text-gray-400'> - 가격이 EMA 200 아래. 숏 우세</span></div>
+              <div><span className='text-lime-400 font-semibold'>✕골든</span><span className='text-gray-400'> - EMA 20이 50 상향돌파. 롱 신호</span></div>
+              <div><span className='text-red-400 font-semibold'>✕데드</span><span className='text-gray-400'> - EMA 20이 50 하향돌파. 숏 신호</span></div>
+              <div><span className='text-gray-300 font-semibold'>펀비</span><span className='text-gray-400'> - 롱:숏 비율. 반대매매 참고</span></div>
+              <div><span className='text-yellow-400 font-semibold'>목표(POC)</span><span className='text-gray-400'> - 가격이 돌아오는 지점</span></div>
             </div>
-            <div>
-              <span className='text-red-400 font-semibold'>X (빨강)</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 데드크로스. EMA 20이 EMA 50 하향돌파. 숏 신호
-              </span>
+          </div>
+
+          {/* 역추세 지표 */}
+          <div className='border border-amber-500/20 rounded-lg p-3'>
+            <h4 className='text-xs font-bold text-amber-400 mb-2 border border-amber-400/50 px-1.5 py-0.5 rounded inline-block'>역추세</h4>
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs mt-2'>
+              <div><span className='text-amber-300 font-semibold'>횡보</span><span className='text-gray-400'> - 가격이 일정 범위 유지. 돌파 대기</span></div>
+              <div><span className='text-lime-400 font-semibold'>다이버전스 ↑</span><span className='text-gray-400'> - 가격↓ 지표↑. 반등 가능</span></div>
+              <div><span className='text-red-400 font-semibold'>다이버전스 ↓</span><span className='text-gray-400'> - 가격↑ 지표↓. 하락 가능</span></div>
+              <div><span className='text-orange-400 font-semibold'>ATR</span><span className='text-gray-400'> - 변동폭. 2% 이상 = 고변동성</span></div>
             </div>
-            <div>
-              <span className='text-gray-400 font-semibold'>X (회색)</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 볼륨 부족. 평균 미만. 신뢰도 낮음
-              </span>
+          </div>
+
+          {/* 고래/기관 */}
+          <div className='border border-purple-500/20 rounded-lg p-3'>
+            <h4 className='text-xs font-bold text-purple-400 mb-2 border border-purple-400/50 px-1.5 py-0.5 rounded inline-block'>고래/기관</h4>
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs mt-2'>
+              <div><span className='text-lime-400 font-semibold'>고래 매수</span><span className='text-gray-400'> - $50K+ 대량 매수. 상승 압력</span></div>
+              <div><span className='text-red-400 font-semibold'>고래 매도</span><span className='text-gray-400'> - $50K+ 대량 매도. 하락 압력</span></div>
+              <div><span className='text-red-400 font-semibold'>청산 ↓</span><span className='text-gray-400'> - 롱 청산 가격대. 하락 시 청산</span></div>
+              <div><span className='text-lime-400 font-semibold'>청산 ↑</span><span className='text-gray-400'> - 숏 청산 가격대. 상승 시 청산</span></div>
+              <div><span className='text-purple-400 font-semibold'>VWAP</span><span className='text-gray-400'> - 기관 기준선. 위=롱, 아래=숏</span></div>
             </div>
-            <div>
-              <span className='font-semibold'>
-                EMA:{' '}
-                <span className='text-red-400'>20</span>
-                <span className='text-gray-500'>/</span>
-                <span className='text-blue-400'>50</span>
-                <span className='text-gray-500'>/</span>
-                <span className='text-green-400'>200</span>
-              </span>
-              <span className='text-gray-300'>
-                {' '}
-                - 이동평균선. 숫자가 클수록 장기 추세
-              </span>
-            </div>
-            <div>
-              <span className='text-amber-400 font-semibold'>
-                RSI (상대강도지수)
-              </span>
-              <span className='text-gray-300'>
-                {' '}
-                - 0~100 범위. 70 이상 과매수, 30 이하 과매도
-              </span>
-            </div>
-            <div>
-              <span className='text-purple-400 font-semibold'>다이버전스</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 가격과 지표의 방향이 반대. 추세 전환 가능성 신호
-              </span>
-            </div>
-            <div>
-              <span className='text-lime-400 font-semibold'>강세 다이버전스</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 가격 하락, RSI 상승. 상승 반전 가능성
-              </span>
-            </div>
-            <div>
-              <span className='text-orange-400 font-semibold'>
-                약세 다이버전스
-              </span>
-              <span className='text-gray-300'>
-                {' '}
-                - 가격 상승, RSI 하락. 하락 반전 가능성
-              </span>
-            </div>
-            <div>
-              <span className='text-gray-400 font-semibold'>필터링된 신호</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 신뢰도가 낮아 회색 점선으로 표시
-              </span>
-            </div>
-            <div>
-              <span className='text-yellow-400 font-semibold'>목표(POC) 노란선</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 가장 많이 거래된 가격. 가격이 여기로 돌아옴
-              </span>
-            </div>
-            <div>
-              <span className='text-orange-400 font-semibold'>숏(VAH) 주황 점선</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 저항 구간. 여기서 숏 진입 고려
-              </span>
-            </div>
-            <div>
-              <span className='text-lime-400 font-semibold'>롱(VAL) 초록 점선</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 지지 구간. 여기서 롱 진입 고려
-              </span>
-            </div>
-            <div>
-              <span className='text-yellow-400 font-semibold'>롱 비율</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 롱 포지션 보유자 비율. 높으면 하락 주의
-              </span>
-            </div>
-            <div>
-              <span className='text-teal-400 font-semibold'>숏 비율</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 숏 포지션 보유자 비율. 높으면 상승 주의
-              </span>
-            </div>
-            <div>
-              <span className='text-purple-400 font-semibold'>VWAP 보라선</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 거래량 가중 평균가. 기관 기준선. 위면 롱, 아래면 숏
-              </span>
-            </div>
-            <div>
-              <span className='text-orange-400 font-semibold'>ATR %</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 평균 변동폭. 2% 이상이면 변동성 높음 주의
-              </span>
-            </div>
-            <div>
-              <span className='text-red-400 font-semibold'>ATR↓ 빨간 점선</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 롱 손절가. ATR 2배 아래
-              </span>
-            </div>
-            <div>
-              <span className='text-green-400 font-semibold'>ATR↑ 초록 점선</span>
-              <span className='text-gray-300'>
-                {' '}
-                - 숏 손절가. ATR 2배 위
-              </span>
+          </div>
+
+          {/* 차트 라인 */}
+          <div className='border border-white/10 rounded-lg p-3'>
+            <h4 className='text-xs font-bold text-gray-400 mb-2 border border-gray-400/50 px-1.5 py-0.5 rounded inline-block'>차트 라인</h4>
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs mt-2'>
+              <div><span className='text-red-400'>━</span><span className='text-blue-400'>━</span><span className='text-green-400'>━</span><span className='text-gray-400'> EMA 20/50/200</span></div>
+              <div><span className='text-yellow-400 font-semibold'>━ 목표(POC)</span><span className='text-gray-400'> - 최대 거래량 가격</span></div>
+              <div><span className='text-red-400 font-semibold'>┄ 숏(VAH)</span><span className='text-gray-400'> - 저항/숏 진입 구간</span></div>
+              <div><span className='text-lime-400 font-semibold'>┄ 롱(VAL)</span><span className='text-gray-400'> - 지지/롱 진입 구간</span></div>
+              <div><span className='text-purple-400 font-semibold'>━ VWAP</span><span className='text-gray-400'> - 거래량 가중 평균</span></div>
             </div>
           </div>
         </div>
