@@ -651,8 +651,8 @@ export function addConsolidationZones(
   const activeZones = zones.filter((zone) => zone.isActive);
 
   activeZones.forEach((zone) => {
-    const color = 'rgba(251, 191, 36, 0.3)'; // amber-400 (현재 횡보 - 주의!)
-    const borderColor = 'rgba(251, 191, 36, 0.8)'; // amber-400
+    const color = 'rgba(251, 191, 36, 0.08)'; // amber-400 (현재 횡보 - 아주 연하게)
+    const borderColor = 'rgba(251, 191, 36, 0.4)'; // amber-400
 
     const startTime = (zone.startTimestamp / 1000) as Time;
     const endTime = (zone.endTimestamp / 1000) as Time;

@@ -1053,11 +1053,11 @@ export default function ChartRenderer({
     }
 
     const signalConfig: Record<string, { label: string; color: string; position: 'above' | 'below' }> = {
-      REAL_BULL: { label: '진짜상승', color: 'rgba(163, 230, 53, 0.9)', position: 'below' },
-      SHORT_TRAP: { label: '숏트랩', color: 'rgba(163, 230, 53, 0.9)', position: 'above' },
-      PUMP_DUMP: { label: '펌프', color: 'rgba(251, 146, 60, 0.9)', position: 'above' },
-      MORE_DROP: { label: '하락', color: 'rgba(248, 113, 113, 0.9)', position: 'above' },
-      LONG_ENTRY: { label: '롱진입', color: 'rgba(34, 211, 238, 0.9)', position: 'below' },
+      REAL_BULL: { label: '↑매수세', color: 'rgba(163, 230, 53, 0.9)', position: 'below' },
+      SHORT_TRAP: { label: '⚠숏탈출', color: 'rgba(163, 230, 53, 0.9)', position: 'above' },
+      PUMP_DUMP: { label: '⚠고점', color: 'rgba(251, 146, 60, 0.9)', position: 'above' },
+      MORE_DROP: { label: '↓매도세', color: 'rgba(248, 113, 113, 0.9)', position: 'above' },
+      LONG_ENTRY: { label: '★롱타점', color: 'rgba(34, 211, 238, 0.9)', position: 'below' },
     };
 
     const timeoutId = setTimeout(() => {
