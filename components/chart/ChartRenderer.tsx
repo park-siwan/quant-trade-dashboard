@@ -1376,69 +1376,82 @@ export default function ChartRenderer({
             );
           })()}
 
-          {/* 청산 데이터 칩 - 5분간 청산량 표시 (항상 표시) */}
-          {(() => {
-            const stats = liquidationData?.stats?.last5m;
-            const longLiq = stats?.longLiq || 0;
-            const shortLiq = stats?.shortLiq || 0;
-            const totalUsd = stats?.totalUsd || 0;
-            const isLongDominant = longLiq > shortLiq;
+          {/* 청산 + 고래 가로 패널 */}
+          <div className='flex items-center gap-3 backdrop-blur-md bg-black/40 px-3 py-1.5 rounded-lg border border-white/10'>
+            {/* 청산 데이터 */}
+            {(() => {
+              const recentLiqs = liquidationData?.recentLiquidations || [];
+              const now = Date.now();
+              const fiveMinAgo = now - 5 * 60 * 1000;
+              const recentFiveMin = recentLiqs.filter(l => l.timestamp >= fiveMinAgo);
 
-            // USD 포맷팅 (K, M 단위)
-            const formatUsd = (value: number) => {
-              if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-              if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-              return value.toFixed(0);
-            };
+              const longLiqs = recentFiveMin.filter(l => l.side === 'Sell');
+              const shortLiqs = recentFiveMin.filter(l => l.side === 'Buy');
 
-            // 청산이 없으면 회색, 있으면 롱/숏 우세에 따라 색상 변경
-            const colorClass = totalUsd === 0
-              ? 'border-gray-400/30 bg-gray-500/20 text-gray-400'
-              : isLongDominant
-                ? 'border-red-400/50 bg-red-500/30 text-red-300'
-                : 'border-lime-400/50 bg-lime-500/30 text-lime-300';
+              const avgLongPrice = longLiqs.length > 0
+                ? longLiqs.reduce((sum, l) => sum + l.price, 0) / longLiqs.length
+                : null;
+              const avgShortPrice = shortLiqs.length > 0
+                ? shortLiqs.reduce((sum, l) => sum + l.price, 0) / shortLiqs.length
+                : null;
 
-            return (
-              <div className={`backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border flex items-center gap-1.5 ${colorClass}`}>
-                <span className='font-bold'>청산</span>
-                <span className='text-red-400'>{formatUsd(longLiq)}</span>
-                <span className='opacity-60'>/</span>
-                <span className='text-lime-400'>{formatUsd(shortLiq)}</span>
-                <span className='opacity-60 text-[10px]'>5분</span>
-              </div>
-            );
-          })()}
+              const formatPrice = (price: number) => {
+                if (price >= 1000) return `${(price / 1000).toFixed(1)}K`;
+                return price.toFixed(0);
+              };
 
-          {/* 고래 거래 칩 - 5분간 고래 매수/매도 표시 */}
-          {(() => {
-            const stats = whaleData?.stats?.last5m;
-            const buyVol = stats?.buyVolume || 0;
-            const sellVol = stats?.sellVolume || 0;
-            const totalVol = buyVol + sellVol;
-            const isBuyDominant = buyVol > sellVol;
+              return (
+                <div className='flex items-center gap-2'>
+                  <span className='text-gray-400 text-xs font-bold'>청산</span>
+                  <div className='flex items-center gap-1.5 text-sm font-mono'>
+                    {avgLongPrice ? (
+                      <span className='text-red-400 font-bold'>↓{formatPrice(avgLongPrice)}</span>
+                    ) : (
+                      <span className='text-gray-600'>-</span>
+                    )}
+                    <span className='text-gray-600'>|</span>
+                    {avgShortPrice ? (
+                      <span className='text-lime-400 font-bold'>↑{formatPrice(avgShortPrice)}</span>
+                    ) : (
+                      <span className='text-gray-600'>-</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
-            const formatUsd = (value: number) => {
-              if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-              if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-              return value.toFixed(0);
-            };
+            <div className='w-px h-4 bg-white/20' />
 
-            const colorClass = totalVol === 0
-              ? 'border-gray-400/30 bg-gray-500/20 text-gray-400'
-              : isBuyDominant
-                ? 'border-cyan-400/50 bg-cyan-500/30 text-cyan-300'
-                : 'border-purple-400/50 bg-purple-500/30 text-purple-300';
+            {/* 고래 프로그레스바 */}
+            {(() => {
+              const stats = whaleData?.stats?.last5m;
+              const buyVol = stats?.buyVolume || 0;
+              const sellVol = stats?.sellVolume || 0;
+              const totalVol = buyVol + sellVol;
 
-            return (
-              <div className={`backdrop-blur-md px-2 py-1 rounded-lg text-xs font-mono border flex items-center gap-1.5 ${colorClass}`}>
-                <span className='font-bold'>🐋</span>
-                <span className='text-cyan-400'>{formatUsd(buyVol)}</span>
-                <span className='opacity-60'>/</span>
-                <span className='text-purple-400'>{formatUsd(sellVol)}</span>
-                <span className='opacity-60 text-[10px]'>5분</span>
-              </div>
-            );
-          })()}
+              const formatUsd = (value: number) => {
+                if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+                if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
+                return '0';
+              };
+
+              const buyPercent = totalVol > 0 ? (buyVol / totalVol) * 100 : 50;
+
+              return (
+                <div className='flex items-center gap-2'>
+                  <span className='text-gray-400 text-xs font-bold'>🐋</span>
+                  <span className='text-lime-400 text-sm font-mono font-bold'>{formatUsd(buyVol)}</span>
+                  <div className='w-20 h-2.5 bg-red-500/40 rounded-full overflow-hidden'>
+                    <div
+                      className='h-full bg-lime-500/80 rounded-full transition-all'
+                      style={{ width: `${buyPercent}%` }}
+                    />
+                  </div>
+                  <span className='text-red-400 text-sm font-mono font-bold'>{formatUsd(sellVol)}</span>
+                </div>
+              );
+            })()}
+          </div>
 
       </div>
 
