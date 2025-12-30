@@ -247,10 +247,9 @@ export default function ChartRenderer({
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-    // 차트 생성 (패널 개수에 따라 높이 조정 - 1:1:1 비율)
-    const hasRsi = rsiData && rsiData.length > 0;
+    // 차트 생성 (패널 개수에 따라 높이 조정)
     const hasOi = oiData && oiData.length > 0;
-    const panelCount = 1 + (hasRsi ? 1 : 0) + (hasOi ? 1 : 0); // 메인 + RSI + OI (OBV, CVD 숨김)
+    const panelCount = 1 + (hasOi ? 1 : 0); // 메인 + OI (RSI, OBV, CVD 숨김)
     const panelHeight = 320; // 각 패널당 높이 (더 큰 차트)
     const chartHeight = panelCount * panelHeight;
 
@@ -370,15 +369,9 @@ export default function ChartRenderer({
     // 동적 paneIndex 계산 (데이터가 있는 지표만 순차적으로 패널 배치)
     let currentPaneIndex = 1; // 메인 패널은 0, 지표는 1부터 시작
 
-    // RSI 지표 추가
-    let rsiSeries = null;
-    let rsiPaneIndex = 0;
-    if (rsiData && rsiData.length > 0) {
-      rsiPaneIndex = currentPaneIndex++;
-      rsiSeries = addRsiIndicator(chart, rsiData, rsiPaneIndex);
-    }
-
-    // OBV, CVD 지표 숨김 (패널 비활성화)
+    // RSI, OBV, CVD 지표 숨김 (패널 비활성화)
+    const rsiSeries = null;
+    const rsiPaneIndex = 0;
     const obvSeries = null;
     const obvPaneIndex = 0;
     const cvdSeries = null;
@@ -878,7 +871,6 @@ export default function ChartRenderer({
     };
   }, [
     data.length, // 캔들 개수만 체크 (데이터 내용 변경은 무시)
-    rsiData?.length,
     oiData?.length,
     emaData !== undefined,
     divergenceSignals?.length,
