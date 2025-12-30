@@ -22,7 +22,6 @@ import {
   addEmaIndicators,
   addCrossoverMarkers,
   addCvdOiMarkers,
-  addConsolidationZones,
 } from '@/lib/chart/indicators';
 import {
   DivergenceSignal,
@@ -492,43 +491,6 @@ export default function ChartRenderer({
       volumeProfileLinesRef.current.push(valLine);
     }
 
-    // 횡보 구간 표시
-    if (consolidationData && consolidationData.zones.length > 0) {
-      addConsolidationZones(chart, consolidationData.zones);
-    }
-
-    // 횡보 목표가 라인 표시 (현재 횡보 중일 때만)
-    if (consolidationData?.isCurrentlyConsolidating && consolidationData.currentZone) {
-      const zone = consolidationData.currentZone;
-      const range = zone.high - zone.low;
-      const targetUp = zone.high + range;
-      const targetDown = zone.low - range;
-
-      // 상방 목표가 라인
-      candlestickSeries.createPriceLine({
-        price: targetUp,
-        color: 'rgba(163, 230, 53, 0.8)', // lime-400
-        lineWidth: 1,
-        lineStyle: 1, // dashed
-        axisLabelVisible: true,
-        title: '횡보↑',
-        axisLabelColor: 'rgba(163, 230, 53, 1)',
-        axisLabelTextColor: '#000',
-      });
-
-      // 하방 목표가 라인
-      candlestickSeries.createPriceLine({
-        price: targetDown,
-        color: 'rgba(248, 113, 113, 0.8)', // red-400
-        lineWidth: 1,
-        lineStyle: 1, // dashed
-        axisLabelVisible: true,
-        title: '횡보↓',
-        axisLabelColor: 'rgba(248, 113, 113, 1)',
-        axisLabelTextColor: '#000',
-      });
-    }
-
     // VWAP 라인 표시 (기관 트레이딩 기준선)
     if (vwapAtrData && vwapAtrData.currentVwap > 0) {
       candlestickSeries.createPriceLine({
@@ -938,7 +900,6 @@ export default function ChartRenderer({
     crossoverEvents?.length,
     marketSignals?.length,
     volumeProfile?.poc, // Volume Profile 변경 시 재렌더링
-    consolidationData?.zones?.length, // 횡보 구간 변경 시 재렌더링
     vwapAtrData?.currentVwap, // VWAP 변경 시 재렌더링
     orderBlockData?.activeBlocks?.length, // 오더블록 변경 시 재렌더링
   ]);
