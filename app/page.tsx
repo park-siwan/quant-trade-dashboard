@@ -1,4 +1,5 @@
 import ChartAdapter from '@/components/ChartAdapter';
+import OrderBookDOM from '@/components/OrderBookDOM';
 
 export default function Home() {
   return (
@@ -10,8 +11,14 @@ export default function Home() {
 
       {/* 메인 콘텐츠 */}
       <div className='relative z-10 space-y-6'>
-        {/* 메인 차트 (전체 너비) - 오더북은 차트 내 DOM 패널로 대체 */}
-        <ChartAdapter symbol='BTC/USDT' initialTimeframe='5m' limit={1000} />
+        {/* 그리드 레이아웃: 차트(좌) + 오더북 DOM(우) */}
+        <div className='grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 items-stretch'>
+          {/* 메인 차트 */}
+          <ChartAdapter symbol='BTC/USDT' initialTimeframe='5m' limit={1000} />
+
+          {/* 오더북 DOM 카드 */}
+          <OrderBookDOM symbol='BTC/USDT' />
+        </div>
 
         {/* 초보자를 위한 용어 설명 - 스크롤 시 보임 */}
         <div className='backdrop-blur-sm bg-white/[0.1] border border-white/10 rounded-xl p-4'>
