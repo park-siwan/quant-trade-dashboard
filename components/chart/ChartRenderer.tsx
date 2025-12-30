@@ -1255,12 +1255,18 @@ export default function ChartRenderer({
           )}
         </div>
 
-        {/* 우측: ATR */}
+        {/* 우측: ATR (평균 대비 비율 표시) */}
         {vwapAtrData?.atrPercent ? (() => {
-          const isHighVolatility = vwapAtrData.atrPercent > 2;
+          const ratio = vwapAtrData.atrRatio || 1;
+          const isHigh = ratio > 1.3; // 평균 대비 30% 이상
+          const isLow = ratio < 0.7; // 평균 대비 30% 이하
+          const colorClass = isHigh ? 'text-orange-400' : isLow ? 'text-blue-400' : 'text-gray-400';
+          const ratioPercent = ((ratio - 1) * 100).toFixed(0);
+          const ratioText = ratio >= 1 ? `+${ratioPercent}%` : `${ratioPercent}%`;
           return (
-            <div className={`text-sm font-mono font-bold ${isHighVolatility ? 'text-orange-400' : 'text-gray-400'}`}>
-              ATR {vwapAtrData.atrPercent.toFixed(2)}%
+            <div className={`text-sm font-mono font-bold flex items-center gap-1 ${colorClass}`}>
+              <span>ATR {vwapAtrData.atrPercent.toFixed(2)}%</span>
+              <span className='text-xs opacity-70'>({ratioText})</span>
             </div>
           );
         })() : (

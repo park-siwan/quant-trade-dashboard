@@ -129,6 +129,8 @@ export interface VwapAtrData {
   currentVwap: number; // 현재 VWAP
   currentAtr: number | null; // 현재 ATR
   atrPercent: number | null; // ATR을 현재가 대비 %로 표현
+  avgAtrPercent: number | null; // 평균 ATR % (최근 50개 캔들)
+  atrRatio: number | null; // 현재 ATR / 평균 ATR (1.0 = 평균, 1.5 = 50% 높음)
   suggestedStopLoss: {
     long: number; // 롱 포지션 손절가 (현재가 - 2*ATR)
     short: number; // 숏 포지션 손절가 (현재가 + 2*ATR)
