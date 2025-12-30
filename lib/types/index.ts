@@ -135,6 +135,22 @@ export interface VwapAtrData {
   } | null;
 }
 
+// 오더블록 타입
+export interface OrderBlock {
+  type: 'bullish' | 'bearish';
+  startIndex: number;
+  timestamp: number;
+  high: number; // 오더블록 상단
+  low: number; // 오더블록 하단
+  isActive: boolean; // 아직 터치되지 않은 활성 오더블록
+  strength: 'strong' | 'medium' | 'weak'; // 오더블록 강도
+}
+
+export interface OrderBlockData {
+  blocks: OrderBlock[];
+  activeBlocks: OrderBlock[];
+}
+
 export interface ApiResponse {
   success: boolean;
   data: {
@@ -173,5 +189,6 @@ export interface ApiResponse {
     cvdOi?: CvdOiData; // CVD + OI 3중 조합 신호
     consolidation?: ConsolidationData; // 횡보 구간 데이터
     vwapAtr?: VwapAtrData; // VWAP + ATR 데이터
+    orderBlocks?: OrderBlockData; // 오더블록 데이터
   };
 }

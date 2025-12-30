@@ -32,6 +32,7 @@ import {
   MarketSignal,
   ConsolidationData,
   VwapAtrData,
+  OrderBlockData,
 } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
 import { LongShortRatio } from '@/hooks/useLongShortRatio';
@@ -113,6 +114,7 @@ interface ChartRendererProps {
   volumeProfile?: VolumeProfileData | null; // 가격대별 거래량
   consolidationData?: ConsolidationData | null; // 횡보 구간 데이터
   vwapAtrData?: VwapAtrData | null; // VWAP + ATR 데이터
+  orderBlockData?: OrderBlockData | null; // 오더블록 데이터
 }
 
 export default function ChartRenderer({
@@ -132,6 +134,7 @@ export default function ChartRenderer({
   volumeProfile,
   consolidationData,
   vwapAtrData,
+  orderBlockData,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -542,7 +545,7 @@ export default function ChartRenderer({
         axisLabelVisible: true,
         title: 'ATR↓',
         axisLabelColor: 'rgba(239, 68, 68, 0.9)',
-        axisLabelTextColor: '#fff',
+        axisLabelTextColor: '#000',
       });
 
       // 숏 손절가 (현재가 + 2*ATR)
@@ -554,8 +557,35 @@ export default function ChartRenderer({
         axisLabelVisible: true,
         title: 'ATR↑',
         axisLabelColor: 'rgba(34, 197, 94, 0.9)',
-        axisLabelTextColor: '#fff',
+        axisLabelTextColor: '#000',
       });
+    }
+
+    // 오더블록 표시 (현재가 근처 최대 3개만)
+    if (orderBlockData?.activeBlocks && orderBlockData.activeBlocks.length > 0) {
+      const currentPrice = data[data.length - 1]?.close || 0;
+
+      orderBlockData.activeBlocks.forEach((block) => {
+        const midPrice = (block.high + block.low) / 2;
+        const isSupport = midPrice < currentPrice; // 현재가 아래 = 지지
+
+        const color = isSupport
+          ? 'rgba(34, 197, 94, 0.8)' // green - 지지
+          : 'rgba(239, 68, 68, 0.8)'; // red - 저항
+
+        candlestickSeries.createPriceLine({
+          price: midPrice,
+          color: color,
+          lineWidth: 2,
+          lineStyle: 1, // dashed
+          axisLabelVisible: true,
+          title: isSupport ? '지지' : '저항',
+          axisLabelColor: color,
+          axisLabelTextColor: '#000',
+        });
+      });
+
+      console.log(`✅ ${orderBlockData.activeBlocks.length}개의 오더블록 표시됨`);
     }
 
     // 패널 높이를 4:1:1:1 비율로 설정 (즉시 실행)
@@ -901,6 +931,7 @@ export default function ChartRenderer({
     volumeProfile?.poc, // Volume Profile 변경 시 재렌더링
     consolidationData?.zones?.length, // 횡보 구간 변경 시 재렌더링
     vwapAtrData?.currentVwap, // VWAP 변경 시 재렌더링
+    orderBlockData?.activeBlocks?.length, // 오더블록 변경 시 재렌더링
   ]);
 
   // Volume Profile 라인 토글 (차트 재생성 없이 라인만 숨김/표시)

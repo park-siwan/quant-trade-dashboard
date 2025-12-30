@@ -13,6 +13,7 @@ import {
   CrossoverEvent,
   ConsolidationData,
   VwapAtrData,
+  OrderBlockData,
 } from '@/lib/types/index';
 import { Bitcoin } from 'lucide-react';
 
@@ -255,6 +256,9 @@ export default function ChartAdapter({
   // VWAP + ATR 데이터
   const vwapAtrData: VwapAtrData | null = data?.data?.vwapAtr || null;
 
+  // 오더블록 데이터
+  const orderBlockData: OrderBlockData | null = data?.data?.orderBlocks || null;
+
   // 다이버전스 방향별 개수 계산 (start 신호만 카운트)
   const bullishCount = divergenceSignals.filter(
     (signal) => signal.phase === 'start' && signal.direction === 'bullish',
@@ -408,6 +412,7 @@ export default function ChartAdapter({
         volumeProfile={volumeProfile}
         consolidationData={consolidationData}
         vwapAtrData={vwapAtrData}
+        orderBlockData={orderBlockData}
       />
     </div>
   );
