@@ -390,6 +390,11 @@ export default function ChartRenderer({
     // ATR 지표 추가
     let atrSeries = null;
     let atrPaneIndex = 0;
+    console.log('🔍 ATR 데이터 확인:', {
+      hasVwapAtrData: !!vwapAtrData,
+      atrLength: vwapAtrData?.atr?.length,
+      atrSample: vwapAtrData?.atr?.slice(-5),
+    });
     if (vwapAtrData?.atr && vwapAtrData.atr.length > 0) {
       atrPaneIndex = currentPaneIndex++;
       // ATR 데이터를 LineData 형식으로 변환
@@ -402,6 +407,7 @@ export default function ChartRenderer({
           });
         }
       });
+      console.log('✅ ATR 패널 추가:', { paneIndex: atrPaneIndex, dataCount: atrLineData.length });
       atrSeries = addAtrIndicator(chart, atrLineData, atrPaneIndex);
     }
 
