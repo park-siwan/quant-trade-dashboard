@@ -495,7 +495,7 @@ export default function ChartRenderer({
         lineWidth: 1,
         lineStyle: 2, // dotted
         axisLabelVisible: true,
-        title: '변동폭↓',
+        title: '변동폭(ATR)↓',
         axisLabelColor: 'rgba(239, 68, 68, 0.9)',
         axisLabelTextColor: '#000',
       });
@@ -507,7 +507,7 @@ export default function ChartRenderer({
         lineWidth: 1,
         lineStyle: 2, // dotted
         axisLabelVisible: true,
-        title: '변동폭↑',
+        title: '변동폭(ATR)↑',
         axisLabelColor: 'rgba(34, 197, 94, 0.9)',
         axisLabelTextColor: '#000',
       });

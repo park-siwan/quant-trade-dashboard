@@ -37,7 +37,7 @@ export default function Home() {
               <div><span className='text-amber-300 font-semibold'>횡보</span><span className='text-gray-400'> - 가격이 일정 범위 유지. 돌파 대기</span></div>
               <div><span className='text-lime-400 font-semibold'>다이버전스 ↑</span><span className='text-gray-400'> - 가격↓ 지표↑. 반등 가능</span></div>
               <div><span className='text-red-400 font-semibold'>다이버전스 ↓</span><span className='text-gray-400'> - 가격↑ 지표↓. 하락 가능</span></div>
-              <div><span className='text-orange-400 font-semibold'>변동폭(ATR)</span><span className='text-gray-400'> - 2% 이상 = 고변동성</span></div>
+              <div><span className='text-orange-400 font-semibold'>변동폭(ATR)</span><span className='text-gray-400'> - Average True Range. 2% 이상 = 고변동성</span></div>
             </div>
           </div>
 
@@ -49,7 +49,7 @@ export default function Home() {
               <div><span className='text-red-400 font-semibold'>고래 매도</span><span className='text-gray-400'> - $50K+ 대량 매도. 하락 압력</span></div>
               <div><span className='text-red-400 font-semibold'>청산 ↓</span><span className='text-gray-400'> - 롱 청산 가격대. 하락 시 청산</span></div>
               <div><span className='text-lime-400 font-semibold'>청산 ↑</span><span className='text-gray-400'> - 숏 청산 가격대. 상승 시 청산</span></div>
-              <div><span className='text-purple-400 font-semibold'>VWAP</span><span className='text-gray-400'> - 기관 기준선. 위=롱, 아래=숏</span></div>
+              <div><span className='text-purple-400 font-semibold'>기관 기준선(VWAP)</span><span className='text-gray-400'> - Volume Weighted Average Price. 위=롱, 아래=숏</span></div>
             </div>
           </div>
 
@@ -61,7 +61,7 @@ export default function Home() {
               <div><span className='text-yellow-400 font-semibold'>━ 목표(POC)</span><span className='text-gray-400'> - 최대 거래량 가격</span></div>
               <div><span className='text-red-400 font-semibold'>┄ 숏(VAH)</span><span className='text-gray-400'> - 저항/숏 진입 구간</span></div>
               <div><span className='text-lime-400 font-semibold'>┄ 롱(VAL)</span><span className='text-gray-400'> - 지지/롱 진입 구간</span></div>
-              <div><span className='text-purple-400 font-semibold'>━ VWAP</span><span className='text-gray-400'> - 거래량 가중 평균</span></div>
+              <div><span className='text-purple-400 font-semibold'>━ 기관 기준선(VWAP)</span><span className='text-gray-400'> - 거래량 가중 평균</span></div>
             </div>
           </div>
         </div>
