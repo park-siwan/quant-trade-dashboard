@@ -5,6 +5,7 @@ import { useCandles } from '@/hooks/useCandles';
 import { useLongShortRatio } from '@/hooks/useLongShortRatio';
 import { useLiquidations } from '@/hooks/useLiquidations';
 import { useWhales } from '@/hooks/useWhales';
+import { useFundingRate } from '@/hooks/useFundingRate';
 import ChartRenderer from '@/components/chart/ChartRenderer';
 import RefreshCountdown from '@/components/chart/RefreshCountdown';
 import { CandlestickData, LineData } from 'lightweight-charts';
@@ -68,6 +69,12 @@ export default function ChartAdapter({
   const { data: whaleData } = useWhales({
     symbol,
     refreshInterval: 5000, // 5초마다 갱신
+  });
+
+  // 펀딩레이트 가져오기 (Binance API)
+  const { data: fundingRateData, timeUntilFunding } = useFundingRate({
+    symbol,
+    refreshInterval: 30000, // 30초마다 갱신
   });
 
   // API 응답을 CandlestickData 형식으로 변환 (데이터가 없으면 빈 배열)
@@ -382,6 +389,41 @@ export default function ChartAdapter({
               </h2>
             </div>
           </div>
+
+          {/* 펀딩레이트 표시 */}
+          {fundingRateData && (
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+              fundingRateData.signal === 'LONG'
+                ? 'bg-green-500/10 border-green-500/30'
+                : fundingRateData.signal === 'SHORT'
+                ? 'bg-red-500/10 border-red-500/30'
+                : 'bg-white/5 border-white/10'
+            }`}>
+              <div className='text-xs'>
+                <span className='text-gray-400'>Funding</span>
+                <span className={`ml-1.5 font-mono font-bold ${
+                  fundingRateData.fundingRate > 0 ? 'text-green-400' : 'text-red-400'
+                }`}>
+                  {fundingRateData.fundingRate > 0 ? '+' : ''}{fundingRateData.fundingRate.toFixed(4)}%
+                </span>
+              </div>
+              <div className='w-px h-4 bg-white/20' />
+              <div className='text-xs'>
+                <span className='text-gray-400'>Next</span>
+                <span className='ml-1.5 font-mono text-white'>{timeUntilFunding}</span>
+              </div>
+              {fundingRateData.signal !== 'NEUTRAL' && (
+                <>
+                  <div className='w-px h-4 bg-white/20' />
+                  <span className={`text-xs font-semibold ${
+                    fundingRateData.signal === 'LONG' ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {fundingRateData.signal === 'LONG' ? '롱 기회' : '숏 기회'}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
 
         </div>
         <div className='flex items-center gap-2'>
