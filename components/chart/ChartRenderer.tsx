@@ -531,7 +531,7 @@ export default function ChartRenderer({
           lineWidth: 2,
           lineStyle: 1, // dashed
           axisLabelVisible: true,
-          title: isSupport ? '지지' : '저항',
+          title: isSupport ? 'OB지지' : 'OB저항',
           axisLabelColor: color,
           axisLabelTextColor: '#000',
         });
