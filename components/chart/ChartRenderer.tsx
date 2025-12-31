@@ -18,6 +18,7 @@ import {
   addObvIndicator,
   addCvdIndicator,
   addOiIndicator,
+  addAtrIndicator,
   addDivergenceLines,
   addEmaIndicators,
   addCrossoverMarkers,
@@ -249,7 +250,8 @@ export default function ChartRenderer({
 
     // 차트 생성 (패널 개수에 따라 높이 조정)
     const hasOi = oiData && oiData.length > 0;
-    const panelCount = 1 + (hasOi ? 1 : 0); // 메인 + OI (RSI, OBV, CVD 숨김)
+    const hasAtr = vwapAtrData?.atr && vwapAtrData.atr.length > 0;
+    const panelCount = 1 + (hasOi ? 1 : 0) + (hasAtr ? 1 : 0); // 메인 + OI + ATR
     const panelHeight = 320; // 각 패널당 높이 (더 큰 차트)
     const chartHeight = panelCount * panelHeight;
 
@@ -383,6 +385,24 @@ export default function ChartRenderer({
     if (oiData && oiData.length > 0) {
       oiPaneIndex = currentPaneIndex++;
       oiSeries = addOiIndicator(chart, oiData, oiPaneIndex);
+    }
+
+    // ATR 지표 추가
+    let atrSeries = null;
+    let atrPaneIndex = 0;
+    if (vwapAtrData?.atr && vwapAtrData.atr.length > 0) {
+      atrPaneIndex = currentPaneIndex++;
+      // ATR 데이터를 LineData 형식으로 변환
+      const atrLineData: LineData[] = [];
+      vwapAtrData.atr.forEach((atrValue, index) => {
+        if (atrValue !== null && data[index]) {
+          atrLineData.push({
+            time: data[index].time,
+            value: atrValue,
+          });
+        }
+      });
+      atrSeries = addAtrIndicator(chart, atrLineData, atrPaneIndex);
     }
 
     // 다이버전스 선 추가
@@ -879,6 +899,7 @@ export default function ChartRenderer({
     marketSignals?.length,
     volumeProfile?.poc, // Volume Profile 변경 시 재렌더링
     vwapAtrData?.currentVwap, // VWAP 변경 시 재렌더링
+    vwapAtrData?.atr?.length, // ATR 변경 시 재렌더링
     orderBlockData?.activeBlocks?.length, // 오더블록 변경 시 재렌더링
   ]);
 

@@ -144,6 +144,47 @@ export function addCvdIndicator(
 }
 
 /**
+ * ATR (Average True Range) 지표를 차트에 추가합니다
+ * @param chart - lightweight-charts 인스턴스
+ * @param atrData - ATR 데이터 배열
+ * @returns ATR 시리즈 인스턴스
+ */
+export function addAtrIndicator(
+  chart: IChartApi,
+  atrData: LineData[],
+  paneIndex: number = 2,
+): ISeriesApi<'Line'> {
+  // ATR 라인 - 주황계열 (변동폭 시각화)
+  const atrSeries = chart.addSeries(
+    LineSeries,
+    {
+      color: 'rgba(251, 146, 60, 0.7)', // orange-400 투명도 70%
+      lineWidth: 2,
+      priceScaleId: 'atr',
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      title: '변동폭(ATR)',
+      lastValueVisible: true,
+    },
+    paneIndex,
+  );
+
+  atrSeries.setData(atrData);
+
+  // ATR 패널 스케일 설정
+  atrSeries.priceScale().applyOptions({
+    autoScale: true, // Y축 자동 스케일링
+    scaleMargins: {
+      top: 0.1,
+      bottom: 0.1,
+    },
+    borderVisible: false,
+  });
+
+  return atrSeries;
+}
+
+/**
  * OI (Open Interest) 지표를 차트에 추가합니다
  * @param chart - lightweight-charts 인스턴스
  * @param oiData - OI 데이터 배열
