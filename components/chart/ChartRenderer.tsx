@@ -480,7 +480,7 @@ export default function ChartRenderer({
         lineWidth: 2,
         lineStyle: 0, // solid
         axisLabelVisible: true,
-        title: 'VWAP',
+        title: '기관(VWAP)',
         axisLabelColor: 'rgba(168, 85, 247, 1)',
         axisLabelTextColor: '#fff',
       });
