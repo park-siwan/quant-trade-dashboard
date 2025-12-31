@@ -1696,7 +1696,7 @@ export default function ChartRenderer({
               {marker.type}{marker.direction === 'bullish' ? '↑' : '↓'}
               {isValidChoch && marker.rsiAtBreak && (
                 <span style={{ fontSize: '7px', marginLeft: '2px' }}>
-                  ({marker.rsiAtBreak.toFixed(0)})
+                  ({marker.direction === 'bullish' ? '저' : '고'}{marker.rsiAtBreak.toFixed(0)})
                 </span>
               )}
             </div>
