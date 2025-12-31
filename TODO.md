@@ -9,17 +9,19 @@
   - 다음 펀딩까지 카운트다운 표시
   - 신호 강도: STRONG/MEDIUM/WEAK
 
-- [ ] **Volume Profile 구현**
-  - POC (Point of Control): 가장 많이 거래된 가격
-  - VAH/VAL (Value Area High/Low)
-  - 오더블록과 겹치면 신뢰도 상승
+- [x] **Volume Profile 구현** ✅ 이미 구현됨
+  - POC (Point of Control): 노란색 실선 - 목표가
+  - VAH (Value Area High): 빨간색 점선 - 숏 진입 구간
+  - VAL (Value Area Low): 초록색 점선 - 롱 진입 구간
+  - 토글 버튼으로 표시/숨김 가능
 
 ## 우선순위 중간 (SMC 완성)
 
-- [ ] **BOS/CHoCH 시장 구조 감지**
-  - Break of Structure: 추세 지속 확인
-  - Change of Character: 추세 전환 신호
-  - 오더블록 맥락 보완
+- [x] **BOS/CHoCH 시장 구조 감지** ✅ 완료
+  - Break of Structure: 추세 지속 확인 (연한 색상)
+  - Change of Character: 추세 전환 신호 (진한 색상 + 테두리)
+  - 스윙 타입 분류: HH, HL, LH, LL
+  - 현재 추세 판단: bullish / bearish / ranging
 
 - [ ] **Liquidation Levels 청산 예상가**
   - Coinglass API 연동
@@ -47,3 +49,11 @@
 - [x] **Funding Rate 지표** (2024-12-31)
   - 백엔드: `/exchange/funding-rate` API
   - 프론트엔드: 헤더에 실시간 표시 + 카운트다운
+
+- [x] **Volume Profile** (이미 구현됨)
+  - POC, VAH, VAL 라인 표시
+  - 토글 버튼으로 표시/숨김
+
+- [x] **BOS/CHoCH 시장 구조** (2024-12-31)
+  - 백엔드: 스윙 포인트 감지, 구조 돌파 분석
+  - 프론트엔드: BOS/CHoCH 마커 + 헤더에 추세 표시

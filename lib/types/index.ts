@@ -234,6 +234,39 @@ export interface LiquidationSummary {
   };
 }
 
+// 시장 구조 (BOS/CHoCH) 타입
+export type MarketTrend = 'bullish' | 'bearish' | 'ranging';
+export type StructureType = 'BOS' | 'CHoCH';
+export type SwingType = 'HH' | 'HL' | 'LH' | 'LL';
+
+export interface SwingPoint {
+  index: number;
+  time: number;
+  price: number;
+  type: 'high' | 'low';
+  swingType?: SwingType;
+}
+
+export interface StructureBreak {
+  type: StructureType;
+  direction: 'bullish' | 'bearish';
+  breakIndex: number;
+  breakTime: number;
+  breakPrice: number;
+  swingPoint: SwingPoint;
+  strength: 'strong' | 'medium' | 'weak';
+  description: string;
+}
+
+export interface MarketStructureData {
+  currentTrend: MarketTrend;
+  swingHighs: SwingPoint[];
+  swingLows: SwingPoint[];
+  structureBreaks: StructureBreak[];
+  lastBOS: StructureBreak | null;
+  lastCHoCH: StructureBreak | null;
+}
+
 export interface ApiResponse {
   success: boolean;
   data: {
@@ -274,5 +307,6 @@ export interface ApiResponse {
     vwapAtr?: VwapAtrData; // VWAP + ATR 데이터
     orderBlocks?: OrderBlockData; // 오더블록 데이터
     orderBook?: OrderBookData; // 오더북 매수/매도벽 데이터
+    marketStructure?: MarketStructureData; // 시장 구조 (BOS/CHoCH)
   };
 }

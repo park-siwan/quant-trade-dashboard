@@ -36,6 +36,7 @@ import {
   OrderBookData,
   LiquidationSummary,
   WhaleSummary,
+  MarketStructureData,
 } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
 import { LongShortRatio } from '@/hooks/useLongShortRatio';
@@ -121,6 +122,7 @@ interface ChartRendererProps {
   orderBookData?: OrderBookData | null; // 오더북 매수/매도벽 데이터
   liquidationData?: LiquidationSummary | null; // 청산 데이터
   whaleData?: WhaleSummary | null; // 고래 거래 데이터
+  marketStructureData?: MarketStructureData | null; // 시장 구조 (BOS/CHoCH)
 }
 
 export default function ChartRenderer({
@@ -144,6 +146,7 @@ export default function ChartRenderer({
   orderBookData,
   liquidationData,
   whaleData,
+  marketStructureData,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -937,6 +940,15 @@ export default function ChartRenderer({
     position: 'above' | 'below';
   }>>([]);
 
+  // BOS/CHoCH 마커 좌표 상태
+  const [structureMarkers, setStructureMarkers] = useState<Array<{
+    x: number;
+    y: number;
+    type: 'BOS' | 'CHoCH';
+    direction: 'bullish' | 'bearish';
+    strength: 'strong' | 'medium' | 'weak';
+  }>>([]);
+
   // 오더북 깊이 시각화를 위한 상태
   const [orderBookBars, setOrderBookBars] = useState<Array<{
     y: number;
@@ -1112,6 +1124,49 @@ export default function ChartRenderer({
 
     return () => clearTimeout(timeoutId);
   }, [scaleUpdateTrigger]);
+
+  // BOS/CHoCH 마커 좌표 계산
+  useEffect(() => {
+    if (!chartRef.current || !candlestickSeriesRef.current || !marketStructureData) {
+      setStructureMarkers([]);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      if (!chartRef.current || !candlestickSeriesRef.current) return;
+
+      const markers: Array<{
+        x: number;
+        y: number;
+        type: 'BOS' | 'CHoCH';
+        direction: 'bullish' | 'bearish';
+        strength: 'strong' | 'medium' | 'weak';
+      }> = [];
+
+      // 최근 20개 구조 돌파만 표시
+      const recentBreaks = marketStructureData.structureBreaks.slice(-20);
+
+      recentBreaks.forEach((breakEvent) => {
+        const timeValue = breakEvent.breakTime / 1000;
+        const x = chartRef.current!.timeScale().timeToCoordinate(timeValue as any);
+        const y = candlestickSeriesRef.current!.priceToCoordinate(breakEvent.breakPrice);
+
+        if (x === null || y === null || x < 0 || x > 2000 || y < 0 || y > 1000) return;
+
+        markers.push({
+          x,
+          y,
+          type: breakEvent.type,
+          direction: breakEvent.direction,
+          strength: breakEvent.strength,
+        });
+      });
+
+      setStructureMarkers(markers);
+    }, 150);
+
+    return () => clearTimeout(timeoutId);
+  }, [scaleUpdateTrigger, marketStructureData]);
 
   // 오더북 깊이 바 계산 (scaleUpdateTrigger 변경 시)
   useEffect(() => {
@@ -1575,6 +1630,34 @@ export default function ChartRenderer({
             }}
           >
             {marker.label}
+          </div>
+        ))}
+
+        {/* BOS/CHoCH 마커 */}
+        {structureMarkers.map((marker, index) => (
+          <div
+            key={`structure-${index}`}
+            style={{
+              position: 'absolute',
+              left: `${marker.x}px`,
+              top: `${marker.y}px`,
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              zIndex: 18,
+              fontSize: '9px',
+              fontWeight: 'bold',
+              padding: '1px 4px',
+              borderRadius: '3px',
+              whiteSpace: 'nowrap',
+              backgroundColor: marker.type === 'CHoCH'
+                ? (marker.direction === 'bullish' ? 'rgba(34, 197, 94, 0.9)' : 'rgba(239, 68, 68, 0.9)')
+                : (marker.direction === 'bullish' ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'),
+              color: '#fff',
+              border: marker.type === 'CHoCH' ? '1px solid #fff' : 'none',
+              boxShadow: marker.type === 'CHoCH' ? '0 0 6px rgba(255,255,255,0.3)' : 'none',
+            }}
+          >
+            {marker.type}
           </div>
         ))}
 

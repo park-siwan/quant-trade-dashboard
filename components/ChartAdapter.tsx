@@ -20,6 +20,7 @@ import {
   OrderBookData,
   LiquidationSummary,
   WhaleSummary,
+  MarketStructureData,
 } from '@/lib/types/index';
 import { Bitcoin } from 'lucide-react';
 
@@ -286,6 +287,9 @@ export default function ChartAdapter({
   // 오더북 데이터 (매수/매도벽)
   const orderBookData: OrderBookData | null = data?.data?.orderBook || null;
 
+  // 시장 구조 (BOS/CHoCH)
+  const marketStructureData: MarketStructureData | null = data?.data?.marketStructure || null;
+
   // 다이버전스 방향별 개수 계산 (start 신호만 카운트)
   const bullishCount = divergenceSignals.filter(
     (signal) => signal.phase === 'start' && signal.direction === 'bullish',
@@ -390,6 +394,25 @@ export default function ChartAdapter({
             </div>
           </div>
 
+          {/* 시장 구조 (추세) 표시 */}
+          {marketStructureData && (
+            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${
+              marketStructureData.currentTrend === 'bullish'
+                ? 'bg-green-500/20 text-green-400'
+                : marketStructureData.currentTrend === 'bearish'
+                ? 'bg-red-500/20 text-red-400'
+                : 'bg-gray-500/20 text-gray-400'
+            }`}>
+              <span className='font-semibold'>
+                {marketStructureData.currentTrend === 'bullish' ? '상승' :
+                 marketStructureData.currentTrend === 'bearish' ? '하락' : '횡보'}
+              </span>
+              {marketStructureData.lastCHoCH && (
+                <span className='text-[10px] opacity-70'>CHoCH</span>
+              )}
+            </div>
+          )}
+
           {/* 펀딩레이트 표시 */}
           {fundingRateData && (
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
@@ -478,6 +501,7 @@ export default function ChartAdapter({
         orderBookData={orderBookData}
         liquidationData={liquidationData}
         whaleData={whaleData}
+        marketStructureData={marketStructureData}
       />
     </div>
   );
