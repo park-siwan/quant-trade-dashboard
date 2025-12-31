@@ -947,6 +947,8 @@ export default function ChartRenderer({
     type: 'BOS' | 'CHoCH';
     direction: 'bullish' | 'bearish';
     strength: 'strong' | 'medium' | 'weak';
+    isOverheated?: boolean; // CHoCH 과열 여부
+    rsiAtBreak?: number;
   }>>([]);
 
   // 오더북 깊이 시각화를 위한 상태
@@ -1141,6 +1143,8 @@ export default function ChartRenderer({
         type: 'BOS' | 'CHoCH';
         direction: 'bullish' | 'bearish';
         strength: 'strong' | 'medium' | 'weak';
+        isOverheated?: boolean;
+        rsiAtBreak?: number;
       }> = [];
 
       // 최근 20개 구조 돌파 표시 (BOS + CHoCH)
@@ -1165,6 +1169,8 @@ export default function ChartRenderer({
           type: breakEvent.type,
           direction: breakEvent.direction,
           strength: breakEvent.strength,
+          isOverheated: breakEvent.isOverheated,
+          rsiAtBreak: breakEvent.rsiAtBreak,
         });
       });
 
@@ -1640,32 +1646,62 @@ export default function ChartRenderer({
         ))}
 
         {/* BOS/CHoCH 마커 */}
-        {structureMarkers.map((marker, index) => (
-          <div
-            key={`structure-${index}`}
-            style={{
-              position: 'absolute',
-              left: `${marker.x}px`,
-              top: `${marker.y}px`,
-              transform: 'translate(-50%, -50%)',
-              pointerEvents: 'none',
-              zIndex: 18,
-              fontSize: marker.type === 'CHoCH' ? '10px' : '8px',
-              fontWeight: 'bold',
-              padding: marker.type === 'CHoCH' ? '2px 6px' : '1px 4px',
-              borderRadius: '3px',
-              whiteSpace: 'nowrap',
-              backgroundColor: marker.direction === 'bullish'
-                ? (marker.type === 'CHoCH' ? 'rgba(34, 197, 94, 0.95)' : 'rgba(34, 197, 94, 0.6)')
-                : (marker.type === 'CHoCH' ? 'rgba(239, 68, 68, 0.95)' : 'rgba(239, 68, 68, 0.6)'),
-              color: '#000',
-              border: marker.type === 'CHoCH' ? '1px solid rgba(0,0,0,0.4)' : 'none',
-              boxShadow: marker.type === 'CHoCH' ? '0 2px 6px rgba(0,0,0,0.4)' : 'none',
-            }}
-          >
-            {marker.type}{marker.direction === 'bullish' ? '↑' : '↓'}
-          </div>
-        ))}
+        {structureMarkers.map((marker, index) => {
+          // CHoCH 과열 여부에 따른 스타일 결정
+          const isValidChoch = marker.type === 'CHoCH' && marker.isOverheated;
+          const isInvalidChoch = marker.type === 'CHoCH' && !marker.isOverheated;
+
+          // 과열 CHoCH = 밝고 강조, 비과열 CHoCH = 흐리게
+          const getBackgroundColor = () => {
+            if (marker.type === 'BOS') {
+              return marker.direction === 'bullish'
+                ? 'rgba(34, 197, 94, 0.6)'
+                : 'rgba(239, 68, 68, 0.6)';
+            }
+            if (isValidChoch) {
+              // 과열 CHoCH - 밝고 강조
+              return marker.direction === 'bullish'
+                ? 'rgba(34, 197, 94, 0.95)'
+                : 'rgba(239, 68, 68, 0.95)';
+            }
+            // 비과열 CHoCH - 흐리게 (참고용)
+            return marker.direction === 'bullish'
+              ? 'rgba(34, 197, 94, 0.3)'
+              : 'rgba(239, 68, 68, 0.3)';
+          };
+
+          return (
+            <div
+              key={`structure-${index}`}
+              style={{
+                position: 'absolute',
+                left: `${marker.x}px`,
+                top: `${marker.y}px`,
+                transform: 'translate(-50%, -50%)',
+                pointerEvents: 'none',
+                zIndex: 18,
+                fontSize: isValidChoch ? '10px' : '8px',
+                fontWeight: 'bold',
+                padding: isValidChoch ? '2px 6px' : '1px 4px',
+                borderRadius: '3px',
+                whiteSpace: 'nowrap',
+                backgroundColor: getBackgroundColor(),
+                color: isInvalidChoch ? 'rgba(0,0,0,0.5)' : '#000',
+                border: isValidChoch ? '2px solid rgba(255,255,255,0.6)' : 'none',
+                boxShadow: isValidChoch ? '0 2px 8px rgba(0,0,0,0.5)' : 'none',
+                opacity: isInvalidChoch ? 0.5 : 1,
+              }}
+              title={marker.rsiAtBreak ? `RSI: ${marker.rsiAtBreak.toFixed(1)}` : undefined}
+            >
+              {marker.type}{marker.direction === 'bullish' ? '↑' : '↓'}
+              {isValidChoch && marker.rsiAtBreak && (
+                <span style={{ fontSize: '7px', marginLeft: '2px' }}>
+                  ({marker.rsiAtBreak.toFixed(0)})
+                </span>
+              )}
+            </div>
+          );
+        })}
 
         {/* 오더북 DOM 스타일 (최신 캔들 우측, 세로 스택) */}
         {orderBookData && chartRef.current && candlestickSeriesRef.current && data.length > 0 && (() => {

@@ -256,6 +256,8 @@ export interface StructureBreak {
   swingPoint: SwingPoint;
   strength: 'strong' | 'medium' | 'weak';
   description: string;
+  rsiAtBreak?: number; // CHoCH 발생 시점 RSI
+  isOverheated?: boolean; // RSI 과열 여부 (CHoCH 유효성)
 }
 
 export interface MarketStructureData {
