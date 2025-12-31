@@ -6,6 +6,7 @@ import { useLongShortRatio } from '@/hooks/useLongShortRatio';
 import { useLiquidations } from '@/hooks/useLiquidations';
 import { useWhales } from '@/hooks/useWhales';
 import { useFundingRate } from '@/hooks/useFundingRate';
+import { useCoinglass } from '@/hooks/useCoinglass';
 import ChartRenderer from '@/components/chart/ChartRenderer';
 import RefreshCountdown from '@/components/chart/RefreshCountdown';
 import { CandlestickData, LineData } from 'lightweight-charts';
@@ -76,6 +77,12 @@ export default function ChartAdapter({
   const { data: fundingRateData, timeUntilFunding } = useFundingRate({
     symbol,
     refreshInterval: 30000, // 30초마다 갱신
+  });
+
+  // Coinglass 트레이딩 신호 가져오기
+  const { data: coinglassData } = useCoinglass({
+    symbol: symbol.replace('/USDT', '').replace('/', ''),
+    refreshInterval: 60000, // 1분마다 갱신
   });
 
   // API 응답을 CandlestickData 형식으로 변환 (데이터가 없으면 빈 배열)
@@ -443,6 +450,70 @@ export default function ChartAdapter({
                   }`}>
                     {fundingRateData.signal === 'LONG' ? '롱 기회' : '숏 기회'}
                   </span>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Coinglass 트레이딩 신호 */}
+          {coinglassData && (
+            <div className='flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-white/5 border-white/10'>
+              {/* 공포탐욕 지수 */}
+              {coinglassData.fearGreed && (
+                <div className='flex items-center gap-1.5'>
+                  <span className='text-[10px] text-gray-400'>F&G</span>
+                  <span className={`text-xs font-bold ${
+                    coinglassData.fearGreed.value <= 25 ? 'text-red-400' :
+                    coinglassData.fearGreed.value <= 45 ? 'text-orange-400' :
+                    coinglassData.fearGreed.value <= 55 ? 'text-yellow-400' :
+                    coinglassData.fearGreed.value <= 75 ? 'text-lime-400' :
+                    'text-green-400'
+                  }`}>
+                    {coinglassData.fearGreed.value}
+                  </span>
+                </div>
+              )}
+
+              <div className='w-px h-4 bg-white/20' />
+
+              {/* 청산 편향 */}
+              <div className='flex items-center gap-1.5'>
+                <span className='text-[10px] text-gray-400'>청산</span>
+                <span className={`text-xs font-semibold ${
+                  coinglassData.liquidationBias === 'long_heavy' ? 'text-red-400' :
+                  coinglassData.liquidationBias === 'short_heavy' ? 'text-green-400' :
+                  'text-gray-400'
+                }`}>
+                  {coinglassData.liquidationBias === 'long_heavy' ? '롱↓' :
+                   coinglassData.liquidationBias === 'short_heavy' ? '숏↑' : '-'}
+                </span>
+              </div>
+
+              <div className='w-px h-4 bg-white/20' />
+
+              {/* ETF 트렌드 */}
+              <div className='flex items-center gap-1.5'>
+                <span className='text-[10px] text-gray-400'>ETF</span>
+                <span className={`text-xs font-semibold ${
+                  coinglassData.etfTrend === 'inflow' ? 'text-green-400' :
+                  coinglassData.etfTrend === 'outflow' ? 'text-red-400' :
+                  'text-gray-400'
+                }`}>
+                  {coinglassData.etfTrend === 'inflow' ? '유입' :
+                   coinglassData.etfTrend === 'outflow' ? '유출' : '-'}
+                </span>
+              </div>
+
+              {/* 불마켓 피크 리스크 (10% 이상일 때만 표시) */}
+              {coinglassData.bullMarketRisk >= 10 && (
+                <>
+                  <div className='w-px h-4 bg-white/20' />
+                  <div className='flex items-center gap-1.5'>
+                    <span className='text-[10px] text-gray-400'>피크</span>
+                    <span className='text-xs font-bold text-amber-400'>
+                      {coinglassData.bullMarketRisk}%
+                    </span>
+                  </div>
                 </>
               )}
             </div>

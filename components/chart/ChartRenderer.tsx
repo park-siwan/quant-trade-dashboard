@@ -1143,19 +1143,25 @@ export default function ChartRenderer({
         strength: 'strong' | 'medium' | 'weak';
       }> = [];
 
-      // 최근 20개 구조 돌파만 표시
+      // 최근 20개 구조 돌파 표시 (BOS + CHoCH)
       const recentBreaks = marketStructureData.structureBreaks.slice(-20);
 
       recentBreaks.forEach((breakEvent) => {
         const timeValue = breakEvent.breakTime / 1000;
         const x = chartRef.current!.timeScale().timeToCoordinate(timeValue as any);
-        const y = candlestickSeriesRef.current!.priceToCoordinate(breakEvent.breakPrice);
+        let y = candlestickSeriesRef.current!.priceToCoordinate(breakEvent.breakPrice);
 
         if (x === null || y === null || x < 0 || x > 2000 || y < 0 || y > 1000) return;
 
+        // 방향에 따라 Y 오프셋 적용 (bullish는 아래, bearish는 위)
+        // CHoCH는 더 큰 오프셋으로 BOS와 겹침 방지
+        const baseOffset = breakEvent.type === 'CHoCH' ? 25 : 12;
+        const yOffset = breakEvent.direction === 'bullish' ? baseOffset : -baseOffset;
+        const adjustedY = (y as number) + yOffset;
+
         markers.push({
           x,
-          y,
+          y: adjustedY,
           type: breakEvent.type,
           direction: breakEvent.direction,
           strength: breakEvent.strength,
@@ -1644,20 +1650,20 @@ export default function ChartRenderer({
               transform: 'translate(-50%, -50%)',
               pointerEvents: 'none',
               zIndex: 18,
-              fontSize: '9px',
+              fontSize: marker.type === 'CHoCH' ? '10px' : '8px',
               fontWeight: 'bold',
-              padding: '1px 4px',
+              padding: marker.type === 'CHoCH' ? '2px 6px' : '1px 4px',
               borderRadius: '3px',
               whiteSpace: 'nowrap',
-              backgroundColor: marker.type === 'CHoCH'
-                ? (marker.direction === 'bullish' ? 'rgba(34, 197, 94, 0.9)' : 'rgba(239, 68, 68, 0.9)')
-                : (marker.direction === 'bullish' ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'),
-              color: '#fff',
-              border: marker.type === 'CHoCH' ? '1px solid #fff' : 'none',
-              boxShadow: marker.type === 'CHoCH' ? '0 0 6px rgba(255,255,255,0.3)' : 'none',
+              backgroundColor: marker.direction === 'bullish'
+                ? (marker.type === 'CHoCH' ? 'rgba(34, 197, 94, 0.95)' : 'rgba(34, 197, 94, 0.6)')
+                : (marker.type === 'CHoCH' ? 'rgba(239, 68, 68, 0.95)' : 'rgba(239, 68, 68, 0.6)'),
+              color: '#000',
+              border: marker.type === 'CHoCH' ? '1px solid rgba(0,0,0,0.4)' : 'none',
+              boxShadow: marker.type === 'CHoCH' ? '0 2px 6px rgba(0,0,0,0.4)' : 'none',
             }}
           >
-            {marker.type}
+            {marker.type}{marker.direction === 'bullish' ? '↑' : '↓'}
           </div>
         ))}
 
