@@ -37,7 +37,7 @@ export default function Home() {
               <div><span className='text-amber-300 font-semibold'>횡보</span><span className='text-gray-400'> - 가격이 일정 범위 유지. 돌파 대기</span></div>
               <div><span className='text-lime-400 font-semibold'>다이버전스 ↑</span><span className='text-gray-400'> - 가격↓ 지표↑. 반등 가능</span></div>
               <div><span className='text-red-400 font-semibold'>다이버전스 ↓</span><span className='text-gray-400'> - 가격↑ 지표↓. 하락 가능</span></div>
-              <div><span className='text-orange-400 font-semibold'>ATR</span><span className='text-gray-400'> - 변동폭. 2% 이상 = 고변동성</span></div>
+              <div><span className='text-orange-400 font-semibold'>변동폭(ATR)</span><span className='text-gray-400'> - 2% 이상 = 고변동성</span></div>
             </div>
           </div>
 

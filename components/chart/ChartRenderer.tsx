@@ -495,7 +495,7 @@ export default function ChartRenderer({
         lineWidth: 1,
         lineStyle: 2, // dotted
         axisLabelVisible: true,
-        title: 'ATR↓',
+        title: '손절↓',
         axisLabelColor: 'rgba(239, 68, 68, 0.9)',
         axisLabelTextColor: '#000',
       });
@@ -507,7 +507,7 @@ export default function ChartRenderer({
         lineWidth: 1,
         lineStyle: 2, // dotted
         axisLabelVisible: true,
-        title: 'ATR↑',
+        title: '손절↑',
         axisLabelColor: 'rgba(34, 197, 94, 0.9)',
         axisLabelTextColor: '#000',
       });
@@ -1265,12 +1265,12 @@ export default function ChartRenderer({
           const ratioText = ratio >= 1 ? `+${ratioPercent}%` : `${ratioPercent}%`;
           return (
             <div className={`text-sm font-mono font-bold flex items-center gap-1 ${colorClass}`}>
-              <span>ATR {vwapAtrData.atrPercent.toFixed(2)}%</span>
+              <span>변동폭(ATR) {vwapAtrData.atrPercent.toFixed(2)}%</span>
               <span className='text-xs opacity-70'>({ratioText})</span>
             </div>
           );
         })() : (
-          <span className='text-gray-600 text-sm'>ATR -</span>
+          <span className='text-gray-600 text-sm'>변동폭(ATR) -</span>
         )}
       </div>
 
