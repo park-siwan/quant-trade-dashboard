@@ -586,8 +586,7 @@ export default function ChartRenderer({
     isFirstRenderRef.current = false;
 
     // 통합 툴팁 (RSI 값 + 필터링 사유 + 크로스오버 + 다이버전스)
-    if (rsiSeries) {
-      chart.subscribeCrosshairMove((param) => {
+    chart.subscribeCrosshairMove((param) => {
         // 첫 번째 점만 설정된 상태: 미리보기 박스 그리기
         const currentMeasurePoints = measurePointsRef.current;
         if (currentMeasurePoints.start && !currentMeasurePoints.end && param.point) {
@@ -691,8 +690,8 @@ export default function ChartRenderer({
           }
         }
 
-        // RSI 값 가져오기
-        if (param.seriesData.has(rsiSeries)) {
+        // RSI 값 가져오기 (RSI 패널이 활성화된 경우에만)
+        if (rsiSeries && param.seriesData.has(rsiSeries)) {
           const rsi = param.seriesData.get(rsiSeries);
           if (rsi && 'value' in rsi) {
             rsiValue = rsi.value;
@@ -813,7 +812,6 @@ export default function ChartRenderer({
           setTooltip(null);
         }
       });
-    }
 
     // 측정 클릭 이벤트 (항상 활성화)
     chart.subscribeClick((param) => {
@@ -1694,9 +1692,9 @@ export default function ChartRenderer({
               title={marker.rsiAtBreak ? `RSI: ${marker.rsiAtBreak.toFixed(1)}` : undefined}
             >
               {marker.type}{marker.direction === 'bullish' ? '↑' : '↓'}
-              {isValidChoch && marker.rsiAtBreak && (
-                <span style={{ fontSize: '7px', marginLeft: '2px' }}>
-                  ({marker.direction === 'bullish' ? '저' : '고'}{marker.rsiAtBreak.toFixed(0)})
+              {isValidChoch && (
+                <span style={{ fontSize: '8px', marginLeft: '2px' }}>
+                  ★
                 </span>
               )}
             </div>
