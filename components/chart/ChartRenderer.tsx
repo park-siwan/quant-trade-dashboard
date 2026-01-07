@@ -1081,8 +1081,7 @@ export default function ChartRenderer({
       return;
     }
 
-    // 차트 렌더링 완료 후 좌표 계산
-    const timeoutId = setTimeout(() => {
+    const updateCrossoverMarkers = () => {
       if (!chartRef.current || !candlestickSeriesRef.current) return;
 
       const markers: Array<{ x: number; y: number; type: 'golden_cross' | 'dead_cross'; isFiltered?: boolean }> = [];
@@ -1112,9 +1111,10 @@ export default function ChartRenderer({
       });
 
       setCrossoverMarkers(markers);
-    }, 150);
+    };
 
-    return () => clearTimeout(timeoutId);
+    const rafId = requestAnimationFrame(updateCrossoverMarkers);
+    return () => cancelAnimationFrame(rafId);
   }, [scaleUpdateTrigger]);
 
   // 데이터 변경 시 CVD+OI 마커 숨기기
@@ -1136,7 +1136,7 @@ export default function ChartRenderer({
       LONG_ENTRY: { label: '★롱타점', color: 'rgba(34, 211, 238, 0.9)', position: 'below' },
     };
 
-    const timeoutId = setTimeout(() => {
+    const updateSignalMarkers = () => {
       if (!chartRef.current || !candlestickSeriesRef.current) return;
 
       const markers: Array<{ x: number; y: number; type: string; label: string; color: string; position: 'above' | 'below' }> = [];
@@ -1169,9 +1169,10 @@ export default function ChartRenderer({
       });
 
       setSignalMarkers(markers);
-    }, 150);
+    };
 
-    return () => clearTimeout(timeoutId);
+    const rafId = requestAnimationFrame(updateSignalMarkers);
+    return () => cancelAnimationFrame(rafId);
   }, [scaleUpdateTrigger]);
 
   // BOS/CHoCH 마커 좌표 계산
@@ -1181,7 +1182,7 @@ export default function ChartRenderer({
       return;
     }
 
-    const timeoutId = setTimeout(() => {
+    const updateStructureMarkers = () => {
       if (!chartRef.current || !candlestickSeriesRef.current) return;
 
       const markers: Array<{
@@ -1224,9 +1225,10 @@ export default function ChartRenderer({
       });
 
       setStructureMarkers(markers);
-    }, 150);
+    };
 
-    return () => clearTimeout(timeoutId);
+    const rafId = requestAnimationFrame(updateStructureMarkers);
+    return () => cancelAnimationFrame(rafId);
   }, [scaleUpdateTrigger, marketStructureData]);
 
   // 오더북 깊이 바 계산 (scaleUpdateTrigger 변경 시)
@@ -1236,7 +1238,7 @@ export default function ChartRenderer({
       return;
     }
 
-    const timeoutId = setTimeout(() => {
+    const updateOrderBookBars = () => {
       if (!chartRef.current || !candlestickSeriesRef.current) return;
 
       const bars: Array<{
@@ -1283,9 +1285,10 @@ export default function ChartRenderer({
       });
 
       setOrderBookBars(bars);
-    }, 200);
+    };
 
-    return () => clearTimeout(timeoutId);
+    const rafId = requestAnimationFrame(updateOrderBookBars);
+    return () => cancelAnimationFrame(rafId);
   }, [scaleUpdateTrigger, orderBookData]);
 
   // 가로선 좌표 계산 (scaleUpdateTrigger 변경 시 실시간 업데이트)
@@ -1295,7 +1298,7 @@ export default function ChartRenderer({
       return;
     }
 
-    const timeoutId = setTimeout(() => {
+    const updatePriceLines = () => {
       if (!chartRef.current || !candlestickSeriesRef.current) return;
 
       const lines: Array<{ y: number; startX: number; label: string; color: string }> = [];
@@ -1363,9 +1366,10 @@ export default function ChartRenderer({
       }
 
       setPriceLines(lines);
-    }, 100);
+    };
 
-    return () => clearTimeout(timeoutId);
+    const rafId = requestAnimationFrame(updatePriceLines);
+    return () => cancelAnimationFrame(rafId);
   }, [scaleUpdateTrigger, volumeProfile, vwapAtrData, showVolumeProfile, data, orderBlockData]);
 
   return (
