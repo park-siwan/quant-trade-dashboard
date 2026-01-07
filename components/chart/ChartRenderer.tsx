@@ -331,12 +331,12 @@ export default function ChartRenderer({
     const candlestickSeries = chart.addSeries(
       CandlestickSeries,
       {
-        upColor: `rgba(163, 230, 53, ${CANDLE_OPACITY})`, // 연두색 캔들 (lime-400) - 기본값
-        downColor: `rgba(251, 146, 60, ${CANDLE_OPACITY})`, // 주황색 캔들 (orange-400) - 기본값
-        borderUpColor: `rgba(163, 230, 53, ${CANDLE_OPACITY})`, // 연두색 테두리
-        borderDownColor: `rgba(251, 146, 60, ${CANDLE_OPACITY})`, // 주황색 테두리
-        wickUpColor: `rgba(163, 230, 53, ${CANDLE_OPACITY})`, // 연두색 꼬리
-        wickDownColor: `rgba(251, 146, 60, ${CANDLE_OPACITY})`, // 주황색 꼬리
+        upColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록색 캔들 (green-500)
+        downColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨간색 캔들 (red-500)
+        borderUpColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록색 테두리
+        borderDownColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨간색 테두리
+        wickUpColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록색 꼬리
+        wickDownColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨간색 꼬리
       },
       0,
     );
@@ -352,14 +352,14 @@ export default function ChartRenderer({
       return {
         ...candle,
         color: isUp
-          ? `rgba(163, 230, 53, ${opacity})`
-          : `rgba(251, 146, 60, ${opacity})`,
+          ? `rgba(34, 197, 94, ${opacity})` // 초록색
+          : `rgba(239, 68, 68, ${opacity})`, // 빨간색
         borderColor: isUp
-          ? `rgba(163, 230, 53, ${opacity})`
-          : `rgba(251, 146, 60, ${opacity})`,
+          ? `rgba(34, 197, 94, ${opacity})`
+          : `rgba(239, 68, 68, ${opacity})`,
         wickColor: isUp
-          ? `rgba(163, 230, 53, ${opacity})`
-          : `rgba(251, 146, 60, ${opacity})`,
+          ? `rgba(34, 197, 94, ${opacity})`
+          : `rgba(239, 68, 68, ${opacity})`,
       };
     });
 
