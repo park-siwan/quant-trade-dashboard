@@ -480,64 +480,102 @@ export default function ChartRenderer({
     //   addCvdOiMarkers(candlestickSeries, marketSignals);
     // }
 
+    // 최근 20개 캔들 범위 계산 (가로선 제한용)
+    const lineStartIndex = Math.max(0, data.length - 20);
+    const lineStartTime = data[lineStartIndex]?.time;
+    const lineEndTime = data[data.length - 1]?.time;
+
+    // 가로선을 LineSeries로 그리는 헬퍼 함수
+    const createLimitedPriceLine = (
+      price: number,
+      color: string,
+      lineWidth: 1 | 2 | 3 | 4,
+      lineStyle: 0 | 1 | 2 | 3 | 4,
+      visible: boolean = true,
+    ) => {
+      if (!visible || !lineStartTime || !lineEndTime) return null;
+      const series = chart.addSeries(
+        LineSeries,
+        {
+          color,
+          lineWidth,
+          lineStyle,
+          lastValueVisible: false,
+          priceLineVisible: false,
+          crosshairMarkerVisible: false,
+        },
+        0,
+      );
+      series.setData([
+        { time: lineStartTime, value: price },
+        { time: lineEndTime, value: price },
+      ]);
+      return series;
+    };
+
     // Volume Profile 라인 (목표가, 상단저항, 하단지지) - ref에 저장하여 토글 가능하게
     volumeProfileLinesRef.current = []; // 초기화
     if (volumeProfile) {
-      // 목표가 (POC) - 가장 많이 거래된 가격 (가격이 여기로 돌아옴)
+      // 목표가 (POC) - 가장 많이 거래된 가격
       const pocLine = candlestickSeries.createPriceLine({
         price: volumeProfile.poc,
-        color: 'rgba(250, 204, 21, 0.9)', // yellow-400 - 목표가
+        color: 'rgba(250, 204, 21, 0.9)',
         lineWidth: 2,
-        lineStyle: 0, // 실선
+        lineStyle: 0,
         axisLabelVisible: showVolumeProfile,
         title: '목표(POC)',
         axisLabelColor: 'rgba(250, 204, 21, 1)',
         axisLabelTextColor: '#000',
-        lineVisible: showVolumeProfile,
+        lineVisible: false, // 전체 가로선 숨김
       });
       volumeProfileLinesRef.current.push(pocLine);
+      createLimitedPriceLine(volumeProfile.poc, 'rgba(250, 204, 21, 0.9)', 2, 0, showVolumeProfile);
 
-      // 상단저항 (VAH) - 저항선 = 숏 진입 구간
+      // 상단저항 (VAH)
       const vahLine = candlestickSeries.createPriceLine({
         price: volumeProfile.vah,
-        color: 'rgba(248, 113, 113, 0.7)', // red-400 - 숏 구간
+        color: 'rgba(248, 113, 113, 0.7)',
         lineWidth: 1,
-        lineStyle: 2, // 점선
+        lineStyle: 2,
         axisLabelVisible: showVolumeProfile,
         title: '숏(VAH)',
         axisLabelColor: 'rgba(248, 113, 113, 0.9)',
         axisLabelTextColor: '#000',
-        lineVisible: showVolumeProfile,
+        lineVisible: false,
       });
       volumeProfileLinesRef.current.push(vahLine);
+      createLimitedPriceLine(volumeProfile.vah, 'rgba(248, 113, 113, 0.7)', 1, 2, showVolumeProfile);
 
-      // 하단지지 (VAL) - 지지선 = 롱 진입 구간
+      // 하단지지 (VAL)
       const valLine = candlestickSeries.createPriceLine({
         price: volumeProfile.val,
-        color: 'rgba(163, 230, 53, 0.7)', // lime-400 - 롱 구간
+        color: 'rgba(163, 230, 53, 0.7)',
         lineWidth: 1,
-        lineStyle: 2, // 점선
+        lineStyle: 2,
         axisLabelVisible: showVolumeProfile,
         title: '롱(VAL)',
         axisLabelColor: 'rgba(163, 230, 53, 0.9)',
         axisLabelTextColor: '#000',
-        lineVisible: showVolumeProfile,
+        lineVisible: false,
       });
       volumeProfileLinesRef.current.push(valLine);
+      createLimitedPriceLine(volumeProfile.val, 'rgba(163, 230, 53, 0.7)', 1, 2, showVolumeProfile);
     }
 
     // VWAP 라인 표시 (기관 트레이딩 기준선)
     if (vwapAtrData && vwapAtrData.currentVwap > 0) {
       candlestickSeries.createPriceLine({
         price: vwapAtrData.currentVwap,
-        color: 'rgba(168, 85, 247, 0.9)', // purple-500
+        color: 'rgba(168, 85, 247, 0.9)',
         lineWidth: 2,
-        lineStyle: 0, // solid
+        lineStyle: 0,
         axisLabelVisible: true,
         title: '기관(VWAP)',
         axisLabelColor: 'rgba(168, 85, 247, 1)',
         axisLabelTextColor: '#fff',
+        lineVisible: false,
       });
+      createLimitedPriceLine(vwapAtrData.currentVwap, 'rgba(168, 85, 247, 0.9)', 2, 0);
     }
 
     // ATR 기반 손절가 라인 표시
@@ -545,26 +583,30 @@ export default function ChartRenderer({
       // 롱 손절가 (현재가 - 2*ATR)
       candlestickSeries.createPriceLine({
         price: vwapAtrData.suggestedStopLoss.long,
-        color: 'rgba(239, 68, 68, 0.6)', // red-500
+        color: 'rgba(239, 68, 68, 0.6)',
         lineWidth: 1,
-        lineStyle: 2, // dotted
+        lineStyle: 2,
         axisLabelVisible: true,
         title: '변동폭(ATR)↓',
         axisLabelColor: 'rgba(239, 68, 68, 0.9)',
         axisLabelTextColor: '#000',
+        lineVisible: false,
       });
+      createLimitedPriceLine(vwapAtrData.suggestedStopLoss.long, 'rgba(239, 68, 68, 0.6)', 1, 2);
 
       // 숏 손절가 (현재가 + 2*ATR)
       candlestickSeries.createPriceLine({
         price: vwapAtrData.suggestedStopLoss.short,
-        color: 'rgba(34, 197, 94, 0.6)', // green-500
+        color: 'rgba(34, 197, 94, 0.6)',
         lineWidth: 1,
-        lineStyle: 2, // dotted
+        lineStyle: 2,
         axisLabelVisible: true,
         title: '변동폭(ATR)↑',
         axisLabelColor: 'rgba(34, 197, 94, 0.9)',
         axisLabelTextColor: '#000',
+        lineVisible: false,
       });
+      createLimitedPriceLine(vwapAtrData.suggestedStopLoss.short, 'rgba(34, 197, 94, 0.6)', 1, 2);
     }
 
     // 오더블록 표시 (현재가 근처 최대 3개만)
@@ -573,22 +615,24 @@ export default function ChartRenderer({
 
       orderBlockData.activeBlocks.forEach((block) => {
         const midPrice = (block.high + block.low) / 2;
-        const isSupport = midPrice < currentPrice; // 현재가 아래 = 지지
+        const isSupport = midPrice < currentPrice;
 
         const color = isSupport
-          ? 'rgba(34, 197, 94, 0.8)' // green - 지지
-          : 'rgba(239, 68, 68, 0.8)'; // red - 저항
+          ? 'rgba(34, 197, 94, 0.8)'
+          : 'rgba(239, 68, 68, 0.8)';
 
         candlestickSeries.createPriceLine({
           price: midPrice,
           color: color,
           lineWidth: 2,
-          lineStyle: 1, // dashed
+          lineStyle: 1,
           axisLabelVisible: true,
           title: isSupport ? 'OB지지' : 'OB저항',
           axisLabelColor: color,
           axisLabelTextColor: '#000',
+          lineVisible: false,
         });
+        createLimitedPriceLine(midPrice, color, 2, 1);
       });
 
       console.log(`✅ ${orderBlockData.activeBlocks.length}개의 오더블록 표시됨`);
