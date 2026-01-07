@@ -1852,8 +1852,8 @@ export default function ChartRenderer({
           );
         })}
 
-        {/* 오더북 DOM 스타일 (최신 캔들 우측, 세로 스택) */}
-        {orderBookData && chartRef.current && candlestickSeriesRef.current && data.length > 0 && (() => {
+        {/* 오더북 DOM 스타일 (최신 캔들 우측, 세로 스택) - 임시 비활성화 */}
+        {false && orderBookData && chartRef.current && candlestickSeriesRef.current && data.length > 0 && (() => {
           // 최신 캔들의 X 좌표 구하기
           const latestCandle = data[data.length - 1];
           const latestX = chartRef.current!.timeScale().timeToCoordinate(latestCandle.time);
