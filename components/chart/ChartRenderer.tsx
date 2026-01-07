@@ -1375,18 +1375,6 @@ export default function ChartRenderer({
   return (
     <div className='w-full'>
 
-      {/* 측정 결과 표시 */}
-      {measureBox && (
-        <div className='mb-2 backdrop-blur-md bg-blue-500/20 text-blue-300 border border-blue-400/50 px-3 py-2 rounded-lg text-sm font-medium'>
-          <span style={{ color: measureBox.pricePercent >= 0 ? '#a3e635' : '#fb923c' }}>
-            {measureBox.pricePercent >= 0 ? '▲' : '▼'} {Math.abs(measureBox.pricePercent).toFixed(2)}%
-          </span>
-          <span className='ml-2 text-gray-300'>
-            (${Math.abs(measureBox.priceDiff).toFixed(2)})
-          </span>
-        </div>
-      )}
-
       {/* 추세 지표 Row - EMA, 크로스, 펀비, 목표가 */}
       <div className='flex items-center justify-between mb-2 backdrop-blur-md bg-black/40 px-3 py-2 rounded-lg border border-cyan-500/20'>
         <div className='flex items-center gap-3'>
@@ -1661,7 +1649,8 @@ export default function ChartRenderer({
         {/* 측정 박스 오버레이 (트레이딩뷰 스타일) */}
         {measureBox && (() => {
           const isPositive = measureBox.pricePercent >= 0;
-          const boxColor = isPositive ? '163, 230, 53' : '251, 146, 60'; // lime-400 : orange-400
+          // 더 잘 보이는 색상: 상승=시안, 하락=빨강
+          const boxColor = isPositive ? '34, 211, 238' : '239, 68, 68'; // cyan-400 : red-500
 
           // 툴팁이 차트 밖으로 나가는지 확인
           const TOOLTIP_HEIGHT = 40; // 대략적인 툴팁 높이
@@ -1692,10 +1681,10 @@ export default function ChartRenderer({
                 top: `${measureBox.top}px`,
                 width: `${measureBox.width}px`,
                 height: `${measureBox.height}px`,
-                backgroundColor: measureBox.isPreview ? `rgba(${boxColor}, 0.05)` : `rgba(${boxColor}, 0.1)`,
-                border: measureBox.isPreview ? `1px dashed rgba(${boxColor}, 0.4)` : `1px solid rgba(${boxColor}, 0.5)`,
+                backgroundColor: measureBox.isPreview ? `rgba(${boxColor}, 0.08)` : `rgba(${boxColor}, 0.15)`,
+                border: measureBox.isPreview ? `1px dashed rgba(${boxColor}, 0.5)` : `2px solid rgba(${boxColor}, 0.7)`,
                 pointerEvents: 'none',
-                zIndex: 15, // 점 마커(11)와 툴팁(12)보다 높게 설정
+                zIndex: 15,
               }}
             >
               {/* 측정 정보 텍스트 (공간에 따라 동적 위치) */}
@@ -1705,21 +1694,23 @@ export default function ChartRenderer({
                   left: '50%',
                   ...tooltipPosition,
                   transform: 'translateX(-50%)',
-                  backgroundColor: `rgba(${boxColor}, 0.9)`,
-                  color: 'white',
-                  padding: '4px 8px',
+                  backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                  color: `rgb(${boxColor})`,
+                  padding: '6px 10px',
                   borderRadius: '4px',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   fontWeight: 'bold',
                   whiteSpace: 'nowrap',
-                  zIndex: 12, // 점 마커(zIndex 11)보다 위에 표시
+                  zIndex: 12,
+                  border: `1px solid rgba(${boxColor}, 0.5)`,
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.5)',
                 }}
               >
-                <div style={{ color: 'white' }}>
-                  {Math.abs(measureBox.priceDiff).toFixed(2)} ({isPositive ? '+' : ''}{measureBox.pricePercent.toFixed(2)}%)
+                <div>
+                  {isPositive ? '+' : ''}{measureBox.pricePercent.toFixed(2)}% (${Math.abs(measureBox.priceDiff).toFixed(2)})
                 </div>
-                <div style={{ fontSize: '10px', opacity: 0.8 }}>
-                  {measureBox.bars} 봉, {measureBox.timeRange}
+                <div style={{ fontSize: '10px', opacity: 0.7, color: '#9ca3af' }}>
+                  {measureBox.bars} 봉 · {measureBox.timeRange}
                 </div>
               </div>
             </div>
