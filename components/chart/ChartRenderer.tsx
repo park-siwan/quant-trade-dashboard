@@ -487,14 +487,13 @@ export default function ChartRenderer({
     //   addCvdOiMarkers(candlestickSeries, marketSignals);
     // }
 
-    // 최근 20개 캔들 범위 계산 (가로선 제한용)
-    // 왼쪽: 20개 캔들 전, 오른쪽: 미래까지 연장 (Y축 라벨까지)
-    const lineStartIndex = Math.max(0, data.length - 20);
-    const lineStartTime = data[lineStartIndex]?.time;
-    // 오른쪽 끝을 미래로 연장 (마지막 캔들 + 50캔들 분량)
+    // 가로선 범위 계산: 마지막 캔들 오른쪽에서 시작 → Y축까지
     const lastCandleTime = data[data.length - 1]?.time as number;
     const candleInterval = data.length > 1 ? (data[data.length - 1]?.time as number) - (data[data.length - 2]?.time as number) : 300;
-    const lineEndTime = (lastCandleTime + candleInterval * 50) as typeof lineStartTime;
+    // 마지막 캔들 바로 오른쪽에서 시작
+    const lineStartTime = (lastCandleTime + candleInterval * 0.5) as typeof data[0]['time'];
+    // 오른쪽 끝을 충분히 미래로 연장 (Y축까지)
+    const lineEndTime = (lastCandleTime + candleInterval * 100) as typeof data[0]['time'];
 
     // 제한된 가로선 시리즈 초기화
     limitedLinesRef.current = [];
