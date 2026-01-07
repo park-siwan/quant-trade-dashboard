@@ -593,35 +593,35 @@ export default function ChartRenderer({
       createLimitedPriceLine(vwapAtrData.currentVwap, 'rgba(168, 85, 247, 0.9)', 2, 0);
     }
 
-    // ATR 기반 손절가 라인 표시
+    // ATR 기반 변동폭 라인 표시
     if (vwapAtrData?.suggestedStopLoss) {
-      // 롱 손절가 (현재가 - 2*ATR)
+      // 하단 (현재가 - 2*ATR) = 롱 진입 유리 구간 (초록색)
       candlestickSeries.createPriceLine({
         price: vwapAtrData.suggestedStopLoss.long,
-        color: 'rgba(239, 68, 68, 0.6)',
-        lineWidth: 1,
-        lineStyle: 2,
-        axisLabelVisible: true,
-        title: '변동폭(ATR)↓',
-        axisLabelColor: 'rgba(239, 68, 68, 0.9)',
-        axisLabelTextColor: '#000',
-        lineVisible: false,
-      });
-      createLimitedPriceLine(vwapAtrData.suggestedStopLoss.long, 'rgba(239, 68, 68, 0.6)', 1, 2);
-
-      // 숏 손절가 (현재가 + 2*ATR)
-      candlestickSeries.createPriceLine({
-        price: vwapAtrData.suggestedStopLoss.short,
         color: 'rgba(34, 197, 94, 0.6)',
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: true,
-        title: '변동폭(ATR)↑',
+        title: '롱(ATR)↓',
         axisLabelColor: 'rgba(34, 197, 94, 0.9)',
         axisLabelTextColor: '#000',
         lineVisible: false,
       });
-      createLimitedPriceLine(vwapAtrData.suggestedStopLoss.short, 'rgba(34, 197, 94, 0.6)', 1, 2);
+      createLimitedPriceLine(vwapAtrData.suggestedStopLoss.long, 'rgba(34, 197, 94, 0.6)', 1, 2);
+
+      // 상단 (현재가 + 2*ATR) = 숏 진입 유리 구간 (빨간색)
+      candlestickSeries.createPriceLine({
+        price: vwapAtrData.suggestedStopLoss.short,
+        color: 'rgba(239, 68, 68, 0.6)',
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: '숏(ATR)↑',
+        axisLabelColor: 'rgba(239, 68, 68, 0.9)',
+        axisLabelTextColor: '#000',
+        lineVisible: false,
+      });
+      createLimitedPriceLine(vwapAtrData.suggestedStopLoss.short, 'rgba(239, 68, 68, 0.6)', 1, 2);
     }
 
     // 오더블록 표시 (현재가 근처 최대 3개만)
