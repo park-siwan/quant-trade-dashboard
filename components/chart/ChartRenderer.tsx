@@ -507,12 +507,12 @@ export default function ChartRenderer({
       // 상단 (VAH) - 빨간색 (숏)
       const vahLine = candlestickSeries.createPriceLine({
         price: volumeProfile.vah,
-        color: 'rgba(248, 113, 113, 0.7)',
+        color: 'rgba(239, 68, 68, 0.7)',
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: showVolumeProfile,
         title: 'VAH',
-        axisLabelColor: 'rgba(248, 113, 113, 0.9)',
+        axisLabelColor: 'rgba(239, 68, 68, 0.9)',
         axisLabelTextColor: '#000',
         lineVisible: false,
       });
@@ -1132,7 +1132,7 @@ export default function ChartRenderer({
       REAL_BULL: { label: '↑매수세', color: 'rgba(163, 230, 53, 0.9)', position: 'below' },
       SHORT_TRAP: { label: '⚠숏탈출', color: 'rgba(163, 230, 53, 0.9)', position: 'above' },
       PUMP_DUMP: { label: '⚠고점', color: 'rgba(251, 146, 60, 0.9)', position: 'above' },
-      MORE_DROP: { label: '↓매도세', color: 'rgba(248, 113, 113, 0.9)', position: 'above' },
+      MORE_DROP: { label: '↓매도세', color: 'rgba(239, 68, 68, 0.9)', position: 'above' },
       LONG_ENTRY: { label: '★롱타점', color: 'rgba(34, 211, 238, 0.9)', position: 'below' },
     };
 
@@ -1320,7 +1320,7 @@ export default function ChartRenderer({
         // VAH 라인
         const vahY = candlestickSeriesRef.current!.priceToCoordinate(volumeProfile.vah);
         if (vahY !== null) {
-          lines.push({ y: vahY, startX, label: 'VAH', color: 'rgba(248, 113, 113, 0.7)' });
+          lines.push({ y: vahY, startX, label: 'VAH', color: 'rgba(239, 68, 68, 0.7)' });
         }
 
         // VAL 라인
