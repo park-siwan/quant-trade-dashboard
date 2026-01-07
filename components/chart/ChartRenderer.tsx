@@ -185,7 +185,6 @@ export default function ChartRenderer({
   const chartRef = useRef<IChartApi | null>(null);
   const measureLineRef = useRef<ISeriesApi<'Line'> | null>(null);
   const volumeProfileLinesRef = useRef<IPriceLine[]>([]); // Volume Profile 라인 ref (Y축 라벨용)
-  const limitedLinesRef = useRef<ISeriesApi<'Line'>[]>([]); // 제한된 가로선 시리즈 ref
 
   // Volume Profile 표시 토글 (useEffect보다 먼저 선언해야 함)
   const [showVolumeProfile, setShowVolumeProfile] = useState(true);
@@ -487,51 +486,7 @@ export default function ChartRenderer({
     //   addCvdOiMarkers(candlestickSeries, marketSignals);
     // }
 
-    // 가로선 범위 계산: 마지막 캔들 오른쪽에서 시작 → Y축까지
-    const lastCandleTime = data[data.length - 1]?.time as number;
-    const candleInterval = data.length > 1 ? (data[data.length - 1]?.time as number) - (data[data.length - 2]?.time as number) : 300;
-    // 마지막 캔들 바로 오른쪽에서 시작
-    const lineStartTime = (lastCandleTime + candleInterval * 0.5) as typeof data[0]['time'];
-    // 오른쪽 끝을 충분히 미래로 연장 (Y축까지)
-    const lineEndTime = (lastCandleTime + candleInterval * 100) as typeof data[0]['time'];
-
-    // 제한된 가로선 시리즈 초기화
-    limitedLinesRef.current = [];
-
-    // 가로선을 LineSeries로 그리는 헬퍼 함수 (Volume Profile용)
-    const createLimitedPriceLine = (
-      price: number,
-      color: string,
-      lineWidth: 1 | 2 | 3 | 4,
-      lineStyle: 0 | 1 | 2 | 3 | 4,
-      visible: boolean = true,
-      isVolumeProfile: boolean = false, // Volume Profile 라인인지 여부
-    ) => {
-      if (!visible || !lineStartTime || !lineEndTime) return null;
-      const series = chart.addSeries(
-        LineSeries,
-        {
-          color,
-          lineWidth,
-          lineStyle,
-          lastValueVisible: false,
-          priceLineVisible: false,
-          crosshairMarkerVisible: false,
-        },
-        0,
-      );
-      series.setData([
-        { time: lineStartTime, value: price },
-        { time: lineEndTime, value: price },
-      ]);
-      // Volume Profile 라인은 ref에 저장하여 토글 가능하게
-      if (isVolumeProfile) {
-        limitedLinesRef.current.push(series);
-      }
-      return series;
-    };
-
-    // Volume Profile 라인 (목표가, 상단저항, 하단지지) - ref에 저장하여 토글 가능하게
+    // Volume Profile 라인 (목표가, 상단저항, 하단지지) - Y축 라벨만, 가로선은 DOM으로 렌더링
     volumeProfileLinesRef.current = []; // 초기화
     if (volumeProfile) {
       // 목표가 (POC) - 가장 많이 거래된 가격
@@ -547,7 +502,7 @@ export default function ChartRenderer({
         lineVisible: false,
       });
       volumeProfileLinesRef.current.push(pocLine);
-      createLimitedPriceLine(volumeProfile.poc, 'rgba(250, 204, 21, 0.9)', 2, 0, showVolumeProfile, true);
+      // 가로선은 DOM으로 렌더링 (createLimitedPriceLine 제거)
 
       // 상단 (VAH) - 빨간색 (숏)
       const vahLine = candlestickSeries.createPriceLine({
@@ -562,7 +517,6 @@ export default function ChartRenderer({
         lineVisible: false,
       });
       volumeProfileLinesRef.current.push(vahLine);
-      createLimitedPriceLine(volumeProfile.vah, 'rgba(248, 113, 113, 0.7)', 1, 2, showVolumeProfile, true);
 
       // 하단 (VAL) - 초록색 (롱)
       const valLine = candlestickSeries.createPriceLine({
@@ -577,10 +531,9 @@ export default function ChartRenderer({
         lineVisible: false,
       });
       volumeProfileLinesRef.current.push(valLine);
-      createLimitedPriceLine(volumeProfile.val, 'rgba(34, 197, 94, 0.7)', 1, 2, showVolumeProfile, true);
     }
 
-    // VWAP 라인 표시 (기관 트레이딩 기준선)
+    // VWAP 라인 표시 (기관 트레이딩 기준선) - Y축 라벨만, 가로선은 DOM으로 렌더링
     if (vwapAtrData && vwapAtrData.currentVwap > 0) {
       candlestickSeries.createPriceLine({
         price: vwapAtrData.currentVwap,
@@ -593,10 +546,10 @@ export default function ChartRenderer({
         axisLabelTextColor: '#fff',
         lineVisible: false,
       });
-      createLimitedPriceLine(vwapAtrData.currentVwap, 'rgba(168, 85, 247, 0.9)', 2, 0);
+      // 가로선은 DOM으로 렌더링 (priceLines state)
     }
 
-    // ATR 기반 변동폭 라인 표시
+    // ATR 기반 변동폭 라인 표시 - Y축 라벨만, 가로선은 DOM으로 렌더링
     if (vwapAtrData?.suggestedStopLoss) {
       // 하단 (현재가 - 2*ATR) = 롱 진입 유리 구간 (초록색)
       candlestickSeries.createPriceLine({
@@ -610,7 +563,7 @@ export default function ChartRenderer({
         axisLabelTextColor: '#000',
         lineVisible: false,
       });
-      createLimitedPriceLine(vwapAtrData.suggestedStopLoss.long, 'rgba(34, 197, 94, 0.6)', 1, 2);
+      // 가로선은 DOM으로 렌더링 (priceLines state)
 
       // 상단 (현재가 + 2*ATR) = 숏 진입 유리 구간 (빨간색)
       candlestickSeries.createPriceLine({
@@ -624,10 +577,10 @@ export default function ChartRenderer({
         axisLabelTextColor: '#000',
         lineVisible: false,
       });
-      createLimitedPriceLine(vwapAtrData.suggestedStopLoss.short, 'rgba(239, 68, 68, 0.6)', 1, 2);
+      // 가로선은 DOM으로 렌더링 (priceLines state)
     }
 
-    // 오더블록 표시 (현재가 근처 최대 3개만)
+    // 오더블록 표시 (현재가 근처 최대 3개만) - Y축 라벨만, 가로선은 DOM으로 렌더링
     if (orderBlockData?.activeBlocks && orderBlockData.activeBlocks.length > 0) {
       const currentPrice = data[data.length - 1]?.close || 0;
 
@@ -650,7 +603,7 @@ export default function ChartRenderer({
           axisLabelTextColor: '#000',
           lineVisible: false,
         });
-        createLimitedPriceLine(midPrice, color, 2, 1);
+        // 가로선은 DOM으로 렌더링 (priceLines state)
       });
 
       console.log(`✅ ${orderBlockData.activeBlocks.length}개의 오더블록 표시됨`);
@@ -997,19 +950,12 @@ export default function ChartRenderer({
     orderBlockData?.activeBlocks?.length, // 오더블록 변경 시 재렌더링
   ]);
 
-  // Volume Profile 라인 토글 (차트 재생성 없이 라인만 숨김/표시)
+  // Volume Profile 라인 토글 (차트 재생성 없이 Y축 라벨만 숨김/표시)
   useEffect(() => {
-    // Y축 라벨만 토글 (전체 가로선은 항상 숨김)
     volumeProfileLinesRef.current.forEach((line) => {
       line.applyOptions({
-        lineVisible: false, // 전체 가로선은 항상 숨김
+        lineVisible: false, // 전체 가로선은 항상 숨김 (DOM으로 렌더링)
         axisLabelVisible: showVolumeProfile,
-      });
-    });
-    // 제한된 가로선 시리즈 토글
-    limitedLinesRef.current.forEach((series) => {
-      series.applyOptions({
-        visible: showVolumeProfile,
       });
     });
   }, [showVolumeProfile]);
@@ -1051,6 +997,14 @@ export default function ChartRenderer({
     price: number;
     size: number;
     type: 'bid' | 'ask';
+  }>>([]);
+
+  // 가로선 좌표 상태 (DOM 렌더링용)
+  const [priceLines, setPriceLines] = useState<Array<{
+    y: number;
+    startX: number;
+    label: string;
+    color: string;
   }>>([]);
 
   // 측정 박스를 위한 상태 (화면 좌표)
@@ -1333,6 +1287,86 @@ export default function ChartRenderer({
 
     return () => clearTimeout(timeoutId);
   }, [scaleUpdateTrigger, orderBookData]);
+
+  // 가로선 좌표 계산 (scaleUpdateTrigger 변경 시 실시간 업데이트)
+  useEffect(() => {
+    if (!chartRef.current || !candlestickSeriesRef.current || data.length === 0) {
+      setPriceLines([]);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      if (!chartRef.current || !candlestickSeriesRef.current) return;
+
+      const lines: Array<{ y: number; startX: number; label: string; color: string }> = [];
+
+      // 마지막 캔들의 X 좌표 (가로선 시작점)
+      const lastCandle = data[data.length - 1];
+      const lastX = chartRef.current!.timeScale().timeToCoordinate(lastCandle.time);
+      if (lastX === null) return;
+
+      const startX = lastX + 10; // 마지막 캔들 오른쪽
+
+      // POC 라인
+      if (volumeProfile && showVolumeProfile) {
+        const pocY = candlestickSeriesRef.current!.priceToCoordinate(volumeProfile.poc);
+        if (pocY !== null) {
+          lines.push({ y: pocY, startX, label: 'POC', color: 'rgba(250, 204, 21, 0.9)' });
+        }
+
+        // VAH 라인
+        const vahY = candlestickSeriesRef.current!.priceToCoordinate(volumeProfile.vah);
+        if (vahY !== null) {
+          lines.push({ y: vahY, startX, label: 'VAH', color: 'rgba(248, 113, 113, 0.7)' });
+        }
+
+        // VAL 라인
+        const valY = candlestickSeriesRef.current!.priceToCoordinate(volumeProfile.val);
+        if (valY !== null) {
+          lines.push({ y: valY, startX, label: 'VAL', color: 'rgba(34, 197, 94, 0.7)' });
+        }
+      }
+
+      // VWAP 라인
+      if (vwapAtrData && vwapAtrData.currentVwap > 0) {
+        const vwapY = candlestickSeriesRef.current!.priceToCoordinate(vwapAtrData.currentVwap);
+        if (vwapY !== null) {
+          lines.push({ y: vwapY, startX, label: 'VWAP', color: 'rgba(168, 85, 247, 0.9)' });
+        }
+      }
+
+      // ATR 라인
+      if (vwapAtrData?.suggestedStopLoss) {
+        const atrLongY = candlestickSeriesRef.current!.priceToCoordinate(vwapAtrData.suggestedStopLoss.long);
+        if (atrLongY !== null) {
+          lines.push({ y: atrLongY, startX, label: '롱ATR', color: 'rgba(34, 197, 94, 0.6)' });
+        }
+
+        const atrShortY = candlestickSeriesRef.current!.priceToCoordinate(vwapAtrData.suggestedStopLoss.short);
+        if (atrShortY !== null) {
+          lines.push({ y: atrShortY, startX, label: '숏ATR', color: 'rgba(239, 68, 68, 0.6)' });
+        }
+      }
+
+      // 오더블록 라인
+      if (orderBlockData?.activeBlocks && orderBlockData.activeBlocks.length > 0) {
+        const currentPrice = data[data.length - 1]?.close || 0;
+        orderBlockData.activeBlocks.forEach((block) => {
+          const midPrice = (block.high + block.low) / 2;
+          const isSupport = midPrice < currentPrice;
+          const color = isSupport ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)';
+          const y = candlestickSeriesRef.current!.priceToCoordinate(midPrice);
+          if (y !== null) {
+            lines.push({ y, startX, label: isSupport ? 'OB지지' : 'OB저항', color });
+          }
+        });
+      }
+
+      setPriceLines(lines);
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [scaleUpdateTrigger, volumeProfile, vwapAtrData, showVolumeProfile, data, orderBlockData]);
 
   return (
     <div className='w-full'>
@@ -1852,25 +1886,42 @@ export default function ChartRenderer({
           );
         })}
 
+        {/* 가로선 DOM (실시간 업데이트) */}
+        {priceLines.map((line, index) => (
+          <div
+            key={`price-line-${index}`}
+            style={{
+              position: 'absolute',
+              left: `${line.startX}px`,
+              top: `${line.y}px`,
+              right: '80px', // Y축 라벨 영역까지
+              height: '1px',
+              backgroundColor: line.color,
+              pointerEvents: 'none',
+              zIndex: 15,
+            }}
+          />
+        ))}
+
         {/* 오더북 DOM 스타일 (최신 캔들 우측, 세로 스택) - 임시 비활성화 */}
         {false && orderBookData && chartRef.current && candlestickSeriesRef.current && data.length > 0 && (() => {
           // 최신 캔들의 X 좌표 구하기
           const latestCandle = data[data.length - 1];
-          const latestX = chartRef.current!.timeScale().timeToCoordinate(latestCandle.time);
+          const latestX = chartRef.current!.timeScale().timeToCoordinate(latestCandle.time) as number | null;
           if (latestX === null) return null;
 
           // 현재가 Y 좌표 (기준점)
           const currentPrice = latestCandle.close;
-          const midY = candlestickSeriesRef.current!.priceToCoordinate(currentPrice);
+          const midY = candlestickSeriesRef.current!.priceToCoordinate(currentPrice) as number | null;
           if (midY === null) return null;
 
-          const barStartX = latestX + 12;
+          const barStartX = (latestX as number) + 12;
           const maxBarWidth = 70;
           const barHeight = 10; // 각 바 높이
           const barGap = 1; // 바 간격
 
-          const asks = orderBookData.asks.slice(0, 8);
-          const bids = orderBookData.bids.slice(0, 8);
+          const asks = orderBookData!.asks.slice(0, 8);
+          const bids = orderBookData!.bids.slice(0, 8);
 
           const allSizes = [...asks.map(a => a.size), ...bids.map(b => b.size)];
           const maxSize = Math.max(...allSizes);
@@ -1881,7 +1932,7 @@ export default function ChartRenderer({
               style={{
                 position: 'absolute',
                 left: `${barStartX}px`,
-                top: `${midY - (asks.length * (barHeight + barGap))}px`,
+                top: `${(midY as number) - (asks.length * (barHeight + barGap))}px`,
                 pointerEvents: 'none',
                 zIndex: 25,
               }}
