@@ -331,8 +331,8 @@ export default function ChartRenderer({
     const candlestickSeries = chart.addSeries(
       CandlestickSeries,
       {
-        upColor: `rgba(163, 230, 53, ${CANDLE_OPACITY})`, // 연두색 캔들 (lime-400)
-        downColor: `rgba(251, 146, 60, ${CANDLE_OPACITY})`, // 주황색 캔들 (orange-400)
+        upColor: `rgba(163, 230, 53, ${CANDLE_OPACITY})`, // 연두색 캔들 (lime-400) - 기본값
+        downColor: `rgba(251, 146, 60, ${CANDLE_OPACITY})`, // 주황색 캔들 (orange-400) - 기본값
         borderUpColor: `rgba(163, 230, 53, ${CANDLE_OPACITY})`, // 연두색 테두리
         borderDownColor: `rgba(251, 146, 60, ${CANDLE_OPACITY})`, // 주황색 테두리
         wickUpColor: `rgba(163, 230, 53, ${CANDLE_OPACITY})`, // 연두색 꼬리
@@ -341,7 +341,29 @@ export default function ChartRenderer({
       0,
     );
 
-    candlestickSeries.setData(data);
+    // 최근 60개 캔들은 투명도 없이, 나머지는 CANDLE_OPACITY로 표시
+    const recentThreshold = data.length - 60;
+    const RECENT_OPACITY = 1.0; // 최근 캔들 투명도 (완전 불투명)
+    const candleDataWithColors = data.map((candle, index) => {
+      const isRecent = index >= recentThreshold;
+      const opacity = isRecent ? RECENT_OPACITY : CANDLE_OPACITY;
+      const isUp = candle.close >= candle.open;
+
+      return {
+        ...candle,
+        color: isUp
+          ? `rgba(163, 230, 53, ${opacity})`
+          : `rgba(251, 146, 60, ${opacity})`,
+        borderColor: isUp
+          ? `rgba(163, 230, 53, ${opacity})`
+          : `rgba(251, 146, 60, ${opacity})`,
+        wickColor: isUp
+          ? `rgba(163, 230, 53, ${opacity})`
+          : `rgba(251, 146, 60, ${opacity})`,
+      };
+    });
+
+    candlestickSeries.setData(candleDataWithColors);
     candlestickSeriesRef.current = candlestickSeries;
 
     // 초기 가격 정보 설정 (최신 캔들)
@@ -950,6 +972,7 @@ export default function ChartRenderer({
     strength: 'strong' | 'medium' | 'weak';
     isOverheated?: boolean; // CHoCH 과열 여부
     rsiAtBreak?: number;
+    breakIndex?: number; // 투명도 조절용 인덱스
   }>>([]);
 
   // 오더북 깊이 시각화를 위한 상태
@@ -1146,6 +1169,7 @@ export default function ChartRenderer({
         strength: 'strong' | 'medium' | 'weak';
         isOverheated?: boolean;
         rsiAtBreak?: number;
+        breakIndex?: number;
       }> = [];
 
       // 최근 20개 구조 돌파 표시 (BOS + CHoCH)
@@ -1172,6 +1196,7 @@ export default function ChartRenderer({
           strength: breakEvent.strength,
           isOverheated: breakEvent.isOverheated,
           rsiAtBreak: breakEvent.rsiAtBreak,
+          breakIndex: breakEvent.breakIndex,
         });
       });
 
