@@ -531,10 +531,6 @@ export default function ChartRenderer({
     // Volume Profile 라인 (목표가, 상단저항, 하단지지) - ref에 저장하여 토글 가능하게
     volumeProfileLinesRef.current = []; // 초기화
     if (volumeProfile) {
-      const currentPrice = data[data.length - 1]?.close || 0;
-      const isAboveVAH = currentPrice > volumeProfile.vah; // VAH 위 → 과매수, 숏 유리
-      const isBelowVAL = currentPrice < volumeProfile.val; // VAL 아래 → 과매도, 롱 유리
-
       // 목표가 (POC) - 가장 많이 거래된 가격
       const pocLine = candlestickSeries.createPriceLine({
         price: volumeProfile.poc,
@@ -542,51 +538,43 @@ export default function ChartRenderer({
         lineWidth: 2,
         lineStyle: 0,
         axisLabelVisible: showVolumeProfile,
-        title: '목표(POC)',
+        title: 'POC',
         axisLabelColor: 'rgba(250, 204, 21, 1)',
         axisLabelTextColor: '#000',
-        lineVisible: false, // 전체 가로선 숨김
+        lineVisible: false,
       });
       volumeProfileLinesRef.current.push(pocLine);
       createLimitedPriceLine(volumeProfile.poc, 'rgba(250, 204, 21, 0.9)', 2, 0, showVolumeProfile, true);
 
-      // 상단 (VAH) - 현재가 위치에 따라 색상/라벨 변경 (평균 회귀 관점)
-      // VAH 위에 있으면 → 과매수 → 조정 기대 → 숏 유리
-      const vahColor = isAboveVAH ? 'rgba(248, 113, 113, 0.7)' : 'rgba(248, 113, 113, 0.7)';
-      const vahLabel = isAboveVAH ? '숏(과매수)' : '숏(VAH)';
-      const vahLabelColor = 'rgba(248, 113, 113, 0.9)';
+      // 상단 (VAH) - 빨간색 (숏)
       const vahLine = candlestickSeries.createPriceLine({
         price: volumeProfile.vah,
-        color: vahColor,
+        color: 'rgba(248, 113, 113, 0.7)',
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: showVolumeProfile,
-        title: vahLabel,
-        axisLabelColor: vahLabelColor,
+        title: 'VAH',
+        axisLabelColor: 'rgba(248, 113, 113, 0.9)',
         axisLabelTextColor: '#000',
         lineVisible: false,
       });
       volumeProfileLinesRef.current.push(vahLine);
-      createLimitedPriceLine(volumeProfile.vah, vahColor, 1, 2, showVolumeProfile, true);
+      createLimitedPriceLine(volumeProfile.vah, 'rgba(248, 113, 113, 0.7)', 1, 2, showVolumeProfile, true);
 
-      // 하단 (VAL) - 현재가 위치에 따라 색상/라벨 변경 (평균 회귀 관점)
-      // VAL 아래에 있으면 → 과매도 → 반등 기대 → 롱 유리
-      const valColor = isBelowVAL ? 'rgba(34, 197, 94, 0.7)' : 'rgba(34, 197, 94, 0.7)';
-      const valLabel = isBelowVAL ? '롱(과매도)' : '롱(VAL)';
-      const valLabelColor = 'rgba(34, 197, 94, 0.9)';
+      // 하단 (VAL) - 초록색 (롱)
       const valLine = candlestickSeries.createPriceLine({
         price: volumeProfile.val,
-        color: valColor,
+        color: 'rgba(34, 197, 94, 0.7)',
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: showVolumeProfile,
-        title: valLabel,
-        axisLabelColor: valLabelColor,
+        title: 'VAL',
+        axisLabelColor: 'rgba(34, 197, 94, 0.9)',
         axisLabelTextColor: '#000',
         lineVisible: false,
       });
       volumeProfileLinesRef.current.push(valLine);
-      createLimitedPriceLine(volumeProfile.val, valColor, 1, 2, showVolumeProfile, true);
+      createLimitedPriceLine(volumeProfile.val, 'rgba(34, 197, 94, 0.7)', 1, 2, showVolumeProfile, true);
     }
 
     // VWAP 라인 표시 (기관 트레이딩 기준선)
