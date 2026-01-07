@@ -184,7 +184,8 @@ export default function ChartRenderer({
   } | null>(null); // 논리적 스크롤 범위 저장 (바 인덱스 기반)
   const chartRef = useRef<IChartApi | null>(null);
   const measureLineRef = useRef<ISeriesApi<'Line'> | null>(null);
-  const volumeProfileLinesRef = useRef<IPriceLine[]>([]); // Volume Profile 라인 ref
+  const volumeProfileLinesRef = useRef<IPriceLine[]>([]); // Volume Profile 라인 ref (Y축 라벨용)
+  const limitedLinesRef = useRef<ISeriesApi<'Line'>[]>([]); // 제한된 가로선 시리즈 ref
 
   // Volume Profile 표시 토글 (useEffect보다 먼저 선언해야 함)
   const [showVolumeProfile, setShowVolumeProfile] = useState(true);
@@ -209,12 +210,18 @@ export default function ChartRenderer({
       return;
     }
 
+    const isUp = realtimeCandle.close >= realtimeCandle.open;
+    const candleColor = isUp ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'; // 최신 캔들은 투명도 100%
+
     const candleUpdate: CandlestickData = {
       time: (realtimeCandle.timestamp / 1000) as CandlestickData['time'],
       open: realtimeCandle.open,
       high: realtimeCandle.high,
       low: realtimeCandle.low,
       close: realtimeCandle.close,
+      color: candleColor,
+      borderColor: candleColor,
+      wickColor: candleColor,
     };
 
     try {
@@ -485,13 +492,17 @@ export default function ChartRenderer({
     const lineStartTime = data[lineStartIndex]?.time;
     const lineEndTime = data[data.length - 1]?.time;
 
-    // 가로선을 LineSeries로 그리는 헬퍼 함수
+    // 제한된 가로선 시리즈 초기화
+    limitedLinesRef.current = [];
+
+    // 가로선을 LineSeries로 그리는 헬퍼 함수 (Volume Profile용)
     const createLimitedPriceLine = (
       price: number,
       color: string,
       lineWidth: 1 | 2 | 3 | 4,
       lineStyle: 0 | 1 | 2 | 3 | 4,
       visible: boolean = true,
+      isVolumeProfile: boolean = false, // Volume Profile 라인인지 여부
     ) => {
       if (!visible || !lineStartTime || !lineEndTime) return null;
       const series = chart.addSeries(
@@ -510,6 +521,10 @@ export default function ChartRenderer({
         { time: lineStartTime, value: price },
         { time: lineEndTime, value: price },
       ]);
+      // Volume Profile 라인은 ref에 저장하여 토글 가능하게
+      if (isVolumeProfile) {
+        limitedLinesRef.current.push(series);
+      }
       return series;
     };
 
@@ -529,7 +544,7 @@ export default function ChartRenderer({
         lineVisible: false, // 전체 가로선 숨김
       });
       volumeProfileLinesRef.current.push(pocLine);
-      createLimitedPriceLine(volumeProfile.poc, 'rgba(250, 204, 21, 0.9)', 2, 0, showVolumeProfile);
+      createLimitedPriceLine(volumeProfile.poc, 'rgba(250, 204, 21, 0.9)', 2, 0, showVolumeProfile, true);
 
       // 상단저항 (VAH)
       const vahLine = candlestickSeries.createPriceLine({
@@ -544,7 +559,7 @@ export default function ChartRenderer({
         lineVisible: false,
       });
       volumeProfileLinesRef.current.push(vahLine);
-      createLimitedPriceLine(volumeProfile.vah, 'rgba(248, 113, 113, 0.7)', 1, 2, showVolumeProfile);
+      createLimitedPriceLine(volumeProfile.vah, 'rgba(248, 113, 113, 0.7)', 1, 2, showVolumeProfile, true);
 
       // 하단지지 (VAL)
       const valLine = candlestickSeries.createPriceLine({
@@ -559,7 +574,7 @@ export default function ChartRenderer({
         lineVisible: false,
       });
       volumeProfileLinesRef.current.push(valLine);
-      createLimitedPriceLine(volumeProfile.val, 'rgba(163, 230, 53, 0.7)', 1, 2, showVolumeProfile);
+      createLimitedPriceLine(volumeProfile.val, 'rgba(163, 230, 53, 0.7)', 1, 2, showVolumeProfile, true);
     }
 
     // VWAP 라인 표시 (기관 트레이딩 기준선)
@@ -981,10 +996,17 @@ export default function ChartRenderer({
 
   // Volume Profile 라인 토글 (차트 재생성 없이 라인만 숨김/표시)
   useEffect(() => {
+    // Y축 라벨만 토글 (전체 가로선은 항상 숨김)
     volumeProfileLinesRef.current.forEach((line) => {
       line.applyOptions({
-        lineVisible: showVolumeProfile,
+        lineVisible: false, // 전체 가로선은 항상 숨김
         axisLabelVisible: showVolumeProfile,
+      });
+    });
+    // 제한된 가로선 시리즈 토글
+    limitedLinesRef.current.forEach((series) => {
+      series.applyOptions({
+        visible: showVolumeProfile,
       });
     });
   }, [showVolumeProfile]);
