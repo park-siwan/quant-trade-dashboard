@@ -37,6 +37,7 @@ import {
   LiquidationSummary,
   WhaleSummary,
   MarketStructureData,
+  AdxData,
 } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
 import { LongShortRatio } from '@/hooks/useLongShortRatio';
@@ -123,6 +124,7 @@ interface ChartRendererProps {
   liquidationData?: LiquidationSummary | null; // 청산 데이터
   whaleData?: WhaleSummary | null; // 고래 거래 데이터
   marketStructureData?: MarketStructureData | null; // 시장 구조 (BOS/CHoCH)
+  adxData?: AdxData | null; // ADX 추세 강도 데이터
 }
 
 export default function ChartRenderer({
@@ -147,6 +149,7 @@ export default function ChartRenderer({
   liquidationData,
   whaleData,
   marketStructureData,
+  adxData,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -1308,6 +1311,60 @@ export default function ChartRenderer({
               </div>
             );
           })()}
+
+          <span className='text-gray-600'>|</span>
+
+          {/* ADX 추세 강도 */}
+          {adxData ? (() => {
+            const { currentAdx, trendStrength, trendDirection, recommendation } = adxData;
+
+            // 추세 강도별 색상
+            const strengthColor = {
+              none: 'text-gray-400',
+              forming: 'text-yellow-400',
+              strong: 'text-cyan-400',
+              very_strong: 'text-blue-400',
+              extreme: 'text-purple-400',
+            }[trendStrength];
+
+            // 추세 강도별 텍스트
+            const strengthText = {
+              none: '횡보',
+              forming: '형성중',
+              strong: '강함',
+              very_strong: '매우강함',
+              extreme: '극단',
+            }[trendStrength];
+
+            // 매매 추천별 배지 색상
+            const recBadge = {
+              trend_follow: { text: '추세추종', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50' },
+              counter_trend: { text: '역추세', color: 'bg-amber-500/20 text-amber-400 border-amber-500/50' },
+              wait: { text: '관망', color: 'bg-gray-500/20 text-gray-400 border-gray-500/50' },
+            }[recommendation];
+
+            // 방향 아이콘
+            const dirIcon = trendDirection === 'bullish' ? '↑' : trendDirection === 'bearish' ? '↓' : '→';
+            const dirColor = trendDirection === 'bullish' ? 'text-lime-400' : trendDirection === 'bearish' ? 'text-red-400' : 'text-gray-400';
+
+            return (
+              <div className='flex items-center gap-2'>
+                <span className='text-gray-500 text-sm'>ADX</span>
+                <span className={`font-mono font-bold text-sm ${strengthColor}`}>
+                  {currentAdx?.toFixed(0) ?? '-'}
+                </span>
+                <span className={`text-xs font-medium ${strengthColor}`}>
+                  {strengthText}
+                </span>
+                <span className={`text-sm font-bold ${dirColor}`}>{dirIcon}</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded border ${recBadge.color}`}>
+                  {recBadge.text}
+                </span>
+              </div>
+            );
+          })() : (
+            <span className='text-gray-600 text-sm'>ADX -</span>
+          )}
         </div>
       </div>
 

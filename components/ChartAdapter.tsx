@@ -22,6 +22,7 @@ import {
   LiquidationSummary,
   WhaleSummary,
   MarketStructureData,
+  AdxData,
 } from '@/lib/types/index';
 import { Bitcoin } from 'lucide-react';
 
@@ -296,6 +297,9 @@ export default function ChartAdapter({
 
   // 시장 구조 (BOS/CHoCH)
   const marketStructureData: MarketStructureData | null = data?.data?.marketStructure || null;
+
+  // ADX (추세 강도)
+  const adxData: AdxData | null = data?.data?.adx || null;
 
   // 다이버전스 방향별 개수 계산 (start 신호만 카운트)
   const bullishCount = divergenceSignals.filter(
@@ -573,6 +577,7 @@ export default function ChartAdapter({
         liquidationData={liquidationData}
         whaleData={whaleData}
         marketStructureData={marketStructureData}
+        adxData={adxData}
       />
     </div>
   );

@@ -258,6 +258,8 @@ export interface StructureBreak {
   description: string;
   rsiAtBreak?: number; // CHoCH 발생 시점 RSI
   isOverheated?: boolean; // RSI 과열 여부 (CHoCH 유효성)
+  adxFiltered?: boolean; // ADX 필터링 여부 (추세장에서 역추세 신호 필터링)
+  adxValue?: number; // ADX 값
 }
 
 export interface MarketStructureData {
@@ -267,6 +269,25 @@ export interface MarketStructureData {
   structureBreaks: StructureBreak[];
   lastBOS: StructureBreak | null;
   lastCHoCH: StructureBreak | null;
+}
+
+// ADX (추세 강도) 타입
+export type TrendStrength = 'none' | 'forming' | 'strong' | 'very_strong' | 'extreme';
+export type AdxTrendDirection = 'bullish' | 'bearish' | 'neutral';
+export type AdxRecommendation = 'trend_follow' | 'counter_trend' | 'wait';
+
+export interface AdxData {
+  adx: (number | null)[];
+  plusDi: (number | null)[];
+  minusDi: (number | null)[];
+  currentAdx: number | null;
+  currentPlusDi: number | null;
+  currentMinusDi: number | null;
+  trendStrength: TrendStrength;
+  trendDirection: AdxTrendDirection;
+  isTrending: boolean; // ADX >= 25
+  recommendation: AdxRecommendation;
+  description: string;
 }
 
 export interface ApiResponse {
@@ -310,5 +331,6 @@ export interface ApiResponse {
     orderBlocks?: OrderBlockData; // 오더블록 데이터
     orderBook?: OrderBookData; // 오더북 매수/매도벽 데이터
     marketStructure?: MarketStructureData; // 시장 구조 (BOS/CHoCH)
+    adx?: AdxData; // ADX 추세 강도 데이터
   };
 }
