@@ -23,8 +23,8 @@ export default function Home() {
             <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs mt-2'>
               <div><span className='text-lime-400 font-semibold'>↑상승</span><span className='text-gray-400'> - 가격이 EMA 200 위. 롱 우세</span></div>
               <div><span className='text-red-400 font-semibold'>↓하락</span><span className='text-gray-400'> - 가격이 EMA 200 아래. 숏 우세</span></div>
-              <div><span className='text-lime-400 font-semibold'>✕골든</span><span className='text-gray-400'> - EMA 20이 50 상향돌파. 롱 신호</span></div>
-              <div><span className='text-red-400 font-semibold'>✕데드</span><span className='text-gray-400'> - EMA 20이 50 하향돌파. 숏 신호</span></div>
+              <div><span className='text-lime-400 font-semibold'>✕골든</span><span className='text-gray-400'> - EMA 50이 200 상향돌파. 롱 신호</span></div>
+              <div><span className='text-red-400 font-semibold'>✕데드</span><span className='text-gray-400'> - EMA 50이 200 하향돌파. 숏 신호</span></div>
               <div><span className='text-gray-300 font-semibold'>펀비</span><span className='text-gray-400'> - 롱:숏 비율. 반대매매 참고</span></div>
               <div><span className='text-yellow-400 font-semibold'>목표(POC)</span><span className='text-gray-400'> - 가격이 돌아오는 지점</span></div>
             </div>

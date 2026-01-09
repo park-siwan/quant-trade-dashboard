@@ -749,12 +749,12 @@ export default function ChartRenderer({
             if (nearbyEvent.type === 'golden_cross') {
               crossoverInfo = {
                 type: 'golden_cross',
-                analysis: `단기 이동평균선(EMA 20)이 장기 이동평균선(EMA 50)을 상향 돌파했습니다. 이는 강력한 상승 신호로 해석되며, 매수 기회로 볼 수 있습니다. 거래량과 함께 확인하면 신뢰도가 높아집니다.`,
+                analysis: `EMA 50이 EMA 200을 상향 돌파했습니다 (골든크로스). 중장기 상승 추세 전환 신호로, 강력한 매수 기회입니다. 거래량과 함께 확인하면 신뢰도가 높아집니다.`,
               };
             } else {
               crossoverInfo = {
                 type: 'dead_cross',
-                analysis: `단기 이동평균선(EMA 20)이 장기 이동평균선(EMA 50)을 하향 돌파했습니다. 이는 하락 추세 전환 신호로, 매도 또는 관망이 권장됩니다. 추가 하락 가능성을 염두에 두세요.`,
+                analysis: `EMA 50이 EMA 200을 하향 돌파했습니다 (데드크로스). 중장기 하락 추세 전환 신호로, 매도 또는 관망이 권장됩니다. 추가 하락 가능성을 염두에 두세요.`,
               };
             }
           }

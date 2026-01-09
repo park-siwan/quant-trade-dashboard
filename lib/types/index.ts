@@ -59,13 +59,13 @@ export interface SignalClassification {
   leverageRecommendation: '5x' | '3x' | 'skip';
 }
 
-// 크로스오버 이벤트
+// 크로스오버 이벤트 (EMA 50/200 기준 - 전통적 골든/데드크로스)
 export interface CrossoverEvent {
   index: number;
   timestamp: number;
   type: Crossover;
-  ema20: number;
   ema50: number;
+  ema200: number;
   // 볼륨 기반 필터링
   isFiltered?: boolean; // 볼륨이 낮으면 true
   volume?: number; // 해당 캔들 볼륨
