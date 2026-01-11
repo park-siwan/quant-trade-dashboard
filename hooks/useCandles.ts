@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchCandles } from '@/lib/api/exchange';
 
 interface UseCandlesParams {
@@ -55,6 +55,8 @@ export function useCandles({
   const wsRef = useRef<WebSocket | null>(null);
   const lastCandleTimeRef = useRef<number>(0);
   const lastUpdateTimeRef = useRef<number>(0); // throttle용
+  const prevCandleCloseRef = useRef<number>(0); // 이전(종료된) 캔들의 close
+  const currentCandleTimeRef = useRef<number>(0); // 현재 캔들 시작 시간
 
   const query = useQuery({
     queryKey: ['candles', symbol, timeframe, limit],
@@ -68,6 +70,17 @@ export function useCandles({
   useEffect(() => {
     refetchRef.current = query.refetch;
   }, [query.refetch]);
+
+  // API 데이터 로드 시 마지막 캔들의 close 저장 (WebSocket 갭 보정용)
+  useEffect(() => {
+    if (query.data?.data?.candles?.length > 0) {
+      const candles = query.data.data.candles;
+      const lastCandle = candles[candles.length - 1];
+      // 마지막 캔들의 close와 시작 시간 저장
+      prevCandleCloseRef.current = lastCandle[4]; // close 값
+      currentCandleTimeRef.current = lastCandle[0]; // timestamp
+    }
+  }, [query.data]);
 
   // WebSocket 연결 (실시간 캔들 업데이트) - Bybit
   useEffect(() => {
@@ -127,15 +140,44 @@ export function useCandles({
                 if (shouldUpdate) {
                   lastUpdateTimeRef.current = now;
 
+                  const rawOpen = parseFloat(kline.open);
+                  const rawHigh = parseFloat(kline.high);
+                  const rawLow = parseFloat(kline.low);
+                  const rawClose = parseFloat(kline.close);
+
+                  // 새 캔들 시작 감지 (캔들 시간이 바뀜)
+                  const isNewCandle = currentCandleTime !== currentCandleTimeRef.current;
+
+                  let adjustedOpen = rawOpen;
+                  let adjustedLow = rawLow;
+                  let adjustedHigh = rawHigh;
+
+                  // 새 캔들이 시작되고, 이전 캔들 close가 있으면 갭 보정
+                  if (isNewCandle && prevCandleCloseRef.current > 0) {
+                    // open을 이전 캔들의 close로 설정 (갭 제거)
+                    adjustedOpen = prevCandleCloseRef.current;
+                    // low/high도 보정된 open 포함하도록 조정
+                    adjustedLow = Math.min(rawLow, adjustedOpen, rawClose);
+                    adjustedHigh = Math.max(rawHigh, adjustedOpen, rawClose);
+                  }
+
+                  // 캔들이 종료되면 close 저장 (다음 캔들 시작 시 사용)
+                  if (kline.confirm) {
+                    prevCandleCloseRef.current = rawClose;
+                  }
+
+                  // 현재 캔들 시간 업데이트
+                  currentCandleTimeRef.current = currentCandleTime;
+
                   // 새로운 캔들 데이터로 업데이트
                   setWsData({
                     timestamp: currentCandleTime,
-                    open: parseFloat(kline.open),
-                    high: parseFloat(kline.high),
-                    low: parseFloat(kline.low),
-                    close: parseFloat(kline.close),
+                    open: adjustedOpen,
+                    high: adjustedHigh,
+                    low: adjustedLow,
+                    close: rawClose,
                     volume: parseFloat(kline.volume),
-                    isFinal: kline.confirm, // 캔들이 닫혔는지 여부
+                    isFinal: kline.confirm,
                   });
                 }
 
