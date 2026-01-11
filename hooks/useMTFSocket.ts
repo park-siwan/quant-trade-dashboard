@@ -12,49 +12,21 @@ import {
   OrderBlock,
 } from '@/lib/types/index';
 import { API_CONFIG } from '@/lib/config';
+import {
+  TIMEFRAMES,
+  DIVERGENCE_EXPIRY_CANDLES,
+  timeframeToSeconds,
+  getNextCandleClose,
+  getSecondsUntilClose,
+} from '@/lib/timeframe';
 
-const TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h', '1d'];
+// Re-export for backward compatibility
+export { getNextCandleClose, getSecondsUntilClose };
 
-// 타임프레임별 캔들 간격 (밀리초)
-const CANDLE_INTERVALS: Record<string, number> = {
-  '5m': 5 * 60 * 1000,
-  '15m': 15 * 60 * 1000,
-  '30m': 30 * 60 * 1000,
-  '1h': 60 * 60 * 1000,
-  '4h': 4 * 60 * 60 * 1000,
-  '1d': 24 * 60 * 60 * 1000,
-};
-
-// 다이버전스 유효기간 (캔들 수 기준)
-const DIVERGENCE_EXPIRY_CANDLES: Record<string, number> = {
-  '5m': 24,
-  '15m': 24,
-  '30m': 48,
-  '1h': 72,
-  '4h': 42,
-  '1d': 14,
-};
-
-export const CANDLE_INTERVALS_SEC: Record<string, number> = {
-  '5m': 5 * 60,
-  '15m': 15 * 60,
-  '30m': 30 * 60,
-  '1h': 60 * 60,
-  '4h': 4 * 60 * 60,
-  '1d': 24 * 60 * 60,
-};
-
-export const getNextCandleClose = (timeframe: string): number => {
-  const now = Date.now();
-  const interval = CANDLE_INTERVALS[timeframe] || 5 * 60 * 1000;
-  const currentCandleStart = Math.floor(now / interval) * interval;
-  return currentCandleStart + interval;
-};
-
-export const getSecondsUntilClose = (timeframe: string): number => {
-  const nextClose = getNextCandleClose(timeframe);
-  return Math.max(0, Math.floor((nextClose - Date.now()) / 1000));
-};
+// 타임프레임별 캔들 간격 (초) - timeframeToSeconds 사용
+export const CANDLE_INTERVALS_SEC: Record<string, number> = Object.fromEntries(
+  TIMEFRAMES.map(tf => [tf, timeframeToSeconds(tf)])
+);
 
 interface BackendTimeframeData {
   timeframe: string;

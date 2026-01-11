@@ -41,47 +41,11 @@ import {
 } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
 import { LongShortRatio } from '@/hooks/useLongShortRatio';
-
-// 타임프레임을 분 단위로 변환
-function timeframeToMinutes(timeframe: string): number {
-  const value = parseInt(timeframe.slice(0, -1));
-  const unit = timeframe.slice(-1);
-  switch (unit) {
-    case 'm': return value;
-    case 'h': return value * 60;
-    case 'd': return value * 24 * 60;
-    case 'w': return value * 7 * 24 * 60;
-    default: return value;
-  }
-}
-
-// 분을 "X일 X시간 X분" 형식으로 변환
-function formatTimeRange(totalMinutes: number): string {
-  const days = Math.floor(totalMinutes / (60 * 24));
-  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-  const minutes = totalMinutes % 60;
-
-  const parts = [];
-  if (days > 0) parts.push(`${days}일`);
-  if (hours > 0) parts.push(`${hours}시간`);
-  if (minutes > 0) parts.push(`${minutes}분`);
-
-  return parts.length > 0 ? parts.join(' ') : '0분';
-}
-
-// 캔들 개수와 타임프레임으로 시간 범위 계산
-function calculateTimeRange(candleCount: number, timeframe: string): string {
-  const totalMinutes = candleCount * timeframeToMinutes(timeframe);
-  if (totalMinutes < 60) return `${totalMinutes}분`;
-  if (totalMinutes < 24 * 60) {
-    const hours = Math.floor(totalMinutes / 60);
-    const mins = totalMinutes % 60;
-    return mins > 0 ? `${hours}시간 ${mins}분` : `${hours}시간`;
-  }
-  const days = Math.floor(totalMinutes / (24 * 60));
-  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
-  return hours > 0 ? `${days}일 ${hours}시간` : `${days}일`;
-}
+import {
+  timeframeToMinutes,
+  formatMinutesToDuration as formatTimeRange,
+  calculateTimeRange,
+} from '@/lib/timeframe';
 
 // Volume Profile 타입
 export interface VolumeProfileData {

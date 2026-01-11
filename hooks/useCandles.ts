@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchCandles } from '@/lib/api/exchange';
-import { API_CONFIG } from '@/lib/config';
+import { timeframeToBybit, getRefreshInterval } from '@/lib/timeframe';
 
 interface UseCandlesParams {
   symbol: string;
@@ -10,40 +10,6 @@ interface UseCandlesParams {
   enableAutoRefresh?: boolean;
   enableWebSocket?: boolean;
 }
-
-// 타임프레임 변환 (API 형식 -> Bybit WebSocket 형식)
-const convertTimeframeToBybit = (timeframe: string): string => {
-  // Bybit 타임프레임: 1, 3, 5, 15, 30, 60, 120, 240, 360, 720, D, W, M
-  const map: Record<string, string> = {
-    '1m': '1',
-    '3m': '3',
-    '5m': '5',
-    '15m': '15',
-    '30m': '30',
-    '1h': '60',
-    '2h': '120',
-    '4h': '240',
-    '6h': '360',
-    '12h': '720',
-    '1d': 'D',
-    '1w': 'W',
-  };
-  return map[timeframe] || '5';
-};
-
-// 타임프레임에 맞춘 폴링 간격
-const getRefreshInterval = (timeframe: string) => {
-  const map: Record<string, number> = {
-    '1m': 60_000,      // 1분
-    '5m': 300_000,     // 5분
-    '15m': 900_000,    // 15분
-    '30m': 1_800_000,  // 30분
-    '1h': 3_600_000,   // 1시간
-    '4h': 14_400_000,  // 4시간
-    '1d': 86_400_000,  // 1일
-  };
-  return map[timeframe] || 300_000; // 기본값 5분
-};
 
 export function useCandles({
   symbol,
@@ -116,7 +82,7 @@ export function useCandles({
 
     // 심볼 변환: BTC/USDT -> BTCUSDT
     const wsSymbol = symbol.replace('/', '').toUpperCase();
-    const wsTimeframe = convertTimeframeToBybit(timeframe);
+    const wsTimeframe = timeframeToBybit(timeframe);
     const wsUrl = 'wss://stream.bybit.com/v5/public/linear';
 
     let isIntentionalClose = false;
