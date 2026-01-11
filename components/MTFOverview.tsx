@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useMTF, getSecondsUntilClose, CANDLE_INTERVALS_SEC } from '@/hooks/useMTF';
-import { MTFStatus, MTFTimeframeData } from '@/lib/types/index';
+import { MTFStatus, MTFStrength, MTFTimeframeData } from '@/lib/types/index';
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock } from 'lucide-react';
 
 interface MTFOverviewProps {
   symbol: string;
+  currentPrice?: number;
+  poc?: number;
+  fundingRate?: number;
 }
 
 // 상태별 아이콘 컴포넌트
@@ -43,19 +46,60 @@ const getRsiColor = (rsi: number | null) => {
   return 'text-gray-300';
 };
 
-// 다이버전스 표시
-const DivergenceDisplay = ({ divergence }: { divergence: MTFTimeframeData['divergence'] }) => {
+// CVD/OI 강도 표시 (↑↑, ↑, →, ↓, ↓↓)
+const DirectionStrengthDisplay = ({
+  direction,
+  strength,
+}: {
+  direction: MTFStatus;
+  strength: MTFStrength;
+}) => {
+  if (direction === 'neutral') {
+    return <span className="text-gray-400 text-xs">→</span>;
+  }
+
+  const isUp = direction === 'bullish';
+  const arrow = isUp ? '↑' : '↓';
+  const doubleArrow = strength === 'strong' ? arrow + arrow : arrow;
+  const color = isUp
+    ? strength === 'strong' ? 'text-green-400' : 'text-lime-400'
+    : strength === 'strong' ? 'text-red-400' : 'text-orange-400';
+
+  return <span className={`text-xs font-bold ${color}`}>{doubleArrow}</span>;
+};
+
+// 다이버전스 표시 (타입 + 시간)
+const DivergenceDisplay = ({ divergence, timeframe }: {
+  divergence: MTFTimeframeData['divergence'];
+  timeframe: string;
+}) => {
   if (!divergence) {
-    return <span className="text-gray-500">-</span>;
+    return <span className="text-gray-500 text-xs">-</span>;
   }
 
   const isBullish = divergence.direction === 'bullish';
-  const typeLabel = divergence.type?.toUpperCase() || '';
+  const typeLabel = divergence.type.toUpperCase();
+
+  // 캔들 수로 시간 계산
+  const candleIntervalMin = (CANDLE_INTERVALS_SEC[timeframe] || 300) / 60;
+  const minutesAgo = divergence.candlesAgo * candleIntervalMin;
+
+  let timeAgo: string;
+  if (minutesAgo < 60) {
+    timeAgo = `${Math.round(minutesAgo)}m`;
+  } else if (minutesAgo < 1440) {
+    timeAgo = `${Math.round(minutesAgo / 60)}h`;
+  } else {
+    timeAgo = `${Math.round(minutesAgo / 1440)}d`;
+  }
 
   return (
-    <span className={`text-xs font-medium ${isBullish ? 'text-green-400' : 'text-red-400'}`}>
-      {isBullish ? '↑' : '↓'} {typeLabel}
-    </span>
+    <div className="flex flex-col items-start">
+      <span className={`text-xs font-semibold ${isBullish ? 'text-green-400' : 'text-red-400'}`}>
+        {isBullish ? '↑' : '↓'} {typeLabel}
+      </span>
+      <span className="text-[9px] text-gray-500">{timeAgo} ago</span>
+    </div>
   );
 };
 
@@ -169,13 +213,19 @@ const TimeframeRow = ({
         {data.rsi !== null ? data.rsi.toFixed(0) : '-'}
       </td>
       <td className="px-3 py-2">
-        <StatusIcon status={data.cvdDirection} />
+        <DirectionStrengthDisplay
+          direction={data.cvdDirection}
+          strength={data.cvdStrength}
+        />
       </td>
       <td className="px-3 py-2">
-        <StatusIcon status={data.oiDirection} />
+        <DirectionStrengthDisplay
+          direction={data.oiDirection}
+          strength={data.oiStrength}
+        />
       </td>
       <td className="px-3 py-2">
-        <DivergenceDisplay divergence={data.divergence} />
+        <DivergenceDisplay divergence={data.divergence} timeframe={data.timeframe} />
       </td>
       <td className="px-3 py-2">
         <CandleCountdown
@@ -195,7 +245,12 @@ const getStrengthLabel = (score: number): { label: string; color: string } => {
   return { label: '약함', color: 'text-gray-400' };
 };
 
-export default function MTFOverview({ symbol }: MTFOverviewProps) {
+// 숫자 포맷
+const formatPrice = (price: number) => {
+  return price.toLocaleString('en-US', { maximumFractionDigits: 0 });
+};
+
+export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: MTFOverviewProps) {
   const { data, isLoading, isError, refetch, refetchTimeframe } = useMTF({ symbol });
 
   if (isLoading) {
@@ -229,33 +284,59 @@ export default function MTFOverview({ symbol }: MTFOverviewProps) {
   }
 
   const strengthInfo = getStrengthLabel(data.alignmentScore);
+  const bullishCount = data.timeframes.filter(t => t.trend === 'bullish').length;
+  const bearishCount = data.timeframes.filter(t => t.trend === 'bearish').length;
+  const totalCount = data.timeframes.length;
+  const alignmentPercent = Math.round(data.alignmentScore * 100);
+
+  // 실제 현재가 (MTF 데이터에서 5m 기준)
+  const actualPrice = currentPrice || data.timeframes.find(t => t.timeframe === '5m')?.currentPrice || 0;
 
   return (
     <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-4">
+      {/* 현재가 요약 */}
+      {actualPrice > 0 && (
+        <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/10 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500">Current:</span>
+            <span className="font-mono font-bold text-white">${formatPrice(actualPrice)}</span>
+          </div>
+          {poc && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-gray-500">POC:</span>
+              <span className="font-mono text-yellow-400">${formatPrice(poc)}</span>
+            </div>
+          )}
+          {fundingRate !== undefined && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-gray-500">Funding:</span>
+              <span className={`font-mono ${fundingRate > 0 ? 'text-green-400' : fundingRate < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                {fundingRate > 0 ? '+' : ''}{fundingRate.toFixed(4)}%
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-bold text-gray-400">MTF Overview</h3>
-          {/* 전체 추세 표시 */}
-          <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border ${getStatusBg(data.overallTrend)}`}>
-            <StatusIcon status={data.overallTrend} />
-            <span className={`text-xs font-semibold ${
+          {/* MTF Alignment 종합 스코어 */}
+          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg border ${getStatusBg(data.overallTrend)}`}>
+            <span className="text-xs text-gray-400">MTF Alignment:</span>
+            <span className={`text-sm font-bold ${
               data.overallTrend === 'bullish' ? 'text-green-400' :
               data.overallTrend === 'bearish' ? 'text-red-400' : 'text-gray-400'
             }`}>
-              {data.overallTrend === 'bullish' ? '불리시' :
-               data.overallTrend === 'bearish' ? '베어리시' : '중립'}
+              {data.overallTrend === 'bullish' ? `${bullishCount}/${totalCount} Bullish` :
+               data.overallTrend === 'bearish' ? `${bearishCount}/${totalCount} Bearish` :
+               `${Math.max(bullishCount, bearishCount)}/${totalCount} Mixed`}
             </span>
-          </div>
-          {/* 강도 표시 */}
-          <div className="flex items-center gap-1.5 text-xs text-gray-500">
-            <span>강도:</span>
-            <span className={`font-semibold ${strengthInfo.color}`}>
-              {strengthInfo.label}
+            <span className={`text-sm font-mono ${strengthInfo.color}`}>
+              ({alignmentPercent}%)
             </span>
-            <span className="font-mono text-gray-400">
-              ({data.timeframes.filter(t => t.trend === data.overallTrend).length}/{data.timeframes.length})
-            </span>
+            <StatusIcon status={data.overallTrend} />
           </div>
         </div>
         <button
@@ -275,9 +356,9 @@ export default function MTFOverview({ symbol }: MTFOverviewProps) {
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">TF</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">Trend</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">RSI</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">CVD</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">OI</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">Div</th>
+              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="CVD 방향/강도">CVD</th>
+              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="OI 방향/강도">OI</th>
+              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">DIV</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="캔들 마감까지">
                 <Clock className="w-3 h-3 inline" />
               </th>
@@ -296,7 +377,7 @@ export default function MTFOverview({ symbol }: MTFOverviewProps) {
       </div>
 
       {/* 범례 */}
-      <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-4 text-[10px] text-gray-500">
+      <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap items-center gap-4 text-[10px] text-gray-500">
         <div className="flex items-center gap-1">
           <TrendingUp className="w-3 h-3 text-green-400" />
           <span>상승</span>
@@ -306,12 +387,20 @@ export default function MTFOverview({ symbol }: MTFOverviewProps) {
           <span>하락</span>
         </div>
         <div className="flex items-center gap-1">
-          <Minus className="w-3 h-3 text-gray-400" />
-          <span>중립</span>
+          <span className="text-green-400 font-bold">↑↑</span>
+          <span>강한 상승</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-lime-400 font-bold">↑</span>
+          <span>약한 상승</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-gray-400">→</span>
+          <span>횡보</span>
         </div>
         <div className="ml-auto text-gray-600">
           <Clock className="w-3 h-3 inline mr-1" />
-          캔들 마감 시 자동 갱신 (UTC 기준)
+          캔들 마감 시 자동 갱신
         </div>
       </div>
     </div>

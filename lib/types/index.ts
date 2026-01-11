@@ -337,16 +337,23 @@ export interface ApiResponse {
 
 // MTF (Multi-Timeframe) 타입
 export type MTFStatus = 'bullish' | 'bearish' | 'neutral';
+export type MTFStrength = 'strong' | 'weak' | 'neutral'; // 강도
 
 export interface MTFTimeframeData {
   timeframe: string;
   trend: MTFStatus;
   rsi: number | null;
   cvdDirection: MTFStatus;
+  cvdStrength: MTFStrength; // CVD 강도
+  cvdChange: number; // CVD 변화율 (%)
   oiDirection: MTFStatus;
+  oiStrength: MTFStrength; // OI 강도
+  oiChange: number; // OI 변화율 (%)
   divergence: {
-    type: 'rsi' | 'obv' | 'cvd' | 'oi' | null;
-    direction: 'bullish' | 'bearish' | null;
+    type: 'rsi' | 'obv' | 'cvd' | 'oi';
+    direction: 'bullish' | 'bearish';
+    timestamp: number; // 발생 시간
+    candlesAgo: number; // 몇 캔들 전
   } | null;
   currentPrice: number;
   ema20: number | null;

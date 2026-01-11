@@ -5,6 +5,7 @@ import {
   MTFTimeframeData,
   MTFOverviewData,
   MTFStatus,
+  MTFStrength,
   MTFSignalValidation,
   ApiResponse,
 } from '@/lib/types/index';
@@ -90,21 +91,28 @@ const processTimeframeData = (
   const rsiArray = data.data.indicators?.rsi;
   const rsi = rsiArray ? rsiArray[rsiArray.length - 1] : null;
 
-  // CVD 방향 (최근 10캔들 기준)
-  const cvdDirection = getCvdDirection(data.data.indicators?.cvd);
+  // CVD 분석 (방향 + 강도 + 변화율)
+  const cvdAnalysis = analyzeCvd(data.data.indicators?.cvd);
 
-  // OI 방향 (최근 10캔들 기준)
-  const oiDirection = getOiDirection(data.data.indicators?.oi);
+  // OI 분석 (방향 + 강도 + 변화율)
+  const oiAnalysis = analyzeOi(data.data.indicators?.oi);
 
-  // 다이버전스 (최근 신호)
-  const divergence = getLatestDivergence(data.data.signals?.divergence);
+  // 다이버전스 (최근 신호 + 시간 정보)
+  const divergence = getLatestDivergence(
+    data.data.signals?.divergence,
+    candles.length
+  );
 
   return {
     timeframe,
     trend,
     rsi,
-    cvdDirection,
-    oiDirection,
+    cvdDirection: cvdAnalysis.direction,
+    cvdStrength: cvdAnalysis.strength,
+    cvdChange: cvdAnalysis.change,
+    oiDirection: oiAnalysis.direction,
+    oiStrength: oiAnalysis.strength,
+    oiChange: oiAnalysis.change,
     divergence,
     currentPrice,
     ema20,
@@ -113,54 +121,101 @@ const processTimeframeData = (
   };
 };
 
-// CVD 방향 계산 (최근 N캔들 기준)
-const getCvdDirection = (cvd: number[] | undefined): MTFStatus => {
-  if (!cvd || cvd.length < 10) return 'neutral';
+// CVD 분석 (방향 + 강도 + 변화율)
+const analyzeCvd = (cvd: number[] | undefined): {
+  direction: MTFStatus;
+  strength: MTFStrength;
+  change: number;
+} => {
+  if (!cvd || cvd.length < 10) {
+    return { direction: 'neutral', strength: 'neutral', change: 0 };
+  }
 
   const recent = cvd.slice(-10);
   const start = recent[0];
   const end = recent[recent.length - 1];
   const change = ((end - start) / Math.abs(start || 1)) * 100;
 
-  if (change > 2) return 'bullish';
-  if (change < -2) return 'bearish';
-  return 'neutral';
+  let direction: MTFStatus = 'neutral';
+  let strength: MTFStrength = 'neutral';
+
+  if (change > 5) {
+    direction = 'bullish';
+    strength = 'strong';
+  } else if (change > 2) {
+    direction = 'bullish';
+    strength = 'weak';
+  } else if (change < -5) {
+    direction = 'bearish';
+    strength = 'strong';
+  } else if (change < -2) {
+    direction = 'bearish';
+    strength = 'weak';
+  }
+
+  return { direction, strength, change };
 };
 
-// OI 방향 계산 (최근 N캔들 기준)
-const getOiDirection = (oi: (number | null)[] | undefined): MTFStatus => {
-  if (!oi) return 'neutral';
+// OI 분석 (방향 + 강도 + 변화율)
+const analyzeOi = (oi: (number | null)[] | undefined): {
+  direction: MTFStatus;
+  strength: MTFStrength;
+  change: number;
+} => {
+  if (!oi) {
+    return { direction: 'neutral', strength: 'neutral', change: 0 };
+  }
 
   const validOi = oi.filter((v): v is number => v !== null);
-  if (validOi.length < 10) return 'neutral';
+  if (validOi.length < 10) {
+    return { direction: 'neutral', strength: 'neutral', change: 0 };
+  }
 
   const recent = validOi.slice(-10);
   const start = recent[0];
   const end = recent[recent.length - 1];
   const change = ((end - start) / Math.abs(start || 1)) * 100;
 
-  if (change > 2) return 'bullish';
-  if (change < -2) return 'bearish';
-  return 'neutral';
+  let direction: MTFStatus = 'neutral';
+  let strength: MTFStrength = 'neutral';
+
+  if (change > 5) {
+    direction = 'bullish';
+    strength = 'strong';
+  } else if (change > 2) {
+    direction = 'bullish';
+    strength = 'weak';
+  } else if (change < -5) {
+    direction = 'bearish';
+    strength = 'strong';
+  } else if (change < -2) {
+    direction = 'bearish';
+    strength = 'weak';
+  }
+
+  return { direction, strength, change };
 };
 
-// 최근 다이버전스 가져오기
+// 최근 다이버전스 가져오기 (타임스탬프 + 캔들 수 포함)
 const getLatestDivergence = (
-  signals: { type: string; direction: string; phase: string }[] | undefined
+  signals: { type: string; direction: string; phase: string; timestamp?: number; index?: number }[] | undefined,
+  totalCandles: number
 ): MTFTimeframeData['divergence'] => {
   if (!signals?.length) return null;
 
-  // 최근 5개 신호 중 마지막
-  const recentSignals = signals
-    .filter((s) => s.phase === 'start')
-    .slice(-5);
+  // start 신호만 필터링
+  const startSignals = signals.filter((s) => s.phase === 'start');
+  if (startSignals.length === 0) return null;
 
-  if (recentSignals.length === 0) return null;
+  // 가장 최근 신호
+  const latest = startSignals[startSignals.length - 1];
+  const candlesAgo = latest.index !== undefined ? totalCandles - 1 - latest.index : 0;
 
-  const latest = recentSignals[recentSignals.length - 1];
   return {
     type: latest.type as 'rsi' | 'obv' | 'cvd' | 'oi',
     direction: latest.direction as 'bullish' | 'bearish',
+    timestamp: latest.timestamp || Date.now(),
+    candlesAgo,
   };
 };
 

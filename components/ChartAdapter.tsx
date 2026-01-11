@@ -524,14 +524,14 @@ export default function ChartAdapter({
           )}
 
         </div>
-        <div className='flex items-center gap-2'>
+        <div className='flex items-center gap-2 shrink-0'>
           {/* 타임프레임 버튼 */}
-          <div className='flex items-center gap-1'>
+          <div className='flex items-center gap-1 flex-nowrap'>
             {TIMEFRAMES.map((tf) => (
               <button
                 key={tf.value}
                 onClick={() => setSelectedTimeframe(tf.value)}
-                className={`px-2 py-1 rounded-lg text-xs transition-all duration-200 ${
+                className={`w-14 py-1 rounded-lg text-xs text-center transition-all duration-200 shrink-0 ${
                   selectedTimeframe === tf.value
                     ? 'bg-orange-500/30 backdrop-blur-md text-white border border-orange-400/50 shadow-lg shadow-orange-500/20'
                     : 'bg-white/5 backdrop-blur-sm text-gray-300 hover:text-white hover:bg-white/10 border border-white/5'
