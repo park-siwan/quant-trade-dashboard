@@ -138,7 +138,7 @@ const ScoreDetails = ({
       </div>
 
       {/* 카테고리별 상세 */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {categories.map(({ key, data }) => {
           const { name, max } = categoryLabels[key];
           const hasDetails = data.details.length > 0;
