@@ -187,7 +187,7 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
   return (
     <div className="flex flex-col items-start">
       <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border ${style.bg}`}>
-        <span className="text-xs">{style.icon}</span>
+        <span className={`text-xs ${style.text}`}>{style.icon}</span>
         <span className={`text-xs font-semibold ${style.text}`}>{style.label}</span>
       </div>
       <span className="text-[9px] text-gray-500 mt-0.5">{reason}</span>
