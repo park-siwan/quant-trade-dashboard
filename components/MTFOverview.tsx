@@ -101,10 +101,10 @@ const DirectionStrengthDisplay = ({
     color = isUp ? 'text-green-400' : 'text-red-400';
   } else if (strength === 'medium') {
     arrows = arrow + arrow;          // ↑↑ or ↓↓
-    color = isUp ? 'text-emerald-400' : 'text-orange-400';
+    color = isUp ? 'text-teal-400' : 'text-orange-400';
   } else {
     arrows = arrow;                  // ↑ or ↓
-    color = isUp ? 'text-lime-400' : 'text-amber-400';
+    color = isUp ? 'text-cyan-400' : 'text-amber-400';
   }
 
   return <span className={`text-xs font-bold ${color}`}>{arrows}</span>;
@@ -608,11 +608,11 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
             <span>강한 상승</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-emerald-400 font-bold">↑↑</span>
+            <span className="text-teal-400 font-bold">↑↑</span>
             <span>상승</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-lime-400 font-bold">↑</span>
+            <span className="text-cyan-400 font-bold">↑</span>
             <span>약한 상승</span>
           </div>
           <div className="flex items-center gap-1">

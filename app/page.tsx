@@ -113,8 +113,8 @@ export default function Home() {
               <h4 className='text-xs font-bold text-green-400 mb-2 border border-green-400/50 px-1.5 py-0.5 rounded inline-block'>CVD/OI 방향</h4>
               <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs mt-2'>
                 <div><span className='text-green-400 font-semibold'>↑↑↑</span><span className='text-gray-400'> - 강한 상승 (8%+ 증가)</span></div>
-                <div><span className='text-emerald-400 font-semibold'>↑↑</span><span className='text-gray-400'> - 상승 (4~8% 증가)</span></div>
-                <div><span className='text-lime-400 font-semibold'>↑</span><span className='text-gray-400'> - 약한 상승 (2~4% 증가)</span></div>
+                <div><span className='text-teal-400 font-semibold'>↑↑</span><span className='text-gray-400'> - 상승 (4~8% 증가)</span></div>
+                <div><span className='text-cyan-400 font-semibold'>↑</span><span className='text-gray-400'> - 약한 상승 (2~4% 증가)</span></div>
                 <div><span className='text-gray-400 font-semibold'>→</span><span className='text-gray-400'> - 횡보 (2% 미만 변동)</span></div>
                 <div><span className='text-amber-400 font-semibold'>↓</span><span className='text-gray-400'> - 약한 하락 (2~4% 감소)</span></div>
                 <div><span className='text-orange-400 font-semibold'>↓↓</span><span className='text-gray-400'> - 하락 (4~8% 감소)</span></div>
