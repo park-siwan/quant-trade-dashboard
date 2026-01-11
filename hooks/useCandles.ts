@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
-import { useState, useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchCandles } from '@/lib/api/exchange';
+import { API_CONFIG } from '@/lib/config';
 
 interface UseCandlesParams {
   symbol: string;
@@ -51,19 +52,43 @@ export function useCandles({
   enableAutoRefresh = true,
   enableWebSocket = true,
 }: UseCandlesParams) {
+  const queryClient = useQueryClient();
   const [wsData, setWsData] = useState<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const lastCandleTimeRef = useRef<number>(0);
   const lastUpdateTimeRef = useRef<number>(0); // throttle용
   const prevCandleCloseRef = useRef<number>(0); // 이전(종료된) 캔들의 close
   const currentCandleTimeRef = useRef<number>(0); // 현재 캔들 시작 시간
+  const syncCountRef = useRef<number>(0); // 동기화 카운터
+
+  const queryKey = ['candles', symbol, timeframe, limit];
 
   const query = useQuery({
-    queryKey: ['candles', symbol, timeframe, limit],
+    queryKey,
     queryFn: () => fetchCandles({ symbol, timeframe, limit }),
     refetchInterval: enableAutoRefresh && !enableWebSocket ? getRefreshInterval(timeframe) : false,
-    staleTime: 10_000, // 10초 동안 fresh
+    staleTime: 60_000, // 1분 동안 fresh (WebSocket이 업데이트하므로)
   });
+
+  // 캔들 캐시 증분 업데이트 함수
+  const appendCandleToCache = useCallback((newCandle: number[]) => {
+    queryClient.setQueryData(queryKey, (oldData: any) => {
+      if (!oldData?.data?.candles) return oldData;
+
+      const candles = [...oldData.data.candles];
+      // 가장 오래된 캔들 제거하고 새 캔들 추가
+      candles.shift();
+      candles.push(newCandle);
+
+      return {
+        ...oldData,
+        data: {
+          ...oldData.data,
+          candles,
+        },
+      };
+    });
+  }, [queryClient, queryKey]);
 
   // refetch 함수를 ref로 저장 (dependency 문제 해결)
   const refetchRef = useRef(query.refetch);
@@ -134,19 +159,22 @@ export function useCandles({
                 const currentCandleTime = kline.start;
                 const now = Date.now();
 
-                // throttle: 500ms마다 업데이트 (더 실시간)
-                const shouldUpdate = now - lastUpdateTimeRef.current > 500;
+                // 캔들 데이터 파싱
+                const rawOpen = parseFloat(kline.open);
+                const rawHigh = parseFloat(kline.high);
+                const rawLow = parseFloat(kline.low);
+                const rawClose = parseFloat(kline.close);
+                const rawVolume = parseFloat(kline.volume);
+
+                // 새 캔들 시작 감지 (캔들 시간이 바뀜)
+                const isNewCandle = currentCandleTime !== currentCandleTimeRef.current;
+
+                // throttle: 500ms마다 UI 업데이트 (더 실시간)
+                const now2 = Date.now();
+                const shouldUpdate = now2 - lastUpdateTimeRef.current > 500;
 
                 if (shouldUpdate) {
-                  lastUpdateTimeRef.current = now;
-
-                  const rawOpen = parseFloat(kline.open);
-                  const rawHigh = parseFloat(kline.high);
-                  const rawLow = parseFloat(kline.low);
-                  const rawClose = parseFloat(kline.close);
-
-                  // 새 캔들 시작 감지 (캔들 시간이 바뀜)
-                  const isNewCandle = currentCandleTime !== currentCandleTimeRef.current;
+                  lastUpdateTimeRef.current = now2;
 
                   let adjustedOpen = rawOpen;
                   let adjustedLow = rawLow;
@@ -181,10 +209,27 @@ export function useCandles({
                   });
                 }
 
-                // 캔들이 닫히면 전체 데이터 리프레시 (지표 재계산)
+                // 캔들이 닫히면 캐시 증분 업데이트 (전체 refetch 대신)
                 if (kline.confirm && currentCandleTime !== lastCandleTimeRef.current) {
                   lastCandleTimeRef.current = currentCandleTime;
-                  refetchRef.current();
+
+                  // 새 캔들 데이터로 캐시 업데이트
+                  const confirmedCandle = [
+                    currentCandleTime,
+                    rawOpen,
+                    rawHigh,
+                    rawLow,
+                    rawClose,
+                    rawVolume,
+                  ];
+                  appendCandleToCache(confirmedCandle);
+
+                  // 10번마다 한 번씩 전체 동기화 (데이터 정합성 보장)
+                  syncCountRef.current++;
+                  if (syncCountRef.current >= 10) {
+                    syncCountRef.current = 0;
+                    refetchRef.current();
+                  }
                 }
               }
             }
@@ -237,7 +282,7 @@ export function useCandles({
         wsRef.current = null;
       }
     };
-  }, [symbol, timeframe, enableWebSocket]);
+  }, [symbol, timeframe, enableWebSocket, appendCandleToCache]);
 
   return {
     ...query,

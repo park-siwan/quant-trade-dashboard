@@ -11,8 +11,7 @@ import {
   MTFActionInfo,
   OrderBlock,
 } from '@/lib/types/index';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { API_CONFIG } from '@/lib/config';
 
 const TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h', '1d'];
 
@@ -543,7 +542,7 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') return;
 
-    const socket = io(`${BACKEND_URL}/mtf`, {
+    const socket = io(`${API_CONFIG.BASE_URL}/mtf`, {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,

@@ -1,7 +1,5 @@
 import { ApiResponse } from '@/lib/types/index';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-const BYBIT_API_URL = 'https://api.bybit.com';
+import { API_CONFIG } from '@/lib/config';
 
 interface FetchCandlesParams {
   symbol: string;
@@ -21,7 +19,7 @@ export async function fetchCandles({
   });
 
   const response = await fetch(
-    `${API_BASE_URL}/exchange/candles/analyze?${params}`
+    `${API_CONFIG.BASE_URL}/exchange/candles/analyze?${params}`
   );
 
   if (!response.ok) {
@@ -60,7 +58,7 @@ export async function fetchLongShortRatio(
   });
 
   const response = await fetch(
-    `${BYBIT_API_URL}/v5/market/account-ratio?${params}`
+    `${API_CONFIG.BYBIT_API_URL}/v5/market/account-ratio?${params}`
   );
 
   if (!response.ok) {

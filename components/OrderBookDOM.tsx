@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { OrderBookData } from '@/lib/types';
+import { API_CONFIG } from '@/lib/config';
 
 interface OrderBookDOMProps {
   symbol: string;
@@ -14,8 +15,7 @@ export default function OrderBookDOM({ symbol }: OrderBookDOMProps) {
   useEffect(() => {
     const fetchOrderBook = async () => {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-        const response = await fetch(`${apiUrl}/exchange/orderbook?symbol=${symbol}`);
+        const response = await fetch(`${API_CONFIG.BASE_URL}/exchange/orderbook?symbol=${symbol}`);
         const data = await response.json();
         if (data.success && data.data) {
           setOrderBook(data.data);
