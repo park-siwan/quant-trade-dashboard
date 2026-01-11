@@ -138,23 +138,23 @@ const ScoreDetails = ({
       </div>
 
       {/* 카테고리별 상세 */}
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {categories.map(({ key, data }) => {
           const { name, max } = categoryLabels[key];
           const hasDetails = data.details.length > 0;
 
           return (
-            <div key={key} className="text-[10px]">
+            <div key={key} className="text-xs">
               {/* 카테고리 헤더 */}
               <div className="flex items-center justify-between">
-                <span className="text-gray-500">{name}</span>
-                <span className={`font-mono ${colorClassMuted}`}>
+                <span className="text-gray-400">{name}</span>
+                <span className={`font-mono font-medium ${colorClassMuted}`}>
                   {data.score}/{max}
                 </span>
               </div>
               {/* 상세 이유 (1개만 표시) */}
               {hasDetails && (
-                <div className="text-[9px] text-gray-600 truncate pl-1">
+                <div className="text-[10px] text-gray-500 truncate pl-1">
                   • {data.details[0]}
                 </div>
               )}
