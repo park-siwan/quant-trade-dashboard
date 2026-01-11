@@ -330,13 +330,13 @@ const TimeframeRow = ({
       <td className={`px-3 py-2 text-xs font-mono ${getRsiColor(data.rsi)}`}>
         {data.rsi !== null ? data.rsi.toFixed(0) : '-'}
       </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2 text-center">
         <DirectionStrengthDisplay
           direction={data.cvdDirection}
           strength={data.cvdStrength}
         />
       </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2 text-center">
         <DirectionStrengthDisplay
           direction={data.oiDirection}
           strength={data.oiStrength}
@@ -483,8 +483,8 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">TF</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">Trend</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">RSI</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="CVD 방향/강도">CVD</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="OI 방향/강도">OI</th>
+              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase text-center" title="CVD 방향/강도">CVD</th>
+              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase text-center" title="OI 방향/강도">OI</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="추세 강도 (25+ 강한 추세)">ADX</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="평균 대비 변동성">ATR%</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">DIV</th>
