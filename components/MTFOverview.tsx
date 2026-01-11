@@ -511,14 +511,6 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
         {/* CVD/OI 방향 */}
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-1">
-            <TrendingUp className="w-3 h-3 text-green-400" />
-            <span>상승</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <TrendingDown className="w-3 h-3 text-red-400" />
-            <span>하락</span>
-          </div>
-          <div className="flex items-center gap-1">
             <span className="text-green-400 font-bold">↑↑↑</span>
             <span>강한 상승</span>
           </div>
