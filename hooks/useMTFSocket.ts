@@ -515,23 +515,25 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
     if (!enabled || typeof window === 'undefined') return;
 
     const socket = io(`${API_CONFIG.BASE_URL}/mtf`, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'], // polling 먼저 시도 (더 안정적)
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
+      timeout: 10000,
+      forceNew: true,
     });
 
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('[MTF Socket] Connected');
+      console.log('[MTF Socket] Connected via', socket.io.engine.transport.name);
       setIsConnected(true);
       socket.emit('subscribe', { symbol });
     });
 
-    socket.on('disconnect', () => {
-      console.log('[MTF Socket] Disconnected');
+    socket.on('disconnect', (reason) => {
+      console.log('[MTF Socket] Disconnected:', reason);
       setIsConnected(false);
     });
 
@@ -542,7 +544,16 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
     });
 
     socket.on('connect_error', (error) => {
-      console.error('[MTF Socket] Connection error:', error);
+      console.warn('[MTF Socket] Connection error (will retry):', error.message);
+      setIsLoading(false); // 로딩 상태 해제
+    });
+
+    socket.io.on('reconnect', (attempt) => {
+      console.log('[MTF Socket] Reconnected after', attempt, 'attempts');
+    });
+
+    socket.io.on('reconnect_attempt', (attempt) => {
+      console.log('[MTF Socket] Reconnect attempt', attempt);
     });
 
     return () => {
