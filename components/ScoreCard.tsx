@@ -147,14 +147,14 @@ const ScoreDetails = ({
             <div key={key} className="text-xs">
               {/* 카테고리 헤더 */}
               <div className="flex items-center justify-between">
-                <span className="text-gray-400">{name}</span>
-                <span className={`font-mono font-medium ${colorClassMuted}`}>
+                <span className="text-gray-300">{name}</span>
+                <span className={`font-mono font-medium ${colorClass}`}>
                   {data.score}/{max}
                 </span>
               </div>
               {/* 상세 이유 (1개만 표시) */}
               {hasDetails && (
-                <div className="text-[10px] text-gray-500 truncate pl-1">
+                <div className="text-[10px] text-gray-400 truncate pl-1">
                   • {data.details[0]}
                 </div>
               )}
