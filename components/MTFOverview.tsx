@@ -46,7 +46,7 @@ const getRsiColor = (rsi: number | null) => {
   return 'text-gray-300';
 };
 
-// CVD/OI 강도 표시 (↑↑, ↑, →, ↓, ↓↓)
+// CVD/OI 강도 표시 (↑↑↑, ↑, →, ↓, ↓↓↓)
 const DirectionStrengthDisplay = ({
   direction,
   strength,
@@ -60,12 +60,12 @@ const DirectionStrengthDisplay = ({
 
   const isUp = direction === 'bullish';
   const arrow = isUp ? '↑' : '↓';
-  const doubleArrow = strength === 'strong' ? arrow + arrow : arrow;
+  const arrows = strength === 'strong' ? arrow + arrow + arrow : arrow;
   const color = isUp
     ? strength === 'strong' ? 'text-green-400' : 'text-lime-400'
     : strength === 'strong' ? 'text-red-400' : 'text-orange-400';
 
-  return <span className={`text-xs font-bold ${color}`}>{doubleArrow}</span>;
+  return <span className={`text-xs font-bold ${color}`}>{arrows}</span>;
 };
 
 // 다이버전스 표시 (타입 + 시간 + 만료 여부)
@@ -508,7 +508,7 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
             <span>하락</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-green-400 font-bold">↑↑</span>
+            <span className="text-green-400 font-bold">↑↑↑</span>
             <span>강한 상승</span>
           </div>
           <div className="flex items-center gap-1">
@@ -524,7 +524,7 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
             <span>약한 하락</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-red-400 font-bold">↓↓</span>
+            <span className="text-red-400 font-bold">↓↓↓</span>
             <span>강한 하락</span>
           </div>
         </div>
