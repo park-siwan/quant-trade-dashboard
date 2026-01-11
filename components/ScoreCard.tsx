@@ -3,7 +3,10 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { MTFOverviewData, OrderBlock } from '@/lib/types';
 import { calculateSignalScore, confidenceLabels, SignalScore, MarketStructureData } from '@/lib/scoring';
-import { TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const RadarScoreChart = dynamic(() => import('./RadarScoreChart'), { ssr: false });
 
 // 개별 숫자 슬롯 컴포넌트
 const DigitSlot = ({ digit, direction, size = 'normal' }: { digit: string; direction: 'up' | 'down' | null; size?: 'normal' | 'large' }) => {
@@ -88,96 +91,6 @@ interface ScoreCardProps {
   vah?: number;
   val?: number;
 }
-
-// 토스 스타일 프로그레스 바 컴포넌트
-const ScoreBar = ({ score, maxScore, color }: { score: number; maxScore: number; color: string }) => {
-  const percentage = (score / maxScore) * 100;
-  const [isAnimating, setIsAnimating] = useState(false);
-  const prevScore = useRef(score);
-
-  useEffect(() => {
-    if (prevScore.current !== score) {
-      setIsAnimating(true);
-      prevScore.current = score;
-      const timer = setTimeout(() => setIsAnimating(false), 600);
-      return () => clearTimeout(timer);
-    }
-  }, [score]);
-
-  return (
-    <div className={`w-full h-1 bg-gray-700 rounded-full overflow-hidden ${isAnimating ? 'animate-bar-glow' : ''}`}>
-      <div
-        className={`h-full ${color} rounded-full transition-all duration-500 ease-out ${isAnimating ? 'brightness-125' : ''}`}
-        style={{ width: `${percentage}%` }}
-      />
-    </div>
-  );
-};
-
-// 카테고리 상세 컴포넌트 (컴팩트)
-const CategoryRow = ({
-  label,
-  longScore,
-  shortScore,
-  maxScore,
-  longDetails,
-  shortDetails,
-}: {
-  label: string;
-  longScore: number;
-  shortScore: number;
-  maxScore: number;
-  longDetails: string[];
-  shortDetails: string[];
-}) => {
-  const [isOpen, setIsOpen] = useState(true);
-
-  const getBarColor = (score: number) => {
-    const ratio = score / maxScore;
-    if (ratio >= 0.8) return 'bg-green-400';
-    if (ratio >= 0.6) return 'bg-lime-400';
-    if (ratio >= 0.4) return 'bg-yellow-400';
-    if (ratio >= 0.2) return 'bg-orange-400';
-    return 'bg-red-400';
-  };
-
-  return (
-    <div className="space-y-0.5">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
-      >
-        {/* 라벨 행 */}
-        <div className="flex items-center gap-1 mb-0.5">
-          {isOpen ? <ChevronUp className="w-2 h-2" /> : <ChevronDown className="w-2 h-2" />}
-          <span>{label}</span>
-        </div>
-
-        {/* 프로그레스바 */}
-        <div className="grid grid-cols-2 gap-3">
-          <ScoreBar score={longScore} maxScore={maxScore} color={getBarColor(longScore)} />
-          <ScoreBar score={shortScore} maxScore={maxScore} color={getBarColor(shortScore)} />
-        </div>
-      </button>
-      {isOpen && (
-        <div className="grid grid-cols-2 gap-3 text-[10px] text-gray-600 pt-0.5">
-          <div>
-            <span className="text-green-400/80 font-mono">{longScore}/{maxScore}</span>
-            <ul className="space-y-0">
-              {longDetails.map((d, i) => <li key={i}>• {d}</li>)}
-            </ul>
-          </div>
-          <div>
-            <span className="text-red-400/80 font-mono">{shortScore}/{maxScore}</span>
-            <ul className="space-y-0">
-              {shortDetails.map((d, i) => <li key={i}>• {d}</li>)}
-            </ul>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 // 신뢰도 배지 스타일
 const getConfidenceBadgeStyle = (confidence: SignalScore['confidence']) => {
@@ -276,41 +189,21 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
         </div>
       </div>
 
-      {/* 카테고리별 점수 비교 */}
-      <div className="space-y-1.5 mb-2">
-        <CategoryRow
-          label="추세 종합"
-          longScore={longScore.mtfAlignment.score}
-          shortScore={shortScore.mtfAlignment.score}
-          maxScore={30}
-          longDetails={longScore.mtfAlignment.details}
-          shortDetails={shortScore.mtfAlignment.details}
-        />
-        <CategoryRow
-          label="다이버전스 (가격↔지표 괴리)"
-          longScore={longScore.divergence.score}
-          shortScore={shortScore.divergence.score}
-          maxScore={30}
-          longDetails={longScore.divergence.details}
-          shortDetails={shortScore.divergence.details}
-        />
-        <CategoryRow
-          label="시장 구조 (지지/저항·목표가·변동성)"
-          longScore={longScore.marketStructure.score}
-          shortScore={shortScore.marketStructure.score}
-          maxScore={20}
-          longDetails={longScore.marketStructure.details}
-          shortDetails={shortScore.marketStructure.details}
-        />
-        <CategoryRow
-          label="외부 요인 (펀딩비·매수세·포지션)"
-          longScore={longScore.externalFactors.score}
-          shortScore={shortScore.externalFactors.score}
-          maxScore={20}
-          longDetails={longScore.externalFactors.details}
-          shortDetails={shortScore.externalFactors.details}
-        />
-      </div>
+      {/* 레이더 차트 */}
+      <RadarScoreChart
+        longScores={{
+          mtfAlignment: longScore.mtfAlignment.score,
+          divergence: longScore.divergence.score,
+          marketStructure: longScore.marketStructure.score,
+          externalFactors: longScore.externalFactors.score,
+        }}
+        shortScores={{
+          mtfAlignment: shortScore.mtfAlignment.score,
+          divergence: shortScore.divergence.score,
+          marketStructure: shortScore.marketStructure.score,
+          externalFactors: shortScore.externalFactors.score,
+        }}
+      />
     </div>
   );
 }
