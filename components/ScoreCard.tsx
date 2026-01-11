@@ -130,7 +130,7 @@ const CategoryRow = ({
   longDetails: string[];
   shortDetails: string[];
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
 
   const getBarColor = (score: number) => {
     const ratio = score / maxScore;

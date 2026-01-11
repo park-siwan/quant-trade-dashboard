@@ -189,11 +189,11 @@ const RsiDisplay = memo(({ rsi }: { rsi: number | null }) => {
   if (rsi <= 30) {
     color = 'bg-green-400';
     textColor = 'text-green-400';
-    label = '매도';
+    label = '과매도';
   } else if (rsi >= 70) {
     color = 'bg-red-400';
     textColor = 'text-red-400';
-    label = '매수';
+    label = '과매수';
   } else if (rsi <= 40) {
     color = 'bg-lime-400';
     textColor = 'text-lime-400';
