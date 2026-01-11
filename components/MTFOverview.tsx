@@ -303,20 +303,22 @@ const DivergenceDisplay = ({ divergence, timeframe }: {
 const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
   const { action, reason } = actionInfo;
 
-  const getActionStyle = (action: MTFAction, reason: string) => {
+  const getActionStyle = (action: MTFAction, reason: string): {
+    bg: string; text: string; icon: React.ElementType; label: string; hideReason?: boolean
+  } => {
     switch (action) {
       case 'long_ok':
         return {
           bg: 'bg-green-500/20 border-green-500/30',
           text: 'text-green-400',
-          icon: '🟢',
+          icon: TrendingUp,
           label: '롱 OK',
         };
       case 'short_ok':
         return {
           bg: 'bg-red-500/20 border-red-500/30',
           text: 'text-red-400',
-          icon: '🔴',
+          icon: TrendingDown,
           label: '숏 OK',
         };
       case 'reversal_warn':
@@ -326,23 +328,23 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
           return {
             bg: isExpired ? 'bg-green-500/10 border-green-500/20' : 'bg-green-500/20 border-green-500/30',
             text: isExpired ? 'text-green-400/60' : 'text-green-400',
-            icon: '↗',
-            label: isExpired ? '반등주의(만료)' : '반등주의',
+            icon: TrendingUp,
+            label: isExpired ? '반등(만료)' : '반등주의',
             hideReason: true,
           };
         } else if (reason.includes('반락')) {
           return {
             bg: isExpired ? 'bg-red-500/10 border-red-500/20' : 'bg-red-500/20 border-red-500/30',
             text: isExpired ? 'text-red-400/60' : 'text-red-400',
-            icon: '↘',
-            label: isExpired ? '반락주의(만료)' : '반락주의',
+            icon: TrendingDown,
+            label: isExpired ? '반락(만료)' : '반락주의',
             hideReason: true,
           };
         }
         return {
           bg: 'bg-amber-500/20 border-amber-500/30',
           text: 'text-amber-400',
-          icon: '⚠️',
+          icon: AlertTriangle,
           label: '반전주의',
         };
       case 'trend_hold':
@@ -351,16 +353,16 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
           return {
             bg: 'bg-green-500/20 border-green-500/30',
             text: 'text-green-400',
-            icon: '↗',
-            label: '상승추세 유지',
+            icon: TrendingUp,
+            label: '상승유지',
             hideReason: true,
           };
         } else {
           return {
             bg: 'bg-red-500/20 border-red-500/30',
             text: 'text-red-400',
-            icon: '↘',
-            label: '하락추세 유지',
+            icon: TrendingDown,
+            label: '하락유지',
             hideReason: true,
           };
         }
@@ -369,18 +371,19 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
         return {
           bg: 'bg-gray-500/20 border-gray-500/30',
           text: 'text-gray-400',
-          icon: '⏸',
+          icon: Clock,
           label: '대기',
         };
     }
   };
 
   const style = getActionStyle(action, reason);
+  const IconComponent = style.icon;
 
   return (
     <div className="flex items-center gap-2">
       <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border ${style.bg}`}>
-        <span className={`text-xs ${style.text}`}>{style.icon}</span>
+        <IconComponent className={`w-3 h-3 ${style.text}`} />
         <span className={`text-xs font-semibold ${style.text}`}>{style.label}</span>
       </div>
       {!style.hideReason && <span className="text-[10px] text-gray-500">{reason}</span>}
