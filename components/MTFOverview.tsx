@@ -753,37 +753,33 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
   const now = new Date();
   const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-  // 티커 콘텐츠 배열
+  // 티커 콘텐츠 배열 (심플 무채색)
   const tickerItems = [
-    `⏰ ${timeStr} 업데이트`,
-    trendText,
-    fundingRate !== undefined && `펀딩 ${fundingRate > 0 ? '+' : ''}${fundingRate.toFixed(4)}%${fundingRate > 0.01 ? ' 🔴롱과열' : fundingRate < -0.01 ? ' 🟢숏과열' : ''}`,
-    aboveEMA200 && '✅ 일봉 EMA200 위 (상승구조)',
-    belowEMA200 && '⛔ 일봉 EMA200 아래 (하락구조)',
-    vah && `단기고점 $${formatPrice(vah)} (${((vah - actualPrice) / actualPrice * 100).toFixed(1)}%${vah > actualPrice ? '↑' : '↓'})`,
-    val && `단기저점 $${formatPrice(val)} (${((actualPrice - val) / actualPrice * 100).toFixed(1)}%${val < actualPrice ? '↓' : '↑'})`,
-    poc && `목표가 $${formatPrice(poc)} (${Math.abs((poc - actualPrice) / actualPrice * 100).toFixed(1)}%${poc > actualPrice ? '↑' : '↓'})`,
-    overboughtTFs.length > 0 && `🔴 RSI 과매수 ${overboughtTFs.map(tf => tf.timeframe).join(',')}`,
-    oversoldTFs.length > 0 && `🟢 RSI 과매도 ${oversoldTFs.map(tf => tf.timeframe).join(',')}`,
-    strongTrendTFs.length > 0 && `🔥 강한추세 ${strongTrendTFs.length}개 TF (ADX 25+)`,
-    strongTrendTFs.length === 0 && '😐 약한추세 (ADX 25 미만)',
-    avgATR && avgATR > 1.5 && `⚡ 고변동성 ATR ${avgATR.toFixed(1)}x - 손절 넓게`,
-    avgATR && avgATR < 0.8 && `😴 저변동성 ATR ${avgATR.toFixed(1)}x - 돌파 대기`,
-    avgATR && avgATR >= 0.8 && avgATR <= 1.5 && `📈 정상 변동성 ATR ${avgATR.toFixed(1)}x`,
-    cvdBullish > cvdBearish + 2 && `💪 매수세 우위 CVD ${cvdBullish}/${totalCount}`,
-    cvdBearish > cvdBullish + 2 && `👎 매도세 우위 CVD ${cvdBearish}/${totalCount}`,
-    cvdBullish === cvdBearish && `⚖️ 매수/매도 균형 CVD`,
-    oiBullish > oiBearish + 2 && `📊 포지션 증가 OI ${oiBullish}/${totalCount} - 신규 진입`,
-    oiBearish > oiBullish + 2 && `📉 포지션 감소 OI ${oiBearish}/${totalCount} - 청산 중`,
-    bullishDivs.length > 0 && `🟢 상승 다이버전스 ${bullishDivs.map(tf => tf.timeframe).join(',')} - 반등 가능`,
-    bearishDivs.length > 0 && `🔴 하락 다이버전스 ${bearishDivs.map(tf => tf.timeframe).join(',')} - 하락 가능`,
-    orderBlocks && orderBlocks.filter(ob => ob.type === 'bullish').length > 0 && `🟩 지지구간 ${orderBlocks.filter(ob => ob.type === 'bullish').length}개`,
-    orderBlocks && orderBlocks.filter(ob => ob.type === 'bearish').length > 0 && `🟥 저항구간 ${orderBlocks.filter(ob => ob.type === 'bearish').length}개`,
-    bullishCount > bearishCount + 2 && '🚀 롱 우세 환경',
-    bearishCount > bullishCount + 2 && '🐻 숏 우세 환경',
-    alignmentPercent >= 80 && '⭐ 추세 강력 일치 (80%+)',
-    alignmentPercent >= 60 && alignmentPercent < 80 && '👍 추세 일치 양호',
-    alignmentPercent < 40 && '⚠️ 추세 혼조 - 관망 권장',
+    `${timeStr} 업데이트`,
+    data.overallTrend === 'bullish' ? `추세 ↑ ${bullishCount}/${totalCount} (${alignmentPercent}%)` :
+    data.overallTrend === 'bearish' ? `추세 ↓ ${bearishCount}/${totalCount} (${alignmentPercent}%)` :
+    `추세 → ${Math.max(bullishCount, bearishCount)}/${totalCount} (${alignmentPercent}%)`,
+    fundingRate !== undefined && `펀딩 ${fundingRate > 0 ? '+' : ''}${fundingRate.toFixed(4)}%${fundingRate > 0.01 ? ' [롱과열]' : fundingRate < -0.01 ? ' [숏과열]' : ''}`,
+    aboveEMA200 && 'EMA200↑ 상승구조',
+    belowEMA200 && 'EMA200↓ 하락구조',
+    vah && `고점 $${formatPrice(vah)} (${((vah - actualPrice) / actualPrice * 100).toFixed(1)}%)`,
+    val && `저점 $${formatPrice(val)} (${((actualPrice - val) / actualPrice * 100).toFixed(1)}%)`,
+    poc && `POC $${formatPrice(poc)} (${Math.abs((poc - actualPrice) / actualPrice * 100).toFixed(1)}%)`,
+    overboughtTFs.length > 0 && `RSI 과매수 ${overboughtTFs.map(tf => tf.timeframe).join(',')}`,
+    oversoldTFs.length > 0 && `RSI 과매도 ${oversoldTFs.map(tf => tf.timeframe).join(',')}`,
+    strongTrendTFs.length > 0 && `ADX25+ ${strongTrendTFs.length}개 TF`,
+    avgATR && avgATR > 1.5 && `ATR ${avgATR.toFixed(1)}x 고변동`,
+    avgATR && avgATR < 0.8 && `ATR ${avgATR.toFixed(1)}x 저변동`,
+    cvdBullish > cvdBearish + 2 && `CVD 매수↑ ${cvdBullish}/${totalCount}`,
+    cvdBearish > cvdBullish + 2 && `CVD 매도↓ ${cvdBearish}/${totalCount}`,
+    oiBullish > oiBearish + 2 && `OI 증가↑ ${oiBullish}/${totalCount}`,
+    oiBearish > oiBullish + 2 && `OI 감소↓ ${oiBearish}/${totalCount}`,
+    bullishDivs.length > 0 && `다이버전스↑ ${bullishDivs.map(tf => tf.timeframe).join(',')}`,
+    bearishDivs.length > 0 && `다이버전스↓ ${bearishDivs.map(tf => tf.timeframe).join(',')}`,
+    orderBlocks && orderBlocks.filter(ob => ob.type === 'bullish').length > 0 && `지지구간 ${orderBlocks.filter(ob => ob.type === 'bullish').length}개`,
+    orderBlocks && orderBlocks.filter(ob => ob.type === 'bearish').length > 0 && `저항구간 ${orderBlocks.filter(ob => ob.type === 'bearish').length}개`,
+    alignmentPercent >= 80 && '추세일치 강함',
+    alignmentPercent < 40 && '추세혼조 관망',
   ].filter(Boolean);
 
   return (
