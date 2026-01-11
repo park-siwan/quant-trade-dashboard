@@ -1,6 +1,6 @@
 'use client';
 
-import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend, Tooltip } from 'recharts';
+import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, Tooltip } from 'recharts';
 
 interface RadarScoreChartProps {
   longScores: {
@@ -73,19 +73,20 @@ export default function RadarScoreChart({ longScores, shortScores, size = 'norma
     return null;
   };
 
-  const height = size === 'large' ? 'h-[240px]' : 'h-[180px]';
+  const height = size === 'large' ? 'h-[280px]' : 'h-[180px]';
+  const outerRadius = size === 'large' ? '80%' : '70%';
 
   return (
     <div className={`w-full ${height}`}>
       <ResponsiveContainer width="100%" height="100%">
-        <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
+        <RadarChart cx="50%" cy="50%" outerRadius={outerRadius} data={data}>
           <PolarGrid
             stroke="rgba(255,255,255,0.1)"
             strokeDasharray="3 3"
           />
           <PolarAngleAxis
             dataKey="category"
-            tick={{ fill: '#9ca3af', fontSize: 10 }}
+            tick={{ fill: '#9ca3af', fontSize: size === 'large' ? 11 : 10 }}
             tickLine={false}
           />
           <Radar
@@ -105,10 +106,6 @@ export default function RadarScoreChart({ longScores, shortScores, size = 'norma
             strokeWidth={2}
           />
           <Tooltip content={<CustomTooltip />} />
-          <Legend
-            wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }}
-            iconSize={8}
-          />
         </RadarChart>
       </ResponsiveContainer>
     </div>
