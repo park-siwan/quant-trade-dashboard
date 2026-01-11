@@ -179,6 +179,25 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
           label: '숏 OK',
         };
       case 'reversal_warn':
+        // 반등주의는 초록, 반락주의는 빨강
+        const isExpired = reason.includes('만료');
+        if (reason.includes('반등')) {
+          return {
+            bg: isExpired ? 'bg-green-500/10 border-green-500/20' : 'bg-green-500/20 border-green-500/30',
+            text: isExpired ? 'text-green-400/60' : 'text-green-400',
+            icon: '↗',
+            label: isExpired ? '반등주의(만료)' : '반등주의',
+            hideReason: true,
+          };
+        } else if (reason.includes('반락')) {
+          return {
+            bg: isExpired ? 'bg-red-500/10 border-red-500/20' : 'bg-red-500/20 border-red-500/30',
+            text: isExpired ? 'text-red-400/60' : 'text-red-400',
+            icon: '↘',
+            label: isExpired ? '반락주의(만료)' : '반락주의',
+            hideReason: true,
+          };
+        }
         return {
           bg: 'bg-amber-500/20 border-amber-500/30',
           text: 'text-amber-400',

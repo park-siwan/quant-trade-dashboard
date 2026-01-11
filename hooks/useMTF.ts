@@ -374,18 +374,18 @@ const calculateAction = (
 
   // 추세 유지 (다이버전스가 있으면 주의 표시)
   if (trend === 'bullish') {
-    // 하락 다이버전스가 있으면 반전 주의
+    // 하락 다이버전스가 있으면 반락 주의
     if (divergence && divergence.direction === 'bearish') {
-      const suffix = divergence.isExpired ? ' (만료DIV)' : '';
-      return { action: 'reversal_warn', reason: `상승추세 반전주의${suffix}` };
+      const suffix = divergence.isExpired ? '(만료)' : '';
+      return { action: 'reversal_warn', reason: `반락주의${suffix}` };
     }
     return { action: 'trend_hold', reason: '상승추세 유지' };
   }
   if (trend === 'bearish') {
-    // 상승 다이버전스가 있으면 반전 주의
+    // 상승 다이버전스가 있으면 반등 주의
     if (divergence && divergence.direction === 'bullish') {
-      const suffix = divergence.isExpired ? ' (만료DIV)' : '';
-      return { action: 'reversal_warn', reason: `하락추세 반전주의${suffix}` };
+      const suffix = divergence.isExpired ? '(만료)' : '';
+      return { action: 'reversal_warn', reason: `반등주의${suffix}` };
     }
     return { action: 'trend_hold', reason: '하락추세 유지' };
   }
