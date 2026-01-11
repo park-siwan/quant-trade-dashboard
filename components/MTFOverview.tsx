@@ -36,14 +36,45 @@ const getStatusBg = (status: MTFStatus) => {
   }
 };
 
-// RSI 색상
-const getRsiColor = (rsi: number | null) => {
-  if (rsi === null) return 'text-gray-400';
-  if (rsi <= 30) return 'text-green-400'; // 과매도
-  if (rsi >= 70) return 'text-red-400'; // 과매수
-  if (rsi <= 40) return 'text-lime-400';
-  if (rsi >= 60) return 'text-orange-400';
-  return 'text-gray-300';
+// RSI 표시 컴포넌트 (게이지 바 포함)
+const RsiDisplay = ({ rsi }: { rsi: number | null }) => {
+  if (rsi === null) {
+    return <span className="text-gray-500 text-xs">-</span>;
+  }
+
+  // 색상 결정
+  let color = 'bg-gray-400';
+  let textColor = 'text-gray-300';
+  let label = '';
+
+  if (rsi <= 30) {
+    color = 'bg-green-400';
+    textColor = 'text-green-400';
+    label = '매도';
+  } else if (rsi >= 70) {
+    color = 'bg-red-400';
+    textColor = 'text-red-400';
+    label = '매수';
+  } else if (rsi <= 40) {
+    color = 'bg-lime-400';
+    textColor = 'text-lime-400';
+  } else if (rsi >= 60) {
+    color = 'bg-orange-400';
+    textColor = 'text-orange-400';
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="w-8 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${color} rounded-full transition-all`}
+          style={{ width: `${rsi}%` }}
+        />
+      </div>
+      <span className={`text-xs font-mono ${textColor}`}>{rsi.toFixed(0)}</span>
+      {label && <span className={`text-[9px] ${textColor}`}>{label}</span>}
+    </div>
+  );
 };
 
 // CVD/OI 강도 표시 (↑↑↑, ↑↑, ↑, →, ↓, ↓↓, ↓↓↓)
@@ -197,16 +228,47 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
   );
 };
 
-// ADX 표시 컴포넌트
+// ADX 표시 컴포넌트 (게이지 바 포함)
 const AdxDisplay = ({ adx, isStrongTrend }: { adx: number | null; isStrongTrend: boolean }) => {
   if (adx === null) {
     return <span className="text-gray-500 text-xs">-</span>;
   }
 
+  // ADX 강도별 색상 (0-100 스케일, 보통 0-50 범위)
+  let color = 'bg-gray-500';
+  let textColor = 'text-gray-400';
+  let label = '';
+
+  if (adx >= 50) {
+    color = 'bg-red-400';
+    textColor = 'text-red-400';
+    label = '극강';
+  } else if (adx >= 25) {
+    color = 'bg-orange-400';
+    textColor = 'text-orange-400';
+    label = '강함';
+  } else if (adx >= 20) {
+    color = 'bg-yellow-400';
+    textColor = 'text-yellow-400';
+    label = '형성';
+  } else {
+    label = '약함';
+  }
+
+  // ADX는 보통 0-50 범위이므로 2배로 스케일
+  const barWidth = Math.min(adx * 2, 100);
+
   return (
-    <span className={`text-xs font-mono ${isStrongTrend ? 'text-orange-400 font-bold' : 'text-gray-400'}`}>
-      {adx.toFixed(0)}{isStrongTrend && ' 🔥'}
-    </span>
+    <div className="flex items-center gap-1.5">
+      <div className="w-6 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${color} rounded-full transition-all`}
+          style={{ width: `${barWidth}%` }}
+        />
+      </div>
+      <span className={`text-xs font-mono ${textColor}`}>{adx.toFixed(0)}</span>
+      <span className={`text-[9px] ${textColor}`}>{label}</span>
+    </div>
   );
 };
 
@@ -339,8 +401,8 @@ const TimeframeRow = ({
           </span>
         </div>
       </td>
-      <td className={`px-3 py-2 text-xs font-mono ${getRsiColor(data.rsi)}`}>
-        {data.rsi !== null ? data.rsi.toFixed(0) : '-'}
+      <td className="px-3 py-2">
+        <RsiDisplay rsi={data.rsi} />
       </td>
       <td className="px-3 py-2 text-center">
         <DirectionStrengthDisplay
