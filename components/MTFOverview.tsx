@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, memo } from 'react';
 import { useMTFSocket, getSecondsUntilClose, CANDLE_INTERVALS_SEC } from '@/hooks/useMTFSocket';
 import { MTFStatus, MTFStrength, MTFTimeframeData, MTFAction, MTFActionInfo, OrderBlock } from '@/lib/types/index';
-import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock, Activity, Zap, Target, BarChart3, ArrowUpDown, Layers, AlertTriangle } from 'lucide-react';
 import ScoreCard from './ScoreCard';
 import RecommendationCard from './RecommendationCard';
 import { calculateSignalScore, MarketStructureData } from '@/lib/scoring';
@@ -753,33 +753,33 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
   const now = new Date();
   const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-  // 티커 콘텐츠 배열 (심플 무채색)
-  const tickerItems = [
-    `${timeStr} 업데이트`,
-    data.overallTrend === 'bullish' ? `추세 ↑ ${bullishCount}/${totalCount} (${alignmentPercent}%)` :
-    data.overallTrend === 'bearish' ? `추세 ↓ ${bearishCount}/${totalCount} (${alignmentPercent}%)` :
-    `추세 → ${Math.max(bullishCount, bearishCount)}/${totalCount} (${alignmentPercent}%)`,
-    fundingRate !== undefined && `펀딩 ${fundingRate > 0 ? '+' : ''}${fundingRate.toFixed(4)}%${fundingRate > 0.01 ? ' [롱과열]' : fundingRate < -0.01 ? ' [숏과열]' : ''}`,
-    aboveEMA200 && 'EMA200↑ 상승구조',
-    belowEMA200 && 'EMA200↓ 하락구조',
-    vah && `고점 $${formatPrice(vah)} (${((vah - actualPrice) / actualPrice * 100).toFixed(1)}%)`,
-    val && `저점 $${formatPrice(val)} (${((actualPrice - val) / actualPrice * 100).toFixed(1)}%)`,
-    poc && `POC $${formatPrice(poc)} (${Math.abs((poc - actualPrice) / actualPrice * 100).toFixed(1)}%)`,
-    overboughtTFs.length > 0 && `RSI 과매수 ${overboughtTFs.map(tf => tf.timeframe).join(',')}`,
-    oversoldTFs.length > 0 && `RSI 과매도 ${oversoldTFs.map(tf => tf.timeframe).join(',')}`,
-    strongTrendTFs.length > 0 && `ADX25+ ${strongTrendTFs.length}개 TF`,
-    avgATR && avgATR > 1.5 && `ATR ${avgATR.toFixed(1)}x 고변동`,
-    avgATR && avgATR < 0.8 && `ATR ${avgATR.toFixed(1)}x 저변동`,
-    cvdBullish > cvdBearish + 2 && `CVD 매수↑ ${cvdBullish}/${totalCount}`,
-    cvdBearish > cvdBullish + 2 && `CVD 매도↓ ${cvdBearish}/${totalCount}`,
-    oiBullish > oiBearish + 2 && `OI 증가↑ ${oiBullish}/${totalCount}`,
-    oiBearish > oiBullish + 2 && `OI 감소↓ ${oiBearish}/${totalCount}`,
-    bullishDivs.length > 0 && `다이버전스↑ ${bullishDivs.map(tf => tf.timeframe).join(',')}`,
-    bearishDivs.length > 0 && `다이버전스↓ ${bearishDivs.map(tf => tf.timeframe).join(',')}`,
-    orderBlocks && orderBlocks.filter(ob => ob.type === 'bullish').length > 0 && `지지구간 ${orderBlocks.filter(ob => ob.type === 'bullish').length}개`,
-    orderBlocks && orderBlocks.filter(ob => ob.type === 'bearish').length > 0 && `저항구간 ${orderBlocks.filter(ob => ob.type === 'bearish').length}개`,
-    alignmentPercent >= 80 && '추세일치 강함',
-    alignmentPercent < 40 && '추세혼조 관망',
+  // 티커 콘텐츠 배열 (lucide 아이콘 + 심플 무채색)
+  const tickerItems: React.ReactNode[] = [
+    <><Clock className="w-3 h-3 inline mr-1" />{timeStr}</>,
+    data.overallTrend === 'bullish' ? <><TrendingUp className="w-3 h-3 inline mr-1" />추세 {bullishCount}/{totalCount} ({alignmentPercent}%)</> :
+    data.overallTrend === 'bearish' ? <><TrendingDown className="w-3 h-3 inline mr-1" />추세 {bearishCount}/{totalCount} ({alignmentPercent}%)</> :
+    <><Minus className="w-3 h-3 inline mr-1" />추세 {Math.max(bullishCount, bearishCount)}/{totalCount} ({alignmentPercent}%)</>,
+    fundingRate !== undefined && <><ArrowUpDown className="w-3 h-3 inline mr-1" />펀딩 {fundingRate > 0 ? '+' : ''}{fundingRate.toFixed(4)}%{fundingRate > 0.01 ? ' [롱과열]' : fundingRate < -0.01 ? ' [숏과열]' : ''}</>,
+    aboveEMA200 && <><TrendingUp className="w-3 h-3 inline mr-1" />EMA200 상승구조</>,
+    belowEMA200 && <><TrendingDown className="w-3 h-3 inline mr-1" />EMA200 하락구조</>,
+    vah && <><Target className="w-3 h-3 inline mr-1" />고점 ${formatPrice(vah)} ({((vah - actualPrice) / actualPrice * 100).toFixed(1)}%)</>,
+    val && <><Target className="w-3 h-3 inline mr-1" />저점 ${formatPrice(val)} ({((actualPrice - val) / actualPrice * 100).toFixed(1)}%)</>,
+    poc && <><Target className="w-3 h-3 inline mr-1" />POC ${formatPrice(poc)} ({Math.abs((poc - actualPrice) / actualPrice * 100).toFixed(1)}%)</>,
+    overboughtTFs.length > 0 && <><Activity className="w-3 h-3 inline mr-1" />RSI 과매수 {overboughtTFs.map(tf => tf.timeframe).join(',')}</>,
+    oversoldTFs.length > 0 && <><Activity className="w-3 h-3 inline mr-1" />RSI 과매도 {oversoldTFs.map(tf => tf.timeframe).join(',')}</>,
+    strongTrendTFs.length > 0 && <><Zap className="w-3 h-3 inline mr-1" />ADX25+ {strongTrendTFs.length}개 TF</>,
+    avgATR && avgATR > 1.5 && <><AlertTriangle className="w-3 h-3 inline mr-1" />ATR {avgATR.toFixed(1)}x 고변동</>,
+    avgATR && avgATR < 0.8 && <><Minus className="w-3 h-3 inline mr-1" />ATR {avgATR.toFixed(1)}x 저변동</>,
+    cvdBullish > cvdBearish + 2 && <><BarChart3 className="w-3 h-3 inline mr-1" />CVD 매수 {cvdBullish}/{totalCount}</>,
+    cvdBearish > cvdBullish + 2 && <><BarChart3 className="w-3 h-3 inline mr-1" />CVD 매도 {cvdBearish}/{totalCount}</>,
+    oiBullish > oiBearish + 2 && <><Layers className="w-3 h-3 inline mr-1" />OI 증가 {oiBullish}/{totalCount}</>,
+    oiBearish > oiBullish + 2 && <><Layers className="w-3 h-3 inline mr-1" />OI 감소 {oiBearish}/{totalCount}</>,
+    bullishDivs.length > 0 && <><Activity className="w-3 h-3 inline mr-1" />다이버전스↑ {bullishDivs.map(tf => tf.timeframe).join(',')}</>,
+    bearishDivs.length > 0 && <><Activity className="w-3 h-3 inline mr-1" />다이버전스↓ {bearishDivs.map(tf => tf.timeframe).join(',')}</>,
+    orderBlocks && orderBlocks.filter(ob => ob.type === 'bullish').length > 0 && <><Layers className="w-3 h-3 inline mr-1" />지지구간 {orderBlocks.filter(ob => ob.type === 'bullish').length}개</>,
+    orderBlocks && orderBlocks.filter(ob => ob.type === 'bearish').length > 0 && <><Layers className="w-3 h-3 inline mr-1" />저항구간 {orderBlocks.filter(ob => ob.type === 'bearish').length}개</>,
+    alignmentPercent >= 80 && <><Zap className="w-3 h-3 inline mr-1" />추세일치 강함</>,
+    alignmentPercent < 40 && <><AlertTriangle className="w-3 h-3 inline mr-1" />추세혼조 관망</>,
   ].filter(Boolean);
 
   return (
