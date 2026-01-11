@@ -339,6 +339,19 @@ export interface ApiResponse {
 export type MTFStatus = 'bullish' | 'bearish' | 'neutral';
 export type MTFStrength = 'strong' | 'weak' | 'neutral'; // 강도
 
+// Action 추천 타입
+export type MTFAction =
+  | 'long_ok'      // 🟢 롱 OK - 상위TF 추세 + 다이버전스 일치
+  | 'short_ok'     // 🔴 숏 OK - 상위TF 추세 + 다이버전스 일치
+  | 'reversal_warn' // ⚠️ 반전주의 - 상위TF 추세와 다이버전스 역행
+  | 'trend_hold'   // 추세유지 - 신호 없음, 추세 따라가기
+  | 'wait';        // 대기 - 명확한 신호 없음
+
+export interface MTFActionInfo {
+  action: MTFAction;
+  reason: string;
+}
+
 export interface MTFTimeframeData {
   timeframe: string;
   trend: MTFStatus;
@@ -359,6 +372,7 @@ export interface MTFTimeframeData {
   ema20: number | null;
   ema50: number | null;
   ema200: number | null;
+  actionInfo: MTFActionInfo; // 추천 액션
 }
 
 export interface MTFSignalValidation {

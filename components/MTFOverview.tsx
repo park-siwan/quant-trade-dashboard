@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useMTF, getSecondsUntilClose, CANDLE_INTERVALS_SEC } from '@/hooks/useMTF';
-import { MTFStatus, MTFStrength, MTFTimeframeData } from '@/lib/types/index';
+import { MTFStatus, MTFStrength, MTFTimeframeData, MTFAction, MTFActionInfo } from '@/lib/types/index';
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock } from 'lucide-react';
 
 interface MTFOverviewProps {
@@ -99,6 +99,64 @@ const DivergenceDisplay = ({ divergence, timeframe }: {
         {isBullish ? '↑' : '↓'} {typeLabel}
       </span>
       <span className="text-[9px] text-gray-500">{timeAgo} ago</span>
+    </div>
+  );
+};
+
+// 액션 표시 컴포넌트
+const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
+  const { action, reason } = actionInfo;
+
+  const getActionStyle = (action: MTFAction) => {
+    switch (action) {
+      case 'long_ok':
+        return {
+          bg: 'bg-green-500/20 border-green-500/30',
+          text: 'text-green-400',
+          icon: '🟢',
+          label: '롱 OK',
+        };
+      case 'short_ok':
+        return {
+          bg: 'bg-red-500/20 border-red-500/30',
+          text: 'text-red-400',
+          icon: '🔴',
+          label: '숏 OK',
+        };
+      case 'reversal_warn':
+        return {
+          bg: 'bg-amber-500/20 border-amber-500/30',
+          text: 'text-amber-400',
+          icon: '⚠️',
+          label: '반전주의',
+        };
+      case 'trend_hold':
+        return {
+          bg: 'bg-blue-500/20 border-blue-500/30',
+          text: 'text-blue-400',
+          icon: '→',
+          label: '추세유지',
+        };
+      case 'wait':
+      default:
+        return {
+          bg: 'bg-gray-500/20 border-gray-500/30',
+          text: 'text-gray-400',
+          icon: '⏸',
+          label: '대기',
+        };
+    }
+  };
+
+  const style = getActionStyle(action);
+
+  return (
+    <div className="flex flex-col items-start">
+      <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border ${style.bg}`}>
+        <span className="text-xs">{style.icon}</span>
+        <span className={`text-xs font-semibold ${style.text}`}>{style.label}</span>
+      </div>
+      <span className="text-[9px] text-gray-500 mt-0.5">{reason}</span>
     </div>
   );
 };
@@ -226,6 +284,9 @@ const TimeframeRow = ({
       </td>
       <td className="px-3 py-2">
         <DivergenceDisplay divergence={data.divergence} timeframe={data.timeframe} />
+      </td>
+      <td className="px-3 py-2">
+        <ActionDisplay actionInfo={data.actionInfo} />
       </td>
       <td className="px-3 py-2">
         <CandleCountdown
@@ -359,6 +420,7 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="CVD 방향/강도">CVD</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="OI 방향/강도">OI</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">DIV</th>
+              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="추천 액션">Action</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="캔들 마감까지">
                 <Clock className="w-3 h-3 inline" />
               </th>

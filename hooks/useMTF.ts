@@ -7,6 +7,8 @@ import {
   MTFStatus,
   MTFStrength,
   MTFSignalValidation,
+  MTFAction,
+  MTFActionInfo,
   ApiResponse,
 } from '@/lib/types/index';
 
@@ -58,11 +60,34 @@ interface UseMTFParams {
   enabled?: boolean;
 }
 
+// actionInfo 없는 중간 타입
+interface RawTimeframeData {
+  timeframe: string;
+  trend: MTFStatus;
+  rsi: number | null;
+  cvdDirection: MTFStatus;
+  cvdStrength: MTFStrength;
+  cvdChange: number;
+  oiDirection: MTFStatus;
+  oiStrength: MTFStrength;
+  oiChange: number;
+  divergence: {
+    type: 'rsi' | 'obv' | 'cvd' | 'oi';
+    direction: 'bullish' | 'bearish';
+    timestamp: number;
+    candlesAgo: number;
+  } | null;
+  currentPrice: number;
+  ema20: number | null;
+  ema50: number | null;
+  ema200: number | null;
+}
+
 // 타임프레임 데이터 변환
 const processTimeframeData = (
   timeframe: string,
   data: ApiResponse | undefined
-): MTFTimeframeData | null => {
+): RawTimeframeData | null => {
   if (!data?.success || !data?.data?.candles?.length) {
     return null;
   }
@@ -221,7 +246,7 @@ const getLatestDivergence = (
 
 // 전체 추세 계산
 const calculateOverallTrend = (
-  timeframes: MTFTimeframeData[]
+  timeframes: RawTimeframeData[]
 ): MTFStatus => {
   const bullishCount = timeframes.filter((t) => t.trend === 'bullish').length;
   const bearishCount = timeframes.filter((t) => t.trend === 'bearish').length;
@@ -232,7 +257,7 @@ const calculateOverallTrend = (
 };
 
 // 강도 점수 계산 (0~1)
-const calculateStrengthScore = (timeframes: MTFTimeframeData[]): number => {
+const calculateStrengthScore = (timeframes: RawTimeframeData[]): number => {
   if (timeframes.length === 0) return 0;
 
   const trends = timeframes.map((t) => t.trend);
@@ -241,6 +266,61 @@ const calculateStrengthScore = (timeframes: MTFTimeframeData[]): number => {
   const maxCount = Math.max(bullishCount, bearishCount);
 
   return maxCount / trends.length;
+};
+
+// 액션 추천 계산
+const calculateAction = (
+  tfData: RawTimeframeData,
+  overallTrend: MTFStatus,
+  higherTfTrend: MTFStatus // 4h or 1d trend
+): MTFActionInfo => {
+  const { trend, divergence, rsi } = tfData;
+
+  // 다이버전스가 있는 경우
+  if (divergence) {
+    const divDirection = divergence.direction;
+
+    // 다이버전스가 상위TF 추세와 같은 방향 → OK
+    if (divDirection === 'bullish' && (overallTrend === 'bullish' || higherTfTrend === 'bullish')) {
+      return { action: 'long_ok', reason: '추세+다이버전스 일치' };
+    }
+    if (divDirection === 'bearish' && (overallTrend === 'bearish' || higherTfTrend === 'bearish')) {
+      return { action: 'short_ok', reason: '추세+다이버전스 일치' };
+    }
+
+    // 다이버전스가 상위TF 추세와 반대 → 반전 주의
+    if (divDirection === 'bullish' && (overallTrend === 'bearish' || higherTfTrend === 'bearish')) {
+      return { action: 'reversal_warn', reason: '역추세 다이버전스' };
+    }
+    if (divDirection === 'bearish' && (overallTrend === 'bullish' || higherTfTrend === 'bullish')) {
+      return { action: 'reversal_warn', reason: '역추세 다이버전스' };
+    }
+
+    // 중립 추세에서 다이버전스
+    if (divDirection === 'bullish') {
+      return { action: 'long_ok', reason: '다이버전스 발생' };
+    }
+    return { action: 'short_ok', reason: '다이버전스 발생' };
+  }
+
+  // 다이버전스 없는 경우
+  // RSI 과매수/과매도 체크
+  if (rsi !== null) {
+    if (rsi >= 70 && trend === 'bullish') {
+      return { action: 'reversal_warn', reason: 'RSI 과매수' };
+    }
+    if (rsi <= 30 && trend === 'bearish') {
+      return { action: 'reversal_warn', reason: 'RSI 과매도' };
+    }
+  }
+
+  // 추세 유지
+  if (trend === 'bullish' || trend === 'bearish') {
+    return { action: 'trend_hold', reason: '추세 유지' };
+  }
+
+  // 신호 없음
+  return { action: 'wait', reason: '명확한 신호 없음' };
 };
 
 // MTF 신호 검증
@@ -358,17 +438,33 @@ export function useMTF({ symbol, limit = 200, enabled = true }: UseMTFParams) {
   const isLoading = queries.some((q) => q.isLoading);
   const isError = queries.some((q) => q.isError);
 
-  // 모든 타임프레임 데이터 처리
-  const timeframesData: MTFTimeframeData[] = queries
+  // 모든 타임프레임 데이터 처리 (actionInfo 제외)
+  const rawTimeframesData: RawTimeframeData[] = queries
     .map((q, index) => processTimeframeData(TIMEFRAMES[index], q.data))
-    .filter((t): t is MTFTimeframeData => t !== null);
+    .filter((t): t is RawTimeframeData => t !== null);
+
+  // 전체 추세 및 상위TF 추세 계산
+  const overallTrend: MTFStatus = rawTimeframesData.length > 0
+    ? calculateOverallTrend(rawTimeframesData)
+    : 'neutral';
+
+  // 4h, 1d 추세 가져오기
+  const h4Trend: MTFStatus = rawTimeframesData.find(t => t.timeframe === '4h')?.trend || 'neutral';
+  const d1Trend: MTFStatus = rawTimeframesData.find(t => t.timeframe === '1d')?.trend || 'neutral';
+  const higherTfTrend: MTFStatus = d1Trend !== 'neutral' ? d1Trend : h4Trend;
+
+  // 각 타임프레임에 actionInfo 추가
+  const timeframesData: MTFTimeframeData[] = rawTimeframesData.map((tfData): MTFTimeframeData => ({
+    ...tfData,
+    actionInfo: calculateAction(tfData, overallTrend, higherTfTrend),
+  }));
 
   const mtfData: MTFOverviewData | null =
     timeframesData.length > 0
       ? {
           timeframes: timeframesData,
-          overallTrend: calculateOverallTrend(timeframesData),
-          alignmentScore: calculateStrengthScore(timeframesData),
+          overallTrend,
+          alignmentScore: calculateStrengthScore(rawTimeframesData),
         }
       : null;
 
