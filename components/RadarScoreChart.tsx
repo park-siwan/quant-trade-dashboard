@@ -15,9 +15,10 @@ interface RadarScoreChartProps {
     marketStructure: number;
     externalFactors: number;
   };
+  size?: 'normal' | 'large';
 }
 
-export default function RadarScoreChart({ longScores, shortScores }: RadarScoreChartProps) {
+export default function RadarScoreChart({ longScores, shortScores, size = 'normal' }: RadarScoreChartProps) {
   // 최대 점수로 정규화 (0-100%)
   const data = [
     {
@@ -72,8 +73,10 @@ export default function RadarScoreChart({ longScores, shortScores }: RadarScoreC
     return null;
   };
 
+  const height = size === 'large' ? 'h-[240px]' : 'h-[180px]';
+
   return (
-    <div className="w-full h-[180px]">
+    <div className={`w-full ${height}`}>
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
           <PolarGrid

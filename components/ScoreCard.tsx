@@ -31,7 +31,6 @@ const DigitSlot = ({ digit, direction, size = 'normal' }: { digit: string; direc
 
   return (
     <span className={`inline-block ${sizeClass} overflow-hidden relative`}>
-      {/* 이전 숫자 */}
       {isSpinning && (
         <span
           className={`absolute inset-0 flex items-center justify-center ${
@@ -41,7 +40,6 @@ const DigitSlot = ({ digit, direction, size = 'normal' }: { digit: string; direc
           {prevDigit}
         </span>
       )}
-      {/* 현재 숫자 */}
       <span
         className={`flex items-center justify-center ${
           isSpinning
@@ -92,25 +90,78 @@ interface ScoreCardProps {
   val?: number;
 }
 
-// 신뢰도 배지 스타일
-const getConfidenceBadgeStyle = (confidence: SignalScore['confidence']) => {
-  switch (confidence) {
-    case 'highest':
-      return 'bg-green-500/20 border-green-500/30 text-green-400';
-    case 'high':
-      return 'bg-lime-500/20 border-lime-500/30 text-lime-400';
-    case 'medium':
-      return 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400';
-    case 'low':
-      return 'bg-orange-500/20 border-orange-500/30 text-orange-400';
-    case 'skip':
-    default:
-      return 'bg-red-500/20 border-red-500/30 text-red-400';
-  }
+// 카테고리 라벨
+const categoryLabels: Record<string, { name: string; max: number }> = {
+  mtfAlignment: { name: '추세', max: 30 },
+  divergence: { name: '다이버전스', max: 30 },
+  marketStructure: { name: '시장구조', max: 20 },
+  externalFactors: { name: '외부요인', max: 20 },
+};
+
+// 상세 이유 컴포넌트
+const ScoreDetails = ({
+  score,
+  type
+}: {
+  score: SignalScore;
+  type: 'long' | 'short';
+}) => {
+  const color = type === 'long' ? 'green' : 'red';
+  const Icon = type === 'long' ? TrendingUp : TrendingDown;
+
+  const categories = [
+    { key: 'mtfAlignment', data: score.mtfAlignment },
+    { key: 'divergence', data: score.divergence },
+    { key: 'marketStructure', data: score.marketStructure },
+    { key: 'externalFactors', data: score.externalFactors },
+  ];
+
+  return (
+    <div className="space-y-2">
+      {/* 총점 헤더 */}
+      <div className={`flex items-center gap-2 pb-2 border-b border-white/10`}>
+        <Icon className={`w-4 h-4 text-${color}-400`} />
+        <span className={`text-sm font-bold text-${color}-400`}>
+          {type === 'long' ? '롱' : '숏'}
+        </span>
+        <span className={`text-xl font-bold font-mono text-${color}-400 ml-auto`}>
+          <AnimatedNumber value={score.total} />
+          <span className="text-xs text-gray-500 font-normal">/100</span>
+        </span>
+      </div>
+
+      {/* 카테고리별 상세 */}
+      <div className="space-y-1.5">
+        {categories.map(({ key, data }) => {
+          const { name, max } = categoryLabels[key];
+          const hasDetails = data.details.length > 0;
+
+          return (
+            <div key={key} className="text-[11px]">
+              {/* 카테고리 헤더 */}
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-gray-500">{name}</span>
+                <span className={`font-mono text-${color}-400/80`}>
+                  {data.score}/{max}
+                </span>
+              </div>
+              {/* 상세 이유 */}
+              {hasDetails && (
+                <ul className="text-[10px] text-gray-600 space-y-0 pl-2">
+                  {data.details.slice(0, 3).map((detail, i) => (
+                    <li key={i} className="truncate">• {detail}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 };
 
 export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlocks, poc, vah, val }: ScoreCardProps) {
-  // 롱/숏 둘 다 계산
   const { longScore, shortScore } = useMemo(() => {
     const marketData: MarketStructureData | undefined = currentPrice
       ? { currentPrice, orderBlocks, poc, vah, val }
@@ -121,16 +172,12 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
     };
   }, [mtfData, fundingRate, currentPrice, orderBlocks, poc, vah, val]);
 
-  const longConfidence = confidenceLabels[longScore.confidence];
-  const shortConfidence = confidenceLabels[shortScore.confidence];
-
-  // 더 높은 점수 방향 확인
   const betterDirection = longScore.total > shortScore.total ? 'long' : longScore.total < shortScore.total ? 'short' : 'neutral';
 
   return (
     <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-3 h-full">
       {/* 헤더 */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <h3 className="text-xs font-bold text-gray-400">신호 점수</h3>
           <span className="flex items-center gap-1 text-[10px] text-gray-500">
@@ -138,72 +185,59 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
             실시간
           </span>
         </div>
+        {betterDirection !== 'neutral' && (
+          <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+            betterDirection === 'long'
+              ? 'bg-green-500/20 text-green-400'
+              : 'bg-red-500/20 text-red-400'
+          }`}>
+            {betterDirection === 'long' ? '롱 우세' : '숏 우세'}
+          </span>
+        )}
       </div>
 
-      {/* 롱/숏 전체 점수 비교 */}
-      <div className="grid grid-cols-2 gap-3 mb-3 pb-3 border-b border-white/10">
-        {/* 롱 점수 */}
-        <div className={`p-2 rounded-lg border relative ${betterDirection === 'long' ? 'border-green-500/30 bg-green-500/5' : 'border-white/5 bg-white/[0.01]'}`}>
-          <div className="flex items-center gap-1.5 mb-1">
-            <TrendingUp className="w-3 h-3 text-green-400" />
-            <span className="text-[10px] text-green-400 font-semibold">롱</span>
-            {betterDirection === 'long' && <span className="text-[10px] text-green-400/60 ml-auto">추천</span>}
-          </div>
-          <div className="text-2xl font-bold font-mono text-green-400">
-            <AnimatedNumber value={longScore.total} />
-          </div>
-          {longScore.recommendation.action !== 'wait' ? (
-            <div className="mt-1 text-[11px] text-gray-500">
-              {longScore.recommendation.leverage} · {longScore.recommendation.seedRatio}
-            </div>
-          ) : (
-            <div className="absolute bottom-1.5 right-1.5">
-              <span className={`text-[10px] px-1 py-0.5 rounded border ${getConfidenceBadgeStyle(longScore.confidence)}`}>
-                {longConfidence.label}
-              </span>
-            </div>
-          )}
+      {/* 메인 레이아웃: 좌측 레이더 + 우측 상세 */}
+      <div className="grid grid-cols-[1fr_1.2fr] gap-4">
+        {/* 좌측: 레이더 차트 */}
+        <div className="flex flex-col">
+          <RadarScoreChart
+            longScores={{
+              mtfAlignment: longScore.mtfAlignment.score,
+              divergence: longScore.divergence.score,
+              marketStructure: longScore.marketStructure.score,
+              externalFactors: longScore.externalFactors.score,
+            }}
+            shortScores={{
+              mtfAlignment: shortScore.mtfAlignment.score,
+              divergence: shortScore.divergence.score,
+              marketStructure: shortScore.marketStructure.score,
+              externalFactors: shortScore.externalFactors.score,
+            }}
+            size="large"
+          />
         </div>
 
-        {/* 숏 점수 */}
-        <div className={`p-2 rounded-lg border relative ${betterDirection === 'short' ? 'border-red-500/30 bg-red-500/5' : 'border-white/5 bg-white/[0.01]'}`}>
-          <div className="flex items-center gap-1.5 mb-1">
-            <TrendingDown className="w-3 h-3 text-red-400" />
-            <span className="text-[10px] text-red-400 font-semibold">숏</span>
-            {betterDirection === 'short' && <span className="text-[10px] text-red-400/60 ml-auto">추천</span>}
+        {/* 우측: 롱/숏 상세 비교 */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* 롱 상세 */}
+          <div className={`p-2 rounded-lg border ${
+            betterDirection === 'long'
+              ? 'border-green-500/30 bg-green-500/5'
+              : 'border-white/5 bg-white/[0.01]'
+          }`}>
+            <ScoreDetails score={longScore} type="long" />
           </div>
-          <div className="text-2xl font-bold font-mono text-red-400">
-            <AnimatedNumber value={shortScore.total} />
+
+          {/* 숏 상세 */}
+          <div className={`p-2 rounded-lg border ${
+            betterDirection === 'short'
+              ? 'border-red-500/30 bg-red-500/5'
+              : 'border-white/5 bg-white/[0.01]'
+          }`}>
+            <ScoreDetails score={shortScore} type="short" />
           </div>
-          {shortScore.recommendation.action !== 'wait' ? (
-            <div className="mt-1 text-[11px] text-gray-500">
-              {shortScore.recommendation.leverage} · {shortScore.recommendation.seedRatio}
-            </div>
-          ) : (
-            <div className="absolute bottom-1.5 right-1.5">
-              <span className={`text-[10px] px-1 py-0.5 rounded border ${getConfidenceBadgeStyle(shortScore.confidence)}`}>
-                {shortConfidence.label}
-              </span>
-            </div>
-          )}
         </div>
       </div>
-
-      {/* 레이더 차트 */}
-      <RadarScoreChart
-        longScores={{
-          mtfAlignment: longScore.mtfAlignment.score,
-          divergence: longScore.divergence.score,
-          marketStructure: longScore.marketStructure.score,
-          externalFactors: longScore.externalFactors.score,
-        }}
-        shortScores={{
-          mtfAlignment: shortScore.mtfAlignment.score,
-          divergence: shortScore.divergence.score,
-          marketStructure: shortScore.marketStructure.score,
-          externalFactors: shortScore.externalFactors.score,
-        }}
-      />
     </div>
   );
 }
