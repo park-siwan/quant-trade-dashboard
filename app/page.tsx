@@ -1,4 +1,5 @@
 import ChartAdapter from '@/components/ChartAdapter';
+import MTFOverview from '@/components/MTFOverview';
 
 export default function Home() {
   return (
@@ -12,6 +13,9 @@ export default function Home() {
       <div className='relative z-10 space-y-6'>
         {/* 메인 차트 (오더북 플로팅 포함) */}
         <ChartAdapter symbol='BTC/USDT' initialTimeframe='5m' limit={1000} />
+
+        {/* MTF Overview - 멀티 타임프레임 상태 */}
+        <MTFOverview symbol='BTC/USDT' />
 
         {/* 용어 설명 - 카테고리별 정리 */}
         <div className='backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-4 space-y-4'>

@@ -334,3 +334,39 @@ export interface ApiResponse {
     adx?: AdxData; // ADX 추세 강도 데이터
   };
 }
+
+// MTF (Multi-Timeframe) 타입
+export type MTFStatus = 'bullish' | 'bearish' | 'neutral';
+
+export interface MTFTimeframeData {
+  timeframe: string;
+  trend: MTFStatus;
+  rsi: number | null;
+  cvdDirection: MTFStatus;
+  oiDirection: MTFStatus;
+  divergence: {
+    type: 'rsi' | 'obv' | 'cvd' | 'oi' | null;
+    direction: 'bullish' | 'bearish' | null;
+  } | null;
+  currentPrice: number;
+  ema20: number | null;
+  ema50: number | null;
+  ema200: number | null;
+}
+
+export interface MTFSignalValidation {
+  valid: boolean;
+  confidence: number; // 0~1
+  reason?: string;
+  details: {
+    timeframe: string;
+    trend: MTFStatus;
+    aligned: boolean;
+  }[];
+}
+
+export interface MTFOverviewData {
+  timeframes: MTFTimeframeData[];
+  overallTrend: MTFStatus;
+  alignmentScore: number; // 0~1, 모든 타임프레임이 같은 방향일수록 높음
+}
