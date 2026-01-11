@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { MTFOverviewData, OrderBlock } from '@/lib/types';
 import { calculateSignalScore, confidenceLabels, SignalScore, MarketStructureData } from '@/lib/scoring';
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, BarChart3, Layers, ArrowUpDown, Zap } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 const RadarScoreChart = dynamic(() => import('./RadarScoreChart'), { ssr: false });
@@ -91,14 +91,14 @@ interface ScoreCardProps {
   fearGreedIndex?: number;
 }
 
-// 6개 카테고리 라벨
-const categoryLabels: Record<string, { name: string; max: number }> = {
-  trendAlignment: { name: '추세', max: 20 },
-  divergence: { name: '다이버전스', max: 20 },
-  momentum: { name: '모멘텀', max: 15 },
-  volume: { name: '거래량', max: 15 },
-  levels: { name: '지지/저항', max: 15 },
-  sentiment: { name: '시장심리', max: 15 },
+// 6개 카테고리 라벨 + 아이콘
+const categoryLabels: Record<string, { name: string; max: number; icon: React.ElementType }> = {
+  trendAlignment: { name: '추세', max: 20, icon: TrendingUp },
+  divergence: { name: '다이버전스', max: 20, icon: Activity },
+  momentum: { name: '모멘텀', max: 15, icon: Zap },
+  volume: { name: '거래량', max: 15, icon: BarChart3 },
+  levels: { name: '지지/저항', max: 15, icon: Layers },
+  sentiment: { name: '시장심리', max: 15, icon: ArrowUpDown },
 };
 
 // 상세 이유 컴포넌트
@@ -140,22 +140,25 @@ const ScoreDetails = ({
       {/* 카테고리별 상세 */}
       <div className="space-y-2">
         {categories.map(({ key, data }) => {
-          const { name, max } = categoryLabels[key];
+          const { name, max, icon: CategoryIcon } = categoryLabels[key];
           const hasDetails = data.details.length > 0;
 
           return (
             <div key={key} className="text-xs">
               {/* 카테고리 헤더 */}
               <div className="flex items-center justify-between">
-                <span className="text-gray-300">{name}</span>
+                <span className="flex items-center gap-1 text-gray-300">
+                  <CategoryIcon className="w-3 h-3 text-gray-500" />
+                  {name}
+                </span>
                 <span className={`font-mono font-medium ${colorClass}`}>
                   {data.score}/{max}
                 </span>
               </div>
               {/* 상세 이유 (1개만 표시) */}
               {hasDetails && (
-                <div className="text-[10px] text-gray-400 truncate pl-1">
-                  • {data.details[0]}
+                <div className="text-[10px] text-gray-400 truncate pl-4">
+                  {data.details[0]}
                 </div>
               )}
             </div>

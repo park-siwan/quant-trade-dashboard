@@ -1,7 +1,7 @@
 'use client';
 
 import { Recommendation, WaitCondition } from '@/lib/recommendation';
-import { TrendingUp, TrendingDown, Ban, Clock, CheckCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Ban, Clock, CheckCircle, Target, ShieldAlert, Crosshair } from 'lucide-react';
 
 interface RecommendationCardProps {
   recommendation: Recommendation;
@@ -99,19 +99,25 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
       {/* 가격 정보 */}
       <div className="grid grid-cols-3 gap-2 text-[11px]">
         <div className="bg-white/[0.02] rounded p-1.5 border border-white/5">
-          <div className="text-[11px] text-gray-500">진입가</div>
+          <div className="flex items-center gap-1 text-[11px] text-gray-500">
+            <Crosshair className="w-3 h-3" />진입가
+          </div>
           <div className="font-mono text-white">
             ${recommendation.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </div>
         </div>
         <div className="bg-white/[0.02] rounded p-1.5 border border-red-500/20">
-          <div className="text-[11px] text-red-400">손절가</div>
+          <div className="flex items-center gap-1 text-[11px] text-red-400">
+            <ShieldAlert className="w-3 h-3" />손절가
+          </div>
           <div className="font-mono text-red-300">
             ${recommendation.stopLoss?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </div>
         </div>
         <div className="bg-white/[0.02] rounded p-1.5 border border-green-500/20">
-          <div className="text-[11px] text-green-400">익절목표</div>
+          <div className="flex items-center gap-1 text-[11px] text-green-400">
+            <Target className="w-3 h-3" />익절목표
+          </div>
           <div className="font-mono text-green-300">
             ${recommendation.takeProfit?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </div>
