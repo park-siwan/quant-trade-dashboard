@@ -165,6 +165,8 @@ const ScoreDetails = ({
 };
 
 export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlocks, poc, vah, val, fearGreedIndex }: ScoreCardProps) {
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+
   const { longScore, shortScore } = useMemo(() => {
     const marketData: MarketStructureData | undefined = currentPrice
       ? { currentPrice, orderBlocks, poc, vah, val }
@@ -174,6 +176,11 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
       shortScore: calculateSignalScore(mtfData, 'bearish', fundingRate, marketData, fearGreedIndex),
     };
   }, [mtfData, fundingRate, currentPrice, orderBlocks, poc, vah, val, fearGreedIndex]);
+
+  // 점수 변경 시 업데이트 시간 갱신
+  useEffect(() => {
+    setLastUpdate(new Date());
+  }, [longScore.total, shortScore.total]);
 
   const betterDirection = longScore.total > shortScore.total ? 'long' : longScore.total < shortScore.total ? 'short' : 'neutral';
 
@@ -185,7 +192,7 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
           <h3 className="text-xs font-bold text-gray-400">신호 점수</h3>
           <span className="flex items-center gap-1 text-[10px] text-gray-500">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-live-pulse" />
-            실시간
+            {lastUpdate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </span>
         </div>
         {betterDirection !== 'neutral' && (
