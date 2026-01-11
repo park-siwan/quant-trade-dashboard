@@ -8,6 +8,7 @@ import ScoreCard from './ScoreCard';
 import RecommendationCard from './RecommendationCard';
 import { calculateSignalScore, MarketStructureData } from '@/lib/scoring';
 import { generateRecommendation } from '@/lib/recommendation';
+import { useCoinglass } from '@/hooks/useCoinglass';
 
 // 공항 전광판/슬롯 스타일 애니메이션 숫자 (소수점 지원)
 const AnimatedValue = memo(({
@@ -658,6 +659,13 @@ const formatPrice = (price: number) => {
 export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: propVah, val: propVal, fundingRate, orderBlocks: propOrderBlocks }: MTFOverviewProps) {
   const { data, isLoading, isError, isConnected, refetch, refetchTimeframe, volumeProfile, orderBlocks: hookOrderBlocks } = useMTFSocket({ symbol });
 
+  // Coinglass 데이터 (공포탐욕지수)
+  const { data: coinglassData } = useCoinglass({
+    symbol: symbol.replace('/USDT', '').replace('/', ''),
+    refreshInterval: 60000,
+  });
+  const fearGreedIndex = coinglassData?.fearGreed?.value ?? undefined;
+
   // props 우선, 없으면 useMTF에서 계산/추출된 값 사용
   const poc = propPoc ?? volumeProfile?.poc;
   const vah = propVah ?? volumeProfile?.vah;
@@ -842,6 +850,7 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
                 poc={poc}
                 vah={vah}
                 val={val}
+                fearGreedIndex={fearGreedIndex}
               />
             </div>
           </div>

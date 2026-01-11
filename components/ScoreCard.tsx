@@ -88,14 +88,17 @@ interface ScoreCardProps {
   poc?: number;
   vah?: number;
   val?: number;
+  fearGreedIndex?: number;
 }
 
-// 카테고리 라벨
+// 6개 카테고리 라벨
 const categoryLabels: Record<string, { name: string; max: number }> = {
-  mtfAlignment: { name: '추세', max: 30 },
-  divergence: { name: '다이버전스', max: 30 },
-  marketStructure: { name: '시장구조', max: 20 },
-  externalFactors: { name: '외부요인', max: 20 },
+  trendAlignment: { name: '추세', max: 20 },
+  divergence: { name: '다이버전스', max: 20 },
+  momentum: { name: '모멘텀', max: 15 },
+  volume: { name: '거래량', max: 15 },
+  levels: { name: '지지/저항', max: 15 },
+  sentiment: { name: '시장심리', max: 15 },
 };
 
 // 상세 이유 컴포넌트
@@ -110,10 +113,12 @@ const ScoreDetails = ({
   const Icon = type === 'long' ? TrendingUp : TrendingDown;
 
   const categories = [
-    { key: 'mtfAlignment', data: score.mtfAlignment },
+    { key: 'trendAlignment', data: score.trendAlignment },
     { key: 'divergence', data: score.divergence },
-    { key: 'marketStructure', data: score.marketStructure },
-    { key: 'externalFactors', data: score.externalFactors },
+    { key: 'momentum', data: score.momentum },
+    { key: 'volume', data: score.volume },
+    { key: 'levels', data: score.levels },
+    { key: 'sentiment', data: score.sentiment },
   ];
 
   return (
@@ -131,27 +136,25 @@ const ScoreDetails = ({
       </div>
 
       {/* 카테고리별 상세 */}
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         {categories.map(({ key, data }) => {
           const { name, max } = categoryLabels[key];
           const hasDetails = data.details.length > 0;
 
           return (
-            <div key={key} className="text-[11px]">
+            <div key={key} className="text-[10px]">
               {/* 카테고리 헤더 */}
-              <div className="flex items-center justify-between mb-0.5">
+              <div className="flex items-center justify-between">
                 <span className="text-gray-500">{name}</span>
                 <span className={`font-mono text-${color}-400/80`}>
                   {data.score}/{max}
                 </span>
               </div>
-              {/* 상세 이유 */}
+              {/* 상세 이유 (1개만 표시) */}
               {hasDetails && (
-                <ul className="text-[10px] text-gray-600 space-y-0 pl-2">
-                  {data.details.slice(0, 3).map((detail, i) => (
-                    <li key={i} className="truncate">• {detail}</li>
-                  ))}
-                </ul>
+                <div className="text-[9px] text-gray-600 truncate pl-1">
+                  • {data.details[0]}
+                </div>
               )}
             </div>
           );
@@ -161,16 +164,16 @@ const ScoreDetails = ({
   );
 };
 
-export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlocks, poc, vah, val }: ScoreCardProps) {
+export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlocks, poc, vah, val, fearGreedIndex }: ScoreCardProps) {
   const { longScore, shortScore } = useMemo(() => {
     const marketData: MarketStructureData | undefined = currentPrice
       ? { currentPrice, orderBlocks, poc, vah, val }
       : undefined;
     return {
-      longScore: calculateSignalScore(mtfData, 'bullish', fundingRate, marketData),
-      shortScore: calculateSignalScore(mtfData, 'bearish', fundingRate, marketData),
+      longScore: calculateSignalScore(mtfData, 'bullish', fundingRate, marketData, fearGreedIndex),
+      shortScore: calculateSignalScore(mtfData, 'bearish', fundingRate, marketData, fearGreedIndex),
     };
-  }, [mtfData, fundingRate, currentPrice, orderBlocks, poc, vah, val]);
+  }, [mtfData, fundingRate, currentPrice, orderBlocks, poc, vah, val, fearGreedIndex]);
 
   const betterDirection = longScore.total > shortScore.total ? 'long' : longScore.total < shortScore.total ? 'short' : 'neutral';
 
@@ -197,28 +200,32 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
       </div>
 
       {/* 메인 레이아웃: 좌측 레이더 + 우측 상세 */}
-      <div className="grid grid-cols-[1fr_1.2fr] gap-4">
-        {/* 좌측: 레이더 차트 */}
+      <div className="grid grid-cols-[1fr_1.3fr] gap-4">
+        {/* 좌측: 레이더 차트 (육각형) */}
         <div className="flex flex-col">
           <RadarScoreChart
             longScores={{
-              mtfAlignment: longScore.mtfAlignment.score,
+              trendAlignment: longScore.trendAlignment.score,
               divergence: longScore.divergence.score,
-              marketStructure: longScore.marketStructure.score,
-              externalFactors: longScore.externalFactors.score,
+              momentum: longScore.momentum.score,
+              volume: longScore.volume.score,
+              levels: longScore.levels.score,
+              sentiment: longScore.sentiment.score,
             }}
             shortScores={{
-              mtfAlignment: shortScore.mtfAlignment.score,
+              trendAlignment: shortScore.trendAlignment.score,
               divergence: shortScore.divergence.score,
-              marketStructure: shortScore.marketStructure.score,
-              externalFactors: shortScore.externalFactors.score,
+              momentum: shortScore.momentum.score,
+              volume: shortScore.volume.score,
+              levels: shortScore.levels.score,
+              sentiment: shortScore.sentiment.score,
             }}
             size="large"
           />
         </div>
 
         {/* 우측: 롱/숏 상세 비교 */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2">
           {/* 롱 상세 */}
           <div className={`p-2 rounded-lg border ${
             betterDirection === 'long'

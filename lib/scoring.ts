@@ -16,19 +16,28 @@ export interface ScoreCategory {
   details: string[];
 }
 
+// 6개 카테고리 신호 점수
 export interface SignalScore {
   total: number;
   maxTotal: number;
   confidence: 'highest' | 'high' | 'medium' | 'low' | 'skip';
-  mtfAlignment: ScoreCategory;
-  divergence: ScoreCategory;
-  marketStructure: ScoreCategory;
-  externalFactors: ScoreCategory;
+  // 6개 카테고리
+  trendAlignment: ScoreCategory;   // 추세
+  divergence: ScoreCategory;        // 다이버전스
+  momentum: ScoreCategory;          // 모멘텀
+  volume: ScoreCategory;            // 거래량 (CVD)
+  levels: ScoreCategory;            // 지지/저항
+  sentiment: ScoreCategory;         // 시장심리 (펀딩+OI)
+  external: ScoreCategory;          // 레거시 호환용 (sentiment alias)
   recommendation: {
     action: 'long' | 'short' | 'wait';
     leverage: string;
     seedRatio: string;
   };
+  // 레거시 호환 (deprecated)
+  mtfAlignment: ScoreCategory;
+  marketStructure: ScoreCategory;
+  externalFactors: ScoreCategory;
 }
 
 // 신선도 계수 (캔들 수 기준)
@@ -56,12 +65,10 @@ const checkNearOrderBlock = (
   }
 
   for (const ob of orderBlocks) {
-    // 오더블록 범위 내에 있는지 체크 (또는 1% 이내)
     const inRange = currentPrice >= ob.low && currentPrice <= ob.high;
     const nearRange = isNearLevel(currentPrice, ob.low, 1.0) || isNearLevel(currentPrice, ob.high, 1.0);
 
     if (inRange || nearRange) {
-      // 상승 오더블록 = 지지 (롱 유리), 하락 오더블록 = 저항 (숏 유리)
       if (ob.type === 'bullish') {
         return { isNear: true, type: 'support' };
       } else {
@@ -73,80 +80,64 @@ const checkNearOrderBlock = (
   return { isNear: false, type: null };
 };
 
-// MTF 정렬 점수 계산 (30점 만점)
-export const calculateMTFAlignmentScore = (
+// 1. 추세 정렬 점수 (20점 만점) - 기본 6점
+export const calculateTrendAlignmentScore = (
   mtfData: MTFOverviewData,
   direction: 'bullish' | 'bearish'
 ): ScoreCategory => {
   const details: string[] = [];
-  let score = 0;
+  let score = 6; // 기본 점수
 
   const timeframes = mtfData.timeframes;
   const alignedCount = timeframes.filter(tf => tf.trend === direction).length;
+  const oppositeCount = timeframes.filter(tf => tf.trend !== direction && tf.trend !== null).length;
   const totalCount = timeframes.length;
 
-  // 기본 점수 (더 세분화된 스케일)
-  if (alignedCount === 6) {
-    score = 30;
-    details.push(`${alignedCount}/${totalCount} TF 일치 (완벽)`);
-  } else if (alignedCount === 5) {
-    score = 25;
+  // 점진적 점수 (0~14점 추가)
+  score += Math.round((alignedCount / totalCount) * 14);
+
+  if (alignedCount >= 5) {
+    details.push(`${alignedCount}/${totalCount} TF 강한 일치`);
+  } else if (alignedCount >= 3) {
     details.push(`${alignedCount}/${totalCount} TF 일치`);
-  } else if (alignedCount === 4) {
-    score = 20;
-    details.push(`${alignedCount}/${totalCount} TF 일치`);
-  } else if (alignedCount === 3) {
-    score = 15;
-    details.push(`${alignedCount}/${totalCount} TF 일치`);
-  } else if (alignedCount === 2) {
-    score = 10;
-    details.push(`${alignedCount}/${totalCount} TF 일치 (약함)`);
-  } else if (alignedCount === 1) {
-    score = 5;
-    details.push(`${alignedCount}/${totalCount} TF 일치 (매우 약함)`);
+  } else if (alignedCount >= 1) {
+    details.push(`${alignedCount}/${totalCount} TF 약한 일치`);
   } else {
-    score = 0;
-    details.push(`${alignedCount}/${totalCount} TF 일치 (진입 위험)`);
+    details.push(`추세 미확인`);
   }
 
-  // 4h, 1d 체크
+  // 4h, 1d 보너스/페널티 (약하게)
   const h4 = timeframes.find(tf => tf.timeframe === '4h');
   const d1 = timeframes.find(tf => tf.timeframe === '1d');
-
-  // 보너스: 4h + 1d 둘 다 일치
-  if (h4?.trend === direction && d1?.trend === direction) {
-    score += 5;
-    details.push('4h+1d 일치 보너스 +5');
-  }
-
-  // 페널티: 4h 또는 1d 역행 (완화된 페널티)
   const oppositeDirection = direction === 'bullish' ? 'bearish' : 'bullish';
+
+  if (h4?.trend === direction && d1?.trend === direction) {
+    score += 2;
+    details.push('고TF 일치');
+  }
   if (h4?.trend === oppositeDirection) {
-    score -= 5;
-    details.push('4h 역행 페널티 -5');
+    score -= 1;
   }
   if (d1?.trend === oppositeDirection) {
-    score -= 5;
-    details.push('1d 역행 페널티 -5');
+    score -= 1;
   }
 
   return {
-    score: Math.max(0, Math.min(35, score)), // 0~35점 (보너스 포함)
-    maxScore: 30,
+    score: Math.max(2, Math.min(20, score)),
+    maxScore: 20,
     details,
   };
 };
 
-// 다이버전스 점수 계산 (30점 만점)
+// 2. 다이버전스 점수 (20점 만점) - 기본 6점
 export const calculateDivergenceScore = (
   mtfData: MTFOverviewData,
   direction: 'bullish' | 'bearish'
 ): ScoreCategory => {
   const details: string[] = [];
-  let score = 0;
+  let score = 6; // 기본 점수 (다이버전스 없어도 중립)
   const divergenceTypes: string[] = [];
 
-  // 각 타임프레임에서 다이버전스 확인
   mtfData.timeframes.forEach(tf => {
     if (tf.divergence && tf.divergence.direction === direction) {
       const multiplier = getFreshnessMultiplier(tf.divergence.candlesAgo, tf.divergence.isExpired);
@@ -155,226 +146,356 @@ export const calculateDivergenceScore = (
         let typeScore = 0;
         switch (tf.divergence.type) {
           case 'rsi':
-            typeScore = 8;
-            break;
           case 'cvd':
-            typeScore = 8;
+            typeScore = 4;
             break;
           case 'obv':
-            typeScore = 7;
-            break;
           case 'oi':
-            typeScore = 7;
+            typeScore = 3;
             break;
         }
 
-        const adjustedScore = typeScore * multiplier;
-        score += adjustedScore;
+        score += typeScore * multiplier;
         divergenceTypes.push(`${tf.timeframe} ${tf.divergence.type.toUpperCase()}`);
-
-        if (multiplier < 1) {
-          details.push(`${tf.timeframe} ${tf.divergence.type.toUpperCase()} (×${multiplier})`);
-        }
       }
     }
   });
 
-  if (divergenceTypes.length === 0) {
-    details.push('다이버전스 없음');
-  } else {
-    details.unshift(`${divergenceTypes.length}개 다이버전스: ${divergenceTypes.join(', ')}`);
+  // 역방향 다이버전스 체크
+  const oppositeDirection = direction === 'bullish' ? 'bearish' : 'bullish';
+  const oppositeDivergences = mtfData.timeframes.filter(
+    tf => tf.divergence && tf.divergence.direction === oppositeDirection && !tf.divergence.isExpired
+  ).length;
+  if (oppositeDivergences > 0) {
+    score -= oppositeDivergences * 2;
   }
 
-  // 컨플루언스 보너스
+  if (divergenceTypes.length === 0) {
+    details.push('다이버전스 대기');
+  } else {
+    details.push(`${divergenceTypes.length}개: ${divergenceTypes.slice(0, 2).join(', ')}`);
+  }
+
   if (divergenceTypes.length >= 2) {
-    score += 5;
-    details.push('컨플루언스 보너스 +5');
+    score += 2;
+    details.push('컨플루언스');
   }
 
   return {
-    score: Math.min(30, Math.round(score)),
-    maxScore: 30,
+    score: Math.max(2, Math.min(20, Math.round(score))),
+    maxScore: 20,
     details,
   };
 };
 
-// 시장 구조 점수 계산 (20점 만점) - 오더블록/POC/VAL/VAH 포함
-export const calculateMarketStructureScore = (
+// 3. 모멘텀/RSI 점수 (15점 만점) - 기본 5점
+export const calculateMomentumScore = (
   mtfData: MTFOverviewData,
-  direction: 'bullish' | 'bearish',
-  marketData?: MarketStructureData
+  direction: 'bullish' | 'bearish'
 ): ScoreCategory => {
   const details: string[] = [];
-  let score = 0;
+  let score = 5; // 기본 점수
 
-  // 1. 오더블록 근처 체크 (+8점)
-  if (marketData?.currentPrice && marketData.orderBlocks) {
-    const obCheck = checkNearOrderBlock(marketData.currentPrice, marketData.orderBlocks, direction);
-    if (obCheck.isNear) {
-      if (
-        (direction === 'bullish' && obCheck.type === 'support') ||
-        (direction === 'bearish' && obCheck.type === 'resistance')
-      ) {
-        score += 8;
-        details.push(`오더블록 ${obCheck.type === 'support' ? '지지' : '저항'} 근처 +8`);
-      } else {
-        // 역방향 오더블록 근처 = 약간의 가산
+  // RSI 레벨 체크 (더 점진적으로)
+  const tf5m = mtfData.timeframes.find(tf => tf.timeframe === '5m');
+  const tf1h = mtfData.timeframes.find(tf => tf.timeframe === '1h');
+
+  if (tf5m?.rsi) {
+    if (direction === 'bullish') {
+      if (tf5m.rsi <= 30) {
+        score += 4;
+        details.push(`RSI 과매도 (${tf5m.rsi.toFixed(0)})`);
+      } else if (tf5m.rsi <= 45) {
         score += 2;
-        details.push(`역방향 오더블록 근처 +2`);
-      }
-    }
-  }
-
-  // 2. POC 근처 체크 (타이트: 0.5% = +5점, 접근중: 1.0% = +3점)
-  if (marketData?.currentPrice && marketData.poc) {
-    if (isNearLevel(marketData.currentPrice, marketData.poc, 0.5)) {
-      score += 5;
-      details.push('POC 근처 +5');
-    } else if (isNearLevel(marketData.currentPrice, marketData.poc, 1.0)) {
-      score += 3;
-      details.push('POC 접근 중 +3');
-    }
-  }
-
-  // 3. VAL/VAH 체크 (넓은 threshold: 1.5% = +5점, 접근중: 2.5% = +3점)
-  if (marketData?.currentPrice) {
-    // 롱: VAL(지지) 근처가 유리
-    if (direction === 'bullish' && marketData.val) {
-      if (isNearLevel(marketData.currentPrice, marketData.val, 1.5)) {
-        score += 5;
-        details.push('VAL(지지) 근처 +5');
-      } else if (isNearLevel(marketData.currentPrice, marketData.val, 2.5)) {
-        score += 3;
-        details.push('VAL 접근 중 +3');
-      }
-    }
-    // 숏: VAH(저항) 근처가 유리
-    if (direction === 'bearish' && marketData.vah) {
-      if (isNearLevel(marketData.currentPrice, marketData.vah, 1.5)) {
-        score += 5;
-        details.push('VAH(저항) 근처 +5');
-      } else if (isNearLevel(marketData.currentPrice, marketData.vah, 2.5)) {
-        score += 3;
-        details.push('VAH 접근 중 +3');
-      }
-    }
-    // 역방향 레벨 근처 = 페널티 (롱인데 VAH 근처, 숏인데 VAL 근처)
-    if (direction === 'bullish' && marketData.vah) {
-      if (isNearLevel(marketData.currentPrice, marketData.vah, 1.5)) {
+        details.push(`RSI 저점대 (${tf5m.rsi.toFixed(0)})`);
+      } else if (tf5m.rsi >= 70) {
         score -= 2;
-        details.push('VAH(저항) 근처 -2');
       }
-    }
-    if (direction === 'bearish' && marketData.val) {
-      if (isNearLevel(marketData.currentPrice, marketData.val, 1.5)) {
+    } else {
+      if (tf5m.rsi >= 70) {
+        score += 4;
+        details.push(`RSI 과매수 (${tf5m.rsi.toFixed(0)})`);
+      } else if (tf5m.rsi >= 55) {
+        score += 2;
+        details.push(`RSI 고점대 (${tf5m.rsi.toFixed(0)})`);
+      } else if (tf5m.rsi <= 30) {
         score -= 2;
-        details.push('VAL(지지) 근처 -2');
       }
     }
   }
 
-  // 4. ADX 기반 추세 강도
+  // ADX 추세 강도 (더 완만하게)
   const strongTrendTFs = mtfData.timeframes.filter(tf => tf.isStrongTrend);
-  const weakTrendTFs = mtfData.timeframes.filter(tf => tf.adx !== null && tf.adx < 20);
+  const avgAdx = mtfData.timeframes
+    .map(tf => tf.adx)
+    .filter((a): a is number => a !== null)
+    .reduce((sum, a, _, arr) => sum + a / arr.length, 0);
 
-  if (strongTrendTFs.length >= 3) {
-    score += 2;
-    details.push(`${strongTrendTFs.length}개 TF 강한 추세 +2`);
-  } else if (weakTrendTFs.length >= 4) {
-    // 약한 추세 = 횡보장, 방향성 진입 불리
-    score -= 1;
-    details.push(`${weakTrendTFs.length}개 TF 약한 추세 -1`);
+  if (avgAdx > 25) {
+    score += 3;
+    details.push(`ADX 강세 (${avgAdx.toFixed(0)})`);
+  } else if (avgAdx > 20) {
+    score += 1;
+    details.push(`ADX 보통`);
   }
 
-  // 5. ATR 기반 변동성 체크
+  // ATR 변동성
   const atrRatios = mtfData.timeframes
     .map(tf => tf.atrRatio)
     .filter((r): r is number => r !== null);
 
   if (atrRatios.length > 0) {
     const avgATR = atrRatios.reduce((sum, r) => sum + r, 0) / atrRatios.length;
-
     if (avgATR < 0.8) {
-      // 저변동 = 브레이크아웃 대기, 진입 유리
-      score += 2;
-      details.push(`저변동(ATR ${avgATR.toFixed(1)}x) +2`);
+      score += 1;
     } else if (avgATR > 1.5) {
-      // 고변동 = 리스크 증가, 진입 불리
-      score -= 2;
-      details.push(`고변동(ATR ${avgATR.toFixed(1)}x) -2`);
-    }
-  }
-
-  // 6. RSI 레벨 체크 (기존 로직, 점수 유지)
-  const tf5m = mtfData.timeframes.find(tf => tf.timeframe === '5m');
-  if (tf5m?.rsi) {
-    if (direction === 'bullish' && tf5m.rsi <= 40) {
-      score += 3;
-      details.push('RSI 저점 진입');
-    } else if (direction === 'bearish' && tf5m.rsi >= 60) {
-      score += 3;
-      details.push('RSI 고점 진입');
+      score -= 1;
     }
   }
 
   return {
-    score: Math.max(0, Math.min(20, score)),
-    maxScore: 20,
-    details: details.length > 0 ? details : ['시장 구조 데이터 없음'],
+    score: Math.max(2, Math.min(15, score)),
+    maxScore: 15,
+    details: details.length > 0 ? details : ['모멘텀 중립'],
   };
 };
 
-// 외부 요인 점수 계산 (20점 만점) - 간소화 버전
-export const calculateExternalFactorsScore = (
+// 4. 거래량 점수 (15점 만점) - CVD만 - 기본 5점
+export const calculateVolumeScore = (
   mtfData: MTFOverviewData,
-  direction: 'bullish' | 'bearish',
-  fundingRate?: number
+  direction: 'bullish' | 'bearish'
 ): ScoreCategory => {
   const details: string[] = [];
-  let score = 0;
+  let score = 5; // 기본 점수
+
+  // CVD 방향 확인
+  const h4 = mtfData.timeframes.find(tf => tf.timeframe === '4h');
+  const h1 = mtfData.timeframes.find(tf => tf.timeframe === '1h');
+  const m15 = mtfData.timeframes.find(tf => tf.timeframe === '15m');
+
+  let alignedCount = 0;
+  let oppositeCount = 0;
+
+  // 4h CVD
+  if (h4?.cvdDirection === direction) {
+    alignedCount++;
+    score += 3;
+  } else if (h4?.cvdDirection && h4.cvdDirection !== direction) {
+    oppositeCount++;
+    score -= 1;
+  }
+
+  // 1h CVD
+  if (h1?.cvdDirection === direction) {
+    alignedCount++;
+    score += 3;
+  } else if (h1?.cvdDirection && h1.cvdDirection !== direction) {
+    oppositeCount++;
+    score -= 1;
+  }
+
+  // 15m CVD
+  if (m15?.cvdDirection === direction) {
+    alignedCount++;
+    score += 2;
+  } else if (m15?.cvdDirection && m15.cvdDirection !== direction) {
+    oppositeCount++;
+  }
+
+  if (alignedCount >= 3) {
+    details.push(`CVD 강한 일치`);
+  } else if (alignedCount >= 2) {
+    details.push(`CVD 일치`);
+  } else if (alignedCount >= 1) {
+    details.push(`CVD 약한 일치`);
+  } else if (oppositeCount >= 2) {
+    details.push(`CVD 역행`);
+  } else {
+    details.push(`CVD 중립`);
+  }
+
+  return {
+    score: Math.max(2, Math.min(15, score)),
+    maxScore: 15,
+    details,
+  };
+};
+
+// 5. 지지/저항 점수 (15점 만점) - 기본 5점
+export const calculateLevelsScore = (
+  mtfData: MTFOverviewData,
+  direction: 'bullish' | 'bearish',
+  marketData?: MarketStructureData
+): ScoreCategory => {
+  const details: string[] = [];
+  let score = 5; // 기본 점수
+
+  if (!marketData?.currentPrice) {
+    return { score: 5, maxScore: 15, details: ['레벨 확인 중'] };
+  }
+
+  let hasNearLevel = false;
+
+  // 오더블록
+  if (marketData.orderBlocks && marketData.orderBlocks.length > 0) {
+    const obCheck = checkNearOrderBlock(marketData.currentPrice, marketData.orderBlocks, direction);
+    if (obCheck.isNear) {
+      hasNearLevel = true;
+      if (
+        (direction === 'bullish' && obCheck.type === 'support') ||
+        (direction === 'bearish' && obCheck.type === 'resistance')
+      ) {
+        score += 4;
+        details.push(`오더블록 ${obCheck.type === 'support' ? '지지' : '저항'}`);
+      } else {
+        score -= 1;
+        details.push('역방향 오더블록');
+      }
+    }
+  }
+
+  // POC
+  if (marketData.poc) {
+    if (isNearLevel(marketData.currentPrice, marketData.poc, 0.5)) {
+      hasNearLevel = true;
+      score += 3;
+      details.push('POC 근처');
+    } else if (isNearLevel(marketData.currentPrice, marketData.poc, 1.0)) {
+      score += 1;
+    }
+  }
+
+  // VAL/VAH
+  if (direction === 'bullish' && marketData.val) {
+    if (isNearLevel(marketData.currentPrice, marketData.val, 1.0)) {
+      hasNearLevel = true;
+      score += 3;
+      details.push('VAL 지지');
+    }
+  }
+  if (direction === 'bearish' && marketData.vah) {
+    if (isNearLevel(marketData.currentPrice, marketData.vah, 1.0)) {
+      hasNearLevel = true;
+      score += 3;
+      details.push('VAH 저항');
+    }
+  }
+
+  // 역방향 레벨 페널티 (약하게)
+  if (direction === 'bullish' && marketData.vah) {
+    if (isNearLevel(marketData.currentPrice, marketData.vah, 1.0)) {
+      score -= 1;
+    }
+  }
+  if (direction === 'bearish' && marketData.val) {
+    if (isNearLevel(marketData.currentPrice, marketData.val, 1.0)) {
+      score -= 1;
+    }
+  }
+
+  if (!hasNearLevel && details.length === 0) {
+    details.push('주요 레벨 없음');
+  }
+
+  return {
+    score: Math.max(2, Math.min(15, score)),
+    maxScore: 15,
+    details,
+  };
+};
+
+// 6. 시장심리 점수 (15점 만점) - 펀딩비 + OI + 공포탐욕지수 - 기본 5점
+export const calculateSentimentScore = (
+  mtfData: MTFOverviewData,
+  direction: 'bullish' | 'bearish',
+  fundingRate?: number,
+  fearGreedIndex?: number
+): ScoreCategory => {
+  const details: string[] = [];
+  let score = 5; // 기본 점수
+
+  // 공포탐욕지수 (0-100, 50 중립)
+  // 롱: 공포(낮은값)일때 유리, 숏: 탐욕(높은값)일때 유리
+  if (fearGreedIndex !== undefined) {
+    if (direction === 'bullish') {
+      if (fearGreedIndex <= 25) {
+        score += 3;
+        details.push(`극단적 공포 (${fearGreedIndex})`);
+      } else if (fearGreedIndex <= 40) {
+        score += 2;
+        details.push(`공포 (${fearGreedIndex})`);
+      } else if (fearGreedIndex >= 75) {
+        score -= 2;
+        details.push(`탐욕 주의`);
+      }
+    } else {
+      if (fearGreedIndex >= 75) {
+        score += 3;
+        details.push(`극단적 탐욕 (${fearGreedIndex})`);
+      } else if (fearGreedIndex >= 60) {
+        score += 2;
+        details.push(`탐욕 (${fearGreedIndex})`);
+      } else if (fearGreedIndex <= 25) {
+        score -= 2;
+        details.push(`공포 주의`);
+      }
+    }
+  }
 
   // 펀딩레이트
   if (fundingRate !== undefined) {
+    const absRate = Math.abs(fundingRate);
     if (direction === 'bullish' && fundingRate < 0) {
-      score += 5;
-      details.push('음수 펀딩 (롱 유리)');
+      score += absRate > 0.005 ? 3 : 1;
+      details.push(`음수 펀딩`);
     } else if (direction === 'bearish' && fundingRate > 0) {
-      score += 5;
-      details.push('양수 펀딩 (숏 유리)');
+      score += absRate > 0.005 ? 3 : 1;
+      details.push(`양수 펀딩`);
     } else if (
       (direction === 'bullish' && fundingRate > 0.01) ||
       (direction === 'bearish' && fundingRate < -0.01)
     ) {
-      score -= 3;
-      details.push('펀딩 역방향 페널티');
+      score -= 1;
     }
   }
 
-  // CVD/OI 방향 일치 확인
+  // OI 방향 확인
   const h4 = mtfData.timeframes.find(tf => tf.timeframe === '4h');
-  if (h4) {
-    if (h4.cvdDirection === direction) {
-      score += 4;
-      details.push('CVD 방향 일치');
-    }
-    if (h4.oiDirection === direction) {
-      score += 4;
-      details.push('OI 방향 일치');
-    }
+  const h1 = mtfData.timeframes.find(tf => tf.timeframe === '1h');
+
+  let oiAligned = 0;
+
+  if (h4?.oiDirection === direction) {
+    oiAligned++;
+    score += 1;
   }
 
-  // 전체 추세 일치
-  if (mtfData.overallTrend === direction) {
-    score += 5;
-    details.push('전체 추세 일치');
+  if (h1?.oiDirection === direction) {
+    oiAligned++;
+    score += 1;
+  }
+
+  if (oiAligned >= 2) {
+    details.push('OI 일치');
+  }
+
+  if (details.length === 0) {
+    details.push('심리 중립');
   }
 
   return {
-    score: Math.max(0, Math.min(20, score)),
-    maxScore: 20,
-    details: details.length > 0 ? details : ['외부 요인 데이터 부족'],
+    score: Math.max(2, Math.min(15, score)),
+    maxScore: 15,
+    details,
   };
 };
+
+// 레거시 호환용 alias
+export const calculateExternalScore = (
+  mtfData: MTFOverviewData,
+  direction: 'bullish' | 'bearish',
+  fundingRate?: number
+) => calculateSentimentScore(mtfData, direction, fundingRate);
 
 // 신뢰도 계산
 const getConfidence = (score: number): SignalScore['confidence'] => {
@@ -408,27 +529,53 @@ const getRecommendation = (
   return { action, leverage: '2x~3x', seedRatio: '5~10%' };
 };
 
-// 전체 스코어 계산
+// 전체 스코어 계산 (6개 카테고리)
 export const calculateSignalScore = (
   mtfData: MTFOverviewData,
   direction: 'bullish' | 'bearish',
   fundingRate?: number,
-  marketData?: MarketStructureData
+  marketData?: MarketStructureData,
+  fearGreedIndex?: number
 ): SignalScore => {
-  const mtfAlignment = calculateMTFAlignmentScore(mtfData, direction);
+  // 6개 카테고리 계산
+  const trendAlignment = calculateTrendAlignmentScore(mtfData, direction);
   const divergence = calculateDivergenceScore(mtfData, direction);
-  const marketStructure = calculateMarketStructureScore(mtfData, direction, marketData);
-  const externalFactors = calculateExternalFactorsScore(mtfData, direction, fundingRate);
+  const momentum = calculateMomentumScore(mtfData, direction);
+  const volume = calculateVolumeScore(mtfData, direction);
+  const levels = calculateLevelsScore(mtfData, direction, marketData);
+  const sentiment = calculateSentimentScore(mtfData, direction, fundingRate, fearGreedIndex);
 
-  const total = mtfAlignment.score + divergence.score + marketStructure.score + externalFactors.score;
+  const total = trendAlignment.score + divergence.score + momentum.score +
+                volume.score + levels.score + sentiment.score;
   const maxTotal = 100;
+
+  // 레거시 호환을 위한 매핑
+  const mtfAlignment = trendAlignment;
+  const marketStructure = {
+    score: momentum.score + levels.score,
+    maxScore: 30,
+    details: [...momentum.details, ...levels.details],
+  };
+  const externalFactors = {
+    score: volume.score + sentiment.score,
+    maxScore: 30,
+    details: [...volume.details, ...sentiment.details],
+  };
 
   return {
     total,
     maxTotal,
     confidence: getConfidence(total),
-    mtfAlignment,
+    // 6개 카테고리
+    trendAlignment,
     divergence,
+    momentum,
+    volume,
+    levels,
+    sentiment,
+    external: sentiment, // 레거시 호환
+    // 레거시 호환
+    mtfAlignment,
     marketStructure,
     externalFactors,
     recommendation: getRecommendation(total, direction),

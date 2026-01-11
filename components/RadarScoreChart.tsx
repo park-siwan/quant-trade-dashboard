@@ -4,58 +4,80 @@ import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, Tool
 
 interface RadarScoreChartProps {
   longScores: {
-    mtfAlignment: number;
+    trendAlignment: number;
     divergence: number;
-    marketStructure: number;
-    externalFactors: number;
+    momentum: number;
+    volume: number;
+    levels: number;
+    sentiment: number;
   };
   shortScores: {
-    mtfAlignment: number;
+    trendAlignment: number;
     divergence: number;
-    marketStructure: number;
-    externalFactors: number;
+    momentum: number;
+    volume: number;
+    levels: number;
+    sentiment: number;
   };
   size?: 'normal' | 'large';
 }
 
 export default function RadarScoreChart({ longScores, shortScores, size = 'normal' }: RadarScoreChartProps) {
-  // 최대 점수로 정규화 (0-100%)
+  // 6개 카테고리 데이터 (정규화: 0-100%)
   const data = [
     {
       category: '추세',
-      fullName: '추세 종합',
-      long: Math.round((longScores.mtfAlignment / 30) * 100),
-      short: Math.round((shortScores.mtfAlignment / 30) * 100),
-      longRaw: longScores.mtfAlignment,
-      shortRaw: shortScores.mtfAlignment,
-      max: 30,
+      fullName: '추세 정렬',
+      long: Math.round((longScores.trendAlignment / 20) * 100),
+      short: Math.round((shortScores.trendAlignment / 20) * 100),
+      longRaw: longScores.trendAlignment,
+      shortRaw: shortScores.trendAlignment,
+      max: 20,
     },
     {
       category: '다이버전스',
       fullName: '다이버전스',
-      long: Math.round((longScores.divergence / 30) * 100),
-      short: Math.round((shortScores.divergence / 30) * 100),
+      long: Math.round((longScores.divergence / 20) * 100),
+      short: Math.round((shortScores.divergence / 20) * 100),
       longRaw: longScores.divergence,
       shortRaw: shortScores.divergence,
-      max: 30,
-    },
-    {
-      category: '시장구조',
-      fullName: '시장 구조',
-      long: Math.round((longScores.marketStructure / 20) * 100),
-      short: Math.round((shortScores.marketStructure / 20) * 100),
-      longRaw: longScores.marketStructure,
-      shortRaw: shortScores.marketStructure,
       max: 20,
     },
     {
-      category: '외부요인',
-      fullName: '외부 요인',
-      long: Math.round((longScores.externalFactors / 20) * 100),
-      short: Math.round((shortScores.externalFactors / 20) * 100),
-      longRaw: longScores.externalFactors,
-      shortRaw: shortScores.externalFactors,
-      max: 20,
+      category: '모멘텀',
+      fullName: '모멘텀/RSI',
+      long: Math.round((longScores.momentum / 15) * 100),
+      short: Math.round((shortScores.momentum / 15) * 100),
+      longRaw: longScores.momentum,
+      shortRaw: shortScores.momentum,
+      max: 15,
+    },
+    {
+      category: '거래량',
+      fullName: '거래량/CVD',
+      long: Math.round((longScores.volume / 15) * 100),
+      short: Math.round((shortScores.volume / 15) * 100),
+      longRaw: longScores.volume,
+      shortRaw: shortScores.volume,
+      max: 15,
+    },
+    {
+      category: '지지/저항',
+      fullName: '지지/저항',
+      long: Math.round((longScores.levels / 15) * 100),
+      short: Math.round((shortScores.levels / 15) * 100),
+      longRaw: longScores.levels,
+      shortRaw: shortScores.levels,
+      max: 15,
+    },
+    {
+      category: '시장심리',
+      fullName: '시장심리 (펀딩+OI)',
+      long: Math.round((longScores.sentiment / 15) * 100),
+      short: Math.round((shortScores.sentiment / 15) * 100),
+      longRaw: longScores.sentiment,
+      shortRaw: shortScores.sentiment,
+      max: 15,
     },
   ];
 
@@ -73,8 +95,8 @@ export default function RadarScoreChart({ longScores, shortScores, size = 'norma
     return null;
   };
 
-  const height = size === 'large' ? 'h-[280px]' : 'h-[180px]';
-  const outerRadius = size === 'large' ? '80%' : '70%';
+  const height = size === 'large' ? 'h-[300px]' : 'h-[200px]';
+  const outerRadius = size === 'large' ? '75%' : '65%';
 
   return (
     <div className={`w-full ${height}`}>
@@ -86,7 +108,7 @@ export default function RadarScoreChart({ longScores, shortScores, size = 'norma
           />
           <PolarAngleAxis
             dataKey="category"
-            tick={{ fill: '#9ca3af', fontSize: size === 'large' ? 11 : 10 }}
+            tick={{ fill: '#9ca3af', fontSize: size === 'large' ? 11 : 9 }}
             tickLine={false}
           />
           <Radar
