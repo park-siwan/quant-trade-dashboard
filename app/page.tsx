@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import ChartAdapter from '@/components/ChartAdapter';
 import MTFOverview from '@/components/MTFOverview';
-import { BarChart3, Table2, BookOpen } from 'lucide-react';
+import { BarChart3, Table2, BookOpen, Bitcoin } from 'lucide-react';
 import { useBTCPrice } from '@/hooks/useBTCPrice';
 
 // 개별 숫자 슬롯 컴포넌트
@@ -111,6 +111,25 @@ export default function Home() {
       {/* 탭 네비게이션 - 상단 고정 */}
       <div className='sticky top-0 z-50 backdrop-blur-xl bg-[#0a0a0a]/80 border-b border-white/10'>
         <div className='flex items-center justify-between p-2'>
+          {/* 실시간 BTC 가격 - 좌측 */}
+          {btcPrice && (
+            <div className='flex items-center gap-2 px-3'>
+              <div className='flex items-center gap-1.5'>
+                <Bitcoin className='w-5 h-5 text-orange-400' strokeWidth={2} />
+                <span className='w-1.5 h-1.5 rounded-full bg-green-500 animate-live-pulse' />
+                <span className='text-xs text-gray-400 font-medium'>BTC/USDT</span>
+              </div>
+              <span className='text-lg font-bold font-mono text-white'>
+                <AnimatedPrice value={btcPrice.price} />
+              </span>
+              {btcPrice.changePercent24h !== 0 && (
+                <span className={`text-xs font-mono px-1.5 py-0.5 rounded transition-all duration-300 ${btcPrice.changePercent24h >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {btcPrice.changePercent24h >= 0 ? '+' : ''}{btcPrice.changePercent24h.toFixed(2)}%
+                </span>
+              )}
+            </div>
+          )}
+          {/* 탭 메뉴 - 우측 */}
           <div className='flex items-center gap-1'>
             {tabs.map((tab) => (
               <button
@@ -127,23 +146,6 @@ export default function Home() {
               </button>
             ))}
           </div>
-          {/* 실시간 BTC 가격 */}
-          {btcPrice && (
-            <div className='flex items-center gap-2 px-3'>
-              <div className='flex items-center gap-1.5'>
-                <span className='w-1.5 h-1.5 rounded-full bg-green-500 animate-live-pulse' />
-                <span className='text-xs text-gray-500'>BTC</span>
-              </div>
-              <span className='text-lg font-bold font-mono text-white'>
-                <AnimatedPrice value={btcPrice.price} />
-              </span>
-              {btcPrice.changePercent24h !== 0 && (
-                <span className={`text-xs font-mono px-1.5 py-0.5 rounded transition-all duration-300 ${btcPrice.changePercent24h >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                  {btcPrice.changePercent24h >= 0 ? '+' : ''}{btcPrice.changePercent24h.toFixed(2)}%
-                </span>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
