@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useMTF, getSecondsUntilClose, CANDLE_INTERVALS_SEC } from '@/hooks/useMTF';
 import { MTFStatus, MTFStrength, MTFTimeframeData, MTFAction, MTFActionInfo } from '@/lib/types/index';
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock } from 'lucide-react';
+import ScoreCard from './ScoreCard';
 
 interface MTFOverviewProps {
   symbol: string;
@@ -532,7 +533,12 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
   const actualPrice = currentPrice || data.timeframes.find(t => t.timeframe === '5m')?.currentPrice || 0;
 
   return (
-    <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-4">
+    <div className="space-y-4">
+      {/* 스코어 카드 */}
+      <ScoreCard mtfData={data} fundingRate={fundingRate} />
+
+      {/* MTF 테이블 */}
+      <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-4">
       {/* 현재가 요약 */}
       {actualPrice > 0 && (
         <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/10 text-xs">
@@ -670,6 +676,7 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
             캔들 마감 시 자동 갱신
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
