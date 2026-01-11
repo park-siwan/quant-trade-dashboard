@@ -46,7 +46,7 @@ const getRsiColor = (rsi: number | null) => {
   return 'text-gray-300';
 };
 
-// CVD/OI 강도 표시 (↑↑↑, ↑, →, ↓, ↓↓↓)
+// CVD/OI 강도 표시 (↑↑↑, ↑↑, ↑, →, ↓, ↓↓, ↓↓↓)
 const DirectionStrengthDisplay = ({
   direction,
   strength,
@@ -60,10 +60,21 @@ const DirectionStrengthDisplay = ({
 
   const isUp = direction === 'bullish';
   const arrow = isUp ? '↑' : '↓';
-  const arrows = strength === 'strong' ? arrow + arrow + arrow : arrow;
-  const color = isUp
-    ? strength === 'strong' ? 'text-green-400' : 'text-lime-400'
-    : strength === 'strong' ? 'text-red-400' : 'text-orange-400';
+
+  // 강도별 화살표 개수
+  let arrows: string;
+  let color: string;
+
+  if (strength === 'strong') {
+    arrows = arrow + arrow + arrow;  // ↑↑↑ or ↓↓↓
+    color = isUp ? 'text-green-400' : 'text-red-400';
+  } else if (strength === 'medium') {
+    arrows = arrow + arrow;          // ↑↑ or ↓↓
+    color = isUp ? 'text-emerald-400' : 'text-orange-400';
+  } else {
+    arrows = arrow;                  // ↑ or ↓
+    color = isUp ? 'text-lime-400' : 'text-amber-400';
+  }
 
   return <span className={`text-xs font-bold ${color}`}>{arrows}</span>;
 };
@@ -512,6 +523,10 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
             <span>강한 상승</span>
           </div>
           <div className="flex items-center gap-1">
+            <span className="text-emerald-400 font-bold">↑↑</span>
+            <span>상승</span>
+          </div>
+          <div className="flex items-center gap-1">
             <span className="text-lime-400 font-bold">↑</span>
             <span>약한 상승</span>
           </div>
@@ -520,8 +535,12 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
             <span>횡보</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-orange-400 font-bold">↓</span>
+            <span className="text-amber-400 font-bold">↓</span>
             <span>약한 하락</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-orange-400 font-bold">↓↓</span>
+            <span>하락</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="text-red-400 font-bold">↓↓↓</span>

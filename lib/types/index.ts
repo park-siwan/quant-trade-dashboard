@@ -337,7 +337,7 @@ export interface ApiResponse {
 
 // MTF (Multi-Timeframe) 타입
 export type MTFStatus = 'bullish' | 'bearish' | 'neutral';
-export type MTFStrength = 'strong' | 'weak' | 'neutral'; // 강도
+export type MTFStrength = 'strong' | 'medium' | 'weak' | 'neutral'; // 강도
 
 // Action 추천 타입
 export type MTFAction =

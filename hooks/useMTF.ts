@@ -196,18 +196,24 @@ const analyzeCvd = (cvd: number[] | undefined): {
   let direction: MTFStatus = 'neutral';
   let strength: MTFStrength = 'neutral';
 
-  if (change > 5) {
+  if (change > 8) {
     direction = 'bullish';
-    strength = 'strong';
+    strength = 'strong';      // ↑↑↑
+  } else if (change > 4) {
+    direction = 'bullish';
+    strength = 'medium';      // ↑↑
   } else if (change > 2) {
     direction = 'bullish';
-    strength = 'weak';
-  } else if (change < -5) {
+    strength = 'weak';        // ↑
+  } else if (change < -8) {
     direction = 'bearish';
-    strength = 'strong';
+    strength = 'strong';      // ↓↓↓
+  } else if (change < -4) {
+    direction = 'bearish';
+    strength = 'medium';      // ↓↓
   } else if (change < -2) {
     direction = 'bearish';
-    strength = 'weak';
+    strength = 'weak';        // ↓
   }
 
   return { direction, strength, change };
@@ -236,18 +242,24 @@ const analyzeOi = (oi: (number | null)[] | undefined): {
   let direction: MTFStatus = 'neutral';
   let strength: MTFStrength = 'neutral';
 
-  if (change > 5) {
+  if (change > 8) {
     direction = 'bullish';
-    strength = 'strong';
+    strength = 'strong';      // ↑↑↑
+  } else if (change > 4) {
+    direction = 'bullish';
+    strength = 'medium';      // ↑↑
   } else if (change > 2) {
     direction = 'bullish';
-    strength = 'weak';
-  } else if (change < -5) {
+    strength = 'weak';        // ↑
+  } else if (change < -8) {
     direction = 'bearish';
-    strength = 'strong';
+    strength = 'strong';      // ↓↓↓
+  } else if (change < -4) {
+    direction = 'bearish';
+    strength = 'medium';      // ↓↓
   } else if (change < -2) {
     direction = 'bearish';
-    strength = 'weak';
+    strength = 'weak';        // ↓
   }
 
   return { direction, strength, change };
@@ -360,9 +372,12 @@ const calculateAction = (
     return { action: 'wait', reason: '횡보 저변동' };
   }
 
-  // 추세 유지
-  if (trend === 'bullish' || trend === 'bearish') {
-    return { action: 'trend_hold', reason: '추세 유지' };
+  // 추세 유지 (상승/하락 구분)
+  if (trend === 'bullish') {
+    return { action: 'trend_hold', reason: '상승추세 유지' };
+  }
+  if (trend === 'bearish') {
+    return { action: 'trend_hold', reason: '하락추세 유지' };
   }
 
   // 신호 없음
