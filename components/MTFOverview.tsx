@@ -2,15 +2,21 @@
 
 import { useState, useEffect } from 'react';
 import { useMTF, getSecondsUntilClose, CANDLE_INTERVALS_SEC } from '@/hooks/useMTF';
-import { MTFStatus, MTFStrength, MTFTimeframeData, MTFAction, MTFActionInfo } from '@/lib/types/index';
+import { MTFStatus, MTFStrength, MTFTimeframeData, MTFAction, MTFActionInfo, OrderBlock } from '@/lib/types/index';
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock } from 'lucide-react';
 import ScoreCard from './ScoreCard';
+import RecommendationCard from './RecommendationCard';
+import { calculateSignalScore, MarketStructureData } from '@/lib/scoring';
+import { generateRecommendation } from '@/lib/recommendation';
 
 interface MTFOverviewProps {
   symbol: string;
   currentPrice?: number;
   poc?: number;
+  vah?: number;
+  val?: number;
   fundingRate?: number;
+  orderBlocks?: OrderBlock[];
 }
 
 // 상태별 아이콘 컴포넌트
@@ -490,8 +496,14 @@ const formatPrice = (price: number) => {
   return price.toLocaleString('en-US', { maximumFractionDigits: 0 });
 };
 
-export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: MTFOverviewProps) {
-  const { data, isLoading, isError, refetch, refetchTimeframe } = useMTF({ symbol });
+export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: propVah, val: propVal, fundingRate, orderBlocks: propOrderBlocks }: MTFOverviewProps) {
+  const { data, isLoading, isError, refetch, refetchTimeframe, volumeProfile, orderBlocks: hookOrderBlocks } = useMTF({ symbol });
+
+  // props 우선, 없으면 useMTF에서 계산/추출된 값 사용
+  const poc = propPoc ?? volumeProfile?.poc;
+  const vah = propVah ?? volumeProfile?.vah;
+  const val = propVal ?? volumeProfile?.val;
+  const orderBlocks = propOrderBlocks ?? hookOrderBlocks;
 
   if (isLoading) {
     return (
@@ -534,8 +546,51 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
 
   return (
     <div className="space-y-4">
-      {/* 스코어 카드 */}
-      <ScoreCard mtfData={data} fundingRate={fundingRate} />
+      {/* 스코어 카드 & 추천 타점 */}
+      {(() => {
+        // 점수 계산
+        const marketData: MarketStructureData | undefined = actualPrice
+          ? { currentPrice: actualPrice, orderBlocks, poc, vah, val }
+          : undefined;
+        const longScore = calculateSignalScore(data, 'bullish', fundingRate, marketData);
+        const shortScore = calculateSignalScore(data, 'bearish', fundingRate, marketData);
+
+        // 평균 ATR 계산 (달러 단위)
+        const atrRatios = data.timeframes
+          .map((tf) => tf.atrRatio)
+          .filter((r): r is number => r !== null);
+        const avgATRRatio = atrRatios.length > 0
+          ? atrRatios.reduce((sum, r) => sum + r, 0) / atrRatios.length
+          : 0.01;
+        const avgATR = actualPrice * avgATRRatio * 0.01; // ATR ratio를 달러로 변환
+
+        // 추천 생성
+        const recommendation = generateRecommendation({
+          longScore,
+          shortScore,
+          currentPrice: actualPrice,
+          poc,
+          vah,
+          val,
+          orderBlocks,
+          avgATR,
+        });
+
+        return (
+          <>
+            <RecommendationCard recommendation={recommendation} />
+            <ScoreCard
+              mtfData={data}
+              fundingRate={fundingRate}
+              currentPrice={actualPrice}
+              orderBlocks={orderBlocks}
+              poc={poc}
+              vah={vah}
+              val={val}
+            />
+          </>
+        );
+      })()}
 
       {/* MTF 테이블 */}
       <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-4">

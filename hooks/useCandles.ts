@@ -73,8 +73,8 @@ export function useCandles({
 
   // API 데이터 로드 시 마지막 캔들의 close 저장 (WebSocket 갭 보정용)
   useEffect(() => {
-    if (query.data?.data?.candles?.length > 0) {
-      const candles = query.data.data.candles;
+    const candles = query.data?.data?.candles;
+    if (candles && candles.length > 0) {
       const lastCandle = candles[candles.length - 1];
       // 마지막 캔들의 close와 시작 시간 저장
       prevCandleCloseRef.current = lastCandle[4]; // close 값

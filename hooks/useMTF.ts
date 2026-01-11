@@ -1,5 +1,5 @@
 import { useQueries } from '@tanstack/react-query';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { fetchCandles } from '@/lib/api/exchange';
 import {
   MTFTimeframeData,
@@ -306,6 +306,92 @@ const calculateOverallTrend = (
   return 'neutral';
 };
 
+// Volume Profile 계산 (POC, VAH, VAL)
+interface VolumeProfileResult {
+  poc: number;
+  vah: number;
+  val: number;
+}
+
+const calculateVolumeProfile = (candles: number[][]): VolumeProfileResult | null => {
+  if (!candles || candles.length < 10) return null;
+
+  // [timestamp, open, high, low, close, volume]
+  const prices = candles.map(c => ({ high: c[2], low: c[3], close: c[4], volume: c[5] || 0 }));
+
+  // 가격 범위
+  const allHighs = prices.map(p => p.high);
+  const allLows = prices.map(p => p.low);
+  const maxPrice = Math.max(...allHighs);
+  const minPrice = Math.min(...allLows);
+  const priceRange = maxPrice - minPrice;
+
+  if (priceRange === 0) return null;
+
+  // 버킷 개수 (50개)
+  const bucketCount = 50;
+  const bucketSize = priceRange / bucketCount;
+
+  // 버킷별 볼륨 집계
+  const buckets: { price: number; volume: number }[] = [];
+  for (let i = 0; i < bucketCount; i++) {
+    buckets.push({
+      price: minPrice + (i + 0.5) * bucketSize,
+      volume: 0,
+    });
+  }
+
+  // 각 캔들의 볼륨을 해당 가격 범위 버킷에 분배
+  prices.forEach(({ high, low, volume }) => {
+    const lowBucket = Math.floor((low - minPrice) / bucketSize);
+    const highBucket = Math.min(Math.floor((high - minPrice) / bucketSize), bucketCount - 1);
+
+    const bucketsInRange = highBucket - lowBucket + 1;
+    const volumePerBucket = volume / bucketsInRange;
+
+    for (let i = Math.max(0, lowBucket); i <= highBucket; i++) {
+      if (buckets[i]) {
+        buckets[i].volume += volumePerBucket;
+      }
+    }
+  });
+
+  // POC (Point of Control) - 최대 거래량 가격
+  const poc = buckets.reduce((max, b) => b.volume > max.volume ? b : max, buckets[0]);
+
+  // VAH/VAL (Value Area High/Low) - 전체 거래량의 70% 포함 구간
+  const totalVolume = buckets.reduce((sum, b) => sum + b.volume, 0);
+  const targetVolume = totalVolume * 0.7;
+
+  // POC 중심으로 확장하며 70% 찾기
+  const pocIndex = buckets.indexOf(poc);
+  let vaLowIndex = pocIndex;
+  let vaHighIndex = pocIndex;
+  let vaVolume = poc.volume;
+
+  while (vaVolume < targetVolume && (vaLowIndex > 0 || vaHighIndex < buckets.length - 1)) {
+    const lowVol = vaLowIndex > 0 ? buckets[vaLowIndex - 1].volume : 0;
+    const highVol = vaHighIndex < buckets.length - 1 ? buckets[vaHighIndex + 1].volume : 0;
+
+    if (lowVol >= highVol && vaLowIndex > 0) {
+      vaLowIndex--;
+      vaVolume += lowVol;
+    } else if (vaHighIndex < buckets.length - 1) {
+      vaHighIndex++;
+      vaVolume += highVol;
+    } else if (vaLowIndex > 0) {
+      vaLowIndex--;
+      vaVolume += lowVol;
+    }
+  }
+
+  return {
+    poc: poc.price,
+    vah: buckets[vaHighIndex].price + bucketSize / 2,
+    val: buckets[vaLowIndex].price - bucketSize / 2,
+  };
+};
+
 // 강도 점수 계산 (0~1)
 const calculateStrengthScore = (timeframes: RawTimeframeData[]): number => {
   if (timeframes.length === 0) return 0;
@@ -539,6 +625,22 @@ export function useMTF({ symbol, limit = 200, enabled = true }: UseMTFParams) {
         }
       : null;
 
+  // Volume Profile 계산 (4h 타임프레임 기준)
+  const h4Index = TIMEFRAMES.indexOf('4h');
+  const h4Query = queries[h4Index];
+  const volumeProfile = useMemo(() => {
+    if (!h4Query?.data?.data?.candles) return null;
+    return calculateVolumeProfile(h4Query.data.data.candles);
+  }, [h4Query?.data]);
+
+  // 오더블록 데이터 추출 (4h 기준)
+  const orderBlocks = useMemo(() => {
+    const obData = h4Query?.data?.data?.orderBlocks;
+    if (!obData) return undefined;
+    // 활성 오더블록만 반환
+    return obData.activeBlocks || obData.blocks || [];
+  }, [h4Query?.data]);
+
   // 개별 타임프레임 refetch
   const refetchTimeframe = useCallback((timeframe: string) => {
     const index = TIMEFRAMES.indexOf(timeframe);
@@ -552,6 +654,8 @@ export function useMTF({ symbol, limit = 200, enabled = true }: UseMTFParams) {
     isLoading,
     isError,
     nextCloseTime,
+    volumeProfile, // POC, VAH, VAL
+    orderBlocks, // 활성 오더블록
     refetch: () => queries.forEach((q) => q.refetch()),
     refetchTimeframe,
     validateSignal: (

@@ -9,7 +9,7 @@ type TabType = 'chart' | 'mtf' | 'glossary';
 
 const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
   { id: 'chart', label: '차트', icon: <BarChart3 className="w-4 h-4" /> },
-  { id: 'mtf', label: 'MTF', icon: <Table2 className="w-4 h-4" /> },
+  { id: 'mtf', label: '분석', icon: <Table2 className="w-4 h-4" /> },
   { id: 'glossary', label: '용어', icon: <BookOpen className="w-4 h-4" /> },
 ];
 

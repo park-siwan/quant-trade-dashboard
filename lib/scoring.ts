@@ -1,4 +1,13 @@
-import { MTFOverviewData, MTFTimeframeData, MTFStatus } from './types';
+import { MTFOverviewData, MTFTimeframeData, MTFStatus, OrderBlock } from './types';
+
+// 추가 시장 데이터 (오더블록, 볼륨프로파일 등)
+export interface MarketStructureData {
+  currentPrice: number;
+  orderBlocks?: OrderBlock[];
+  poc?: number;  // Point of Control
+  vah?: number;  // Value Area High
+  val?: number;  // Value Area Low
+}
 
 // 스코어 카테고리
 export interface ScoreCategory {
@@ -30,6 +39,40 @@ const getFreshnessMultiplier = (candlesAgo: number, isExpired: boolean): number 
   return 0.3;
 };
 
+// 가격이 레벨 근처인지 체크 (threshold: 기본 0.5%)
+const isNearLevel = (currentPrice: number, level: number, thresholdPercent: number = 0.5): boolean => {
+  const diff = Math.abs(currentPrice - level) / currentPrice * 100;
+  return diff <= thresholdPercent;
+};
+
+// 가격이 오더블록 근처인지 체크
+const checkNearOrderBlock = (
+  currentPrice: number,
+  orderBlocks: OrderBlock[] | undefined,
+  direction: 'bullish' | 'bearish'
+): { isNear: boolean; type: 'support' | 'resistance' | null } => {
+  if (!orderBlocks || orderBlocks.length === 0) {
+    return { isNear: false, type: null };
+  }
+
+  for (const ob of orderBlocks) {
+    // 오더블록 범위 내에 있는지 체크 (또는 1% 이내)
+    const inRange = currentPrice >= ob.low && currentPrice <= ob.high;
+    const nearRange = isNearLevel(currentPrice, ob.low, 1.0) || isNearLevel(currentPrice, ob.high, 1.0);
+
+    if (inRange || nearRange) {
+      // 불리시 오더블록 = 지지 (롱 유리), 베어리시 오더블록 = 저항 (숏 유리)
+      if (ob.type === 'bullish') {
+        return { isNear: true, type: 'support' };
+      } else {
+        return { isNear: true, type: 'resistance' };
+      }
+    }
+  }
+
+  return { isNear: false, type: null };
+};
+
 // MTF 정렬 점수 계산 (30점 만점)
 export const calculateMTFAlignmentScore = (
   mtfData: MTFOverviewData,
@@ -42,7 +85,7 @@ export const calculateMTFAlignmentScore = (
   const alignedCount = timeframes.filter(tf => tf.trend === direction).length;
   const totalCount = timeframes.length;
 
-  // 기본 점수
+  // 기본 점수 (더 세분화된 스케일)
   if (alignedCount === 6) {
     score = 30;
     details.push(`${alignedCount}/${totalCount} TF 일치 (완벽)`);
@@ -55,6 +98,12 @@ export const calculateMTFAlignmentScore = (
   } else if (alignedCount === 3) {
     score = 15;
     details.push(`${alignedCount}/${totalCount} TF 일치`);
+  } else if (alignedCount === 2) {
+    score = 10;
+    details.push(`${alignedCount}/${totalCount} TF 일치 (약함)`);
+  } else if (alignedCount === 1) {
+    score = 5;
+    details.push(`${alignedCount}/${totalCount} TF 일치 (매우 약함)`);
   } else {
     score = 0;
     details.push(`${alignedCount}/${totalCount} TF 일치 (진입 위험)`);
@@ -70,15 +119,15 @@ export const calculateMTFAlignmentScore = (
     details.push('4h+1d 일치 보너스 +5');
   }
 
-  // 페널티: 4h 또는 1d 역행
+  // 페널티: 4h 또는 1d 역행 (완화된 페널티)
   const oppositeDirection = direction === 'bullish' ? 'bearish' : 'bullish';
   if (h4?.trend === oppositeDirection) {
-    score -= 10;
-    details.push('4h 역행 페널티 -10');
+    score -= 5;
+    details.push('4h 역행 페널티 -5');
   }
   if (d1?.trend === oppositeDirection) {
-    score -= 10;
-    details.push('1d 역행 페널티 -10');
+    score -= 5;
+    details.push('1d 역행 페널티 -5');
   }
 
   return {
@@ -149,55 +198,129 @@ export const calculateDivergenceScore = (
   };
 };
 
-// 시장 구조 점수 계산 (20점 만점) - 간소화 버전
+// 시장 구조 점수 계산 (20점 만점) - 오더블록/POC/VAL/VAH 포함
 export const calculateMarketStructureScore = (
   mtfData: MTFOverviewData,
-  direction: 'bullish' | 'bearish'
+  direction: 'bullish' | 'bearish',
+  marketData?: MarketStructureData
 ): ScoreCategory => {
   const details: string[] = [];
   let score = 0;
 
-  // ADX 기반 추세 강도
-  const strongTrendTFs = mtfData.timeframes.filter(tf => tf.isStrongTrend);
-  if (strongTrendTFs.length >= 3) {
-    score += 10;
-    details.push(`${strongTrendTFs.length}개 TF 강한 추세`);
-  } else if (strongTrendTFs.length >= 1) {
-    score += 5;
-    details.push(`${strongTrendTFs.length}개 TF 강한 추세`);
-  }
-
-  // ATR 기반 변동성 평가
-  const h4 = mtfData.timeframes.find(tf => tf.timeframe === '4h');
-  if (h4?.atrRatio) {
-    if (h4.atrRatio >= 0.8 && h4.atrRatio <= 1.5) {
-      score += 5;
-      details.push('적정 변동성');
-    } else if (h4.atrRatio > 1.5) {
-      score += 2;
-      details.push('고변동성 주의');
-    } else {
-      score += 3;
-      details.push('저변동성');
+  // 1. 오더블록 근처 체크 (+8점)
+  if (marketData?.currentPrice && marketData.orderBlocks) {
+    const obCheck = checkNearOrderBlock(marketData.currentPrice, marketData.orderBlocks, direction);
+    if (obCheck.isNear) {
+      if (
+        (direction === 'bullish' && obCheck.type === 'support') ||
+        (direction === 'bearish' && obCheck.type === 'resistance')
+      ) {
+        score += 8;
+        details.push(`오더블록 ${obCheck.type === 'support' ? '지지' : '저항'} 근처 +8`);
+      } else {
+        // 역방향 오더블록 근처 = 약간의 가산
+        score += 2;
+        details.push(`역방향 오더블록 근처 +2`);
+      }
     }
   }
 
-  // RSI 레벨 체크
+  // 2. POC 근처 체크 (타이트: 0.5% = +5점, 접근중: 1.0% = +3점)
+  if (marketData?.currentPrice && marketData.poc) {
+    if (isNearLevel(marketData.currentPrice, marketData.poc, 0.5)) {
+      score += 5;
+      details.push('POC 근처 +5');
+    } else if (isNearLevel(marketData.currentPrice, marketData.poc, 1.0)) {
+      score += 3;
+      details.push('POC 접근 중 +3');
+    }
+  }
+
+  // 3. VAL/VAH 체크 (넓은 threshold: 1.5% = +5점, 접근중: 2.5% = +3점)
+  if (marketData?.currentPrice) {
+    // 롱: VAL(지지) 근처가 유리
+    if (direction === 'bullish' && marketData.val) {
+      if (isNearLevel(marketData.currentPrice, marketData.val, 1.5)) {
+        score += 5;
+        details.push('VAL(지지) 근처 +5');
+      } else if (isNearLevel(marketData.currentPrice, marketData.val, 2.5)) {
+        score += 3;
+        details.push('VAL 접근 중 +3');
+      }
+    }
+    // 숏: VAH(저항) 근처가 유리
+    if (direction === 'bearish' && marketData.vah) {
+      if (isNearLevel(marketData.currentPrice, marketData.vah, 1.5)) {
+        score += 5;
+        details.push('VAH(저항) 근처 +5');
+      } else if (isNearLevel(marketData.currentPrice, marketData.vah, 2.5)) {
+        score += 3;
+        details.push('VAH 접근 중 +3');
+      }
+    }
+    // 역방향 레벨 근처 = 페널티 (롱인데 VAH 근처, 숏인데 VAL 근처)
+    if (direction === 'bullish' && marketData.vah) {
+      if (isNearLevel(marketData.currentPrice, marketData.vah, 1.5)) {
+        score -= 2;
+        details.push('VAH(저항) 근처 -2');
+      }
+    }
+    if (direction === 'bearish' && marketData.val) {
+      if (isNearLevel(marketData.currentPrice, marketData.val, 1.5)) {
+        score -= 2;
+        details.push('VAL(지지) 근처 -2');
+      }
+    }
+  }
+
+  // 4. ADX 기반 추세 강도
+  const strongTrendTFs = mtfData.timeframes.filter(tf => tf.isStrongTrend);
+  const weakTrendTFs = mtfData.timeframes.filter(tf => tf.adx !== null && tf.adx < 20);
+
+  if (strongTrendTFs.length >= 3) {
+    score += 2;
+    details.push(`${strongTrendTFs.length}개 TF 강한 추세 +2`);
+  } else if (weakTrendTFs.length >= 4) {
+    // 약한 추세 = 횡보장, 방향성 진입 불리
+    score -= 1;
+    details.push(`${weakTrendTFs.length}개 TF 약한 추세 -1`);
+  }
+
+  // 5. ATR 기반 변동성 체크
+  const atrRatios = mtfData.timeframes
+    .map(tf => tf.atrRatio)
+    .filter((r): r is number => r !== null);
+
+  if (atrRatios.length > 0) {
+    const avgATR = atrRatios.reduce((sum, r) => sum + r, 0) / atrRatios.length;
+
+    if (avgATR < 0.8) {
+      // 저변동 = 브레이크아웃 대기, 진입 유리
+      score += 2;
+      details.push(`저변동(ATR ${avgATR.toFixed(1)}x) +2`);
+    } else if (avgATR > 1.5) {
+      // 고변동 = 리스크 증가, 진입 불리
+      score -= 2;
+      details.push(`고변동(ATR ${avgATR.toFixed(1)}x) -2`);
+    }
+  }
+
+  // 6. RSI 레벨 체크 (기존 로직, 점수 유지)
   const tf5m = mtfData.timeframes.find(tf => tf.timeframe === '5m');
   if (tf5m?.rsi) {
     if (direction === 'bullish' && tf5m.rsi <= 40) {
-      score += 5;
+      score += 3;
       details.push('RSI 저점 진입');
     } else if (direction === 'bearish' && tf5m.rsi >= 60) {
-      score += 5;
+      score += 3;
       details.push('RSI 고점 진입');
     }
   }
 
   return {
-    score: Math.min(20, score),
+    score: Math.max(0, Math.min(20, score)),
     maxScore: 20,
-    details: details.length > 0 ? details : ['구조 데이터 부족'],
+    details: details.length > 0 ? details : ['시장 구조 데이터 없음'],
   };
 };
 
@@ -289,11 +412,12 @@ const getRecommendation = (
 export const calculateSignalScore = (
   mtfData: MTFOverviewData,
   direction: 'bullish' | 'bearish',
-  fundingRate?: number
+  fundingRate?: number,
+  marketData?: MarketStructureData
 ): SignalScore => {
   const mtfAlignment = calculateMTFAlignmentScore(mtfData, direction);
   const divergence = calculateDivergenceScore(mtfData, direction);
-  const marketStructure = calculateMarketStructureScore(mtfData, direction);
+  const marketStructure = calculateMarketStructureScore(mtfData, direction, marketData);
   const externalFactors = calculateExternalFactorsScore(mtfData, direction, fundingRate);
 
   const total = mtfAlignment.score + divergence.score + marketStructure.score + externalFactors.score;
