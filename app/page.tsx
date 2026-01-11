@@ -115,8 +115,9 @@ export default function Home() {
           {btcPrice && (
             <div className='flex items-center gap-2 px-3'>
               <div className='flex items-center gap-1.5'>
-                <Bitcoin className='w-5 h-5 text-orange-400' strokeWidth={2} />
-                <span className='w-1.5 h-1.5 rounded-full bg-green-500 animate-live-pulse' />
+                <span className='w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center'>
+                  <Bitcoin className='w-3.5 h-3.5 text-black' strokeWidth={2.5} />
+                </span>
                 <span className='text-xs text-gray-400 font-medium'>BTC/USDT</span>
               </div>
               <span className='text-lg font-bold font-mono text-white'>
