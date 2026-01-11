@@ -1,6 +1,16 @@
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { fetchCandles } from '@/lib/api/exchange';
+
+// Bybit WebSocket 타임프레임 매핑
+const BYBIT_INTERVALS: Record<string, string> = {
+  '5m': '5',
+  '15m': '15',
+  '30m': '30',
+  '1h': '60',
+  '4h': '240',
+  '1d': 'D',
+};
 import {
   MTFTimeframeData,
   MTFOverviewData,
@@ -22,6 +32,16 @@ const CANDLE_INTERVALS: Record<string, number> = {
   '1h': 60 * 60 * 1000,      // 1시간
   '4h': 4 * 60 * 60 * 1000,  // 4시간
   '1d': 24 * 60 * 60 * 1000, // 1일
+};
+
+// 타임프레임별 실시간 갱신 간격 (밀리초) - rate limit 회피
+const REFETCH_INTERVALS: Record<string, number> = {
+  '5m': 1000,    // 1초 - 가장 중요한 단기 데이터
+  '15m': 2000,   // 2초
+  '30m': 5000,   // 5초
+  '1h': 10000,   // 10초
+  '4h': 30000,   // 30초
+  '1d': 60000,   // 1분
 };
 
 // 다음 캔들 마감 시간 계산 (UTC 기준)
@@ -547,9 +567,8 @@ export function useMTF({ symbol, limit = 200, enabled = true }: UseMTFParams) {
       queryKey: ['mtf-candles', symbol, timeframe, limit],
       queryFn: () => fetchCandles({ symbol, timeframe, limit }),
       enabled,
-      staleTime: CANDLE_INTERVALS[timeframe] / 2,
-      // refetchInterval 제거 - 수동으로 캔들 마감 시 갱신
-      refetchInterval: false as const,
+      staleTime: REFETCH_INTERVALS[timeframe] / 2, // 갱신 간격의 절반
+      refetchInterval: REFETCH_INTERVALS[timeframe], // 타임프레임별 차등 갱신
     })),
   });
 

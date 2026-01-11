@@ -1,13 +1,130 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useMTF, getSecondsUntilClose, CANDLE_INTERVALS_SEC } from '@/hooks/useMTF';
+import { useState, useEffect, useRef, memo } from 'react';
+import { useMTFSocket, getSecondsUntilClose, CANDLE_INTERVALS_SEC } from '@/hooks/useMTFSocket';
 import { MTFStatus, MTFStrength, MTFTimeframeData, MTFAction, MTFActionInfo, OrderBlock } from '@/lib/types/index';
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock } from 'lucide-react';
 import ScoreCard from './ScoreCard';
 import RecommendationCard from './RecommendationCard';
 import { calculateSignalScore, MarketStructureData } from '@/lib/scoring';
 import { generateRecommendation } from '@/lib/recommendation';
+
+// 공항 전광판/슬롯 스타일 애니메이션 숫자 (소수점 지원)
+const AnimatedValue = memo(({
+  value,
+  decimals = 0,
+  className = '',
+  suffix = '',
+}: {
+  value: number | null;
+  decimals?: number;
+  className?: string;
+  suffix?: string;
+}) => {
+  const [displayValue, setDisplayValue] = useState(value);
+  const [prevDisplayValue, setPrevDisplayValue] = useState(value);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [direction, setDirection] = useState<'up' | 'down' | null>(null);
+  const previousValue = useRef(value);
+
+  useEffect(() => {
+    if (value === null || previousValue.current === null) {
+      setDisplayValue(value);
+      previousValue.current = value;
+      return;
+    }
+    if (previousValue.current === value) return;
+
+    const startValue = previousValue.current;
+    const endValue = value;
+    const duration = 300;
+    const startTime = performance.now();
+
+    const newDirection = endValue > startValue ? 'up' : 'down';
+    setDirection(newDirection);
+    setPrevDisplayValue(startValue);
+    setIsAnimating(true);
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+      const current = startValue + (endValue - startValue) * eased;
+
+      setDisplayValue(current);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        previousValue.current = value;
+        setTimeout(() => {
+          setIsAnimating(false);
+          setDirection(null);
+        }, 100);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [value]);
+
+  if (displayValue === null) return <span className="text-gray-500">-</span>;
+
+  const colorClass = isAnimating
+    ? direction === 'up'
+      ? 'text-green-400'
+      : 'text-red-400'
+    : '';
+
+  return (
+    <span className={`inline-flex overflow-hidden relative ${className}`}>
+      {/* 이전 값 */}
+      {isAnimating && prevDisplayValue !== null && (
+        <span
+          className={`absolute inset-0 flex items-center justify-center ${
+            direction === 'up' ? 'animate-slot-out-up' : 'animate-slot-out-down'
+          }`}
+        >
+          {prevDisplayValue.toFixed(decimals)}{suffix}
+        </span>
+      )}
+      {/* 현재 값 */}
+      <span
+        className={`inline-block ${colorClass} ${
+          isAnimating
+            ? direction === 'up'
+              ? 'animate-slot-in-up'
+              : 'animate-slot-in-down'
+            : ''
+        }`}
+      >
+        {displayValue.toFixed(decimals)}{suffix}
+      </span>
+    </span>
+  );
+});
+AnimatedValue.displayName = 'AnimatedValue';
+
+// 셀 업데이트 감지 래퍼
+const AnimatedCell = memo(({ children, dataKey }: { children: React.ReactNode; dataKey: string }) => {
+  const [isUpdated, setIsUpdated] = useState(false);
+  const prevKey = useRef(dataKey);
+
+  useEffect(() => {
+    if (prevKey.current !== dataKey) {
+      setIsUpdated(true);
+      prevKey.current = dataKey;
+      const timer = setTimeout(() => setIsUpdated(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [dataKey]);
+
+  return (
+    <div className={`transition-all duration-300 ${isUpdated ? 'animate-cell-update' : ''}`}>
+      {children}
+    </div>
+  );
+});
+AnimatedCell.displayName = 'AnimatedCell';
 
 interface MTFOverviewProps {
   symbol: string;
@@ -43,8 +160,23 @@ const getStatusBg = (status: MTFStatus) => {
   }
 };
 
-// RSI 표시 컴포넌트 (게이지 바 포함)
-const RsiDisplay = ({ rsi }: { rsi: number | null }) => {
+// RSI 표시 컴포넌트 (게이지 바 포함) - 토스 스타일
+const RsiDisplay = memo(({ rsi }: { rsi: number | null }) => {
+  const [barWidth, setBarWidth] = useState(rsi || 0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const prevRsi = useRef(rsi);
+
+  useEffect(() => {
+    if (rsi === null) return;
+    if (prevRsi.current !== rsi) {
+      setIsAnimating(true);
+      setBarWidth(rsi);
+      prevRsi.current = rsi;
+      const timer = setTimeout(() => setIsAnimating(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [rsi]);
+
   if (rsi === null) {
     return <span className="text-gray-500 text-xs">-</span>;
   }
@@ -72,17 +204,18 @@ const RsiDisplay = ({ rsi }: { rsi: number | null }) => {
 
   return (
     <div className="flex items-center gap-1.5">
-      <div className="w-8 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+      <div className={`w-8 h-1.5 bg-gray-700 rounded-full overflow-hidden ${isAnimating ? 'animate-bar-glow' : ''}`}>
         <div
-          className={`h-full ${color} rounded-full transition-all`}
-          style={{ width: `${rsi}%` }}
+          className={`h-full ${color} rounded-full transition-all duration-500 ease-out`}
+          style={{ width: `${barWidth}%` }}
         />
       </div>
-      <span className={`text-xs font-mono ${textColor}`}>{rsi.toFixed(0)}</span>
-      {label && <span className={`text-[11px] ${textColor}`}>{label}</span>}
+      <AnimatedValue value={rsi} decimals={0} className={`text-xs font-mono ${textColor}`} />
+      {label && <span className={`text-[11px] ${textColor} ${isAnimating ? 'animate-flash-up' : ''}`}>{label}</span>}
     </div>
   );
-};
+});
+RsiDisplay.displayName = 'RsiDisplay';
 
 // CVD/OI 강도 표시 (↑↑↑, ↑↑, ↑, →, ↓, ↓↓, ↓↓↓)
 const DirectionStrengthDisplay = ({
@@ -254,8 +387,23 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
   );
 };
 
-// ADX 표시 컴포넌트 (게이지 바 포함)
-const AdxDisplay = ({ adx, isStrongTrend }: { adx: number | null; isStrongTrend: boolean }) => {
+// ADX 표시 컴포넌트 (게이지 바 포함) - 토스 스타일
+const AdxDisplay = memo(({ adx, isStrongTrend }: { adx: number | null; isStrongTrend: boolean }) => {
+  const [barWidth, setBarWidth] = useState(adx ? Math.min(adx * 2, 100) : 0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const prevAdx = useRef(adx);
+
+  useEffect(() => {
+    if (adx === null) return;
+    if (prevAdx.current !== adx) {
+      setIsAnimating(true);
+      setBarWidth(Math.min(adx * 2, 100));
+      prevAdx.current = adx;
+      const timer = setTimeout(() => setIsAnimating(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [adx]);
+
   if (adx === null) {
     return <span className="text-gray-500 text-xs">-</span>;
   }
@@ -281,25 +429,38 @@ const AdxDisplay = ({ adx, isStrongTrend }: { adx: number | null; isStrongTrend:
     label = '약함';
   }
 
-  // ADX는 보통 0-50 범위이므로 2배로 스케일
-  const barWidth = Math.min(adx * 2, 100);
-
   return (
     <div className="flex items-center gap-1.5">
-      <div className="w-6 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+      <div className={`w-6 h-1.5 bg-gray-700 rounded-full overflow-hidden ${isAnimating ? 'animate-bar-glow' : ''}`}>
         <div
-          className={`h-full ${color} rounded-full transition-all`}
+          className={`h-full ${color} rounded-full transition-all duration-500 ease-out`}
           style={{ width: `${barWidth}%` }}
         />
       </div>
-      <span className={`text-xs font-mono ${textColor}`}>{adx.toFixed(0)}</span>
-      <span className={`text-[11px] ${textColor}`}>{label}</span>
+      <AnimatedValue value={adx} decimals={0} className={`text-xs font-mono ${textColor}`} />
+      <span className={`text-[11px] ${textColor} ${isAnimating && isStrongTrend ? 'animate-flash-up' : ''}`}>{label}</span>
     </div>
   );
-};
+});
+AdxDisplay.displayName = 'AdxDisplay';
 
-// ATR Ratio 표시 컴포넌트 (게이지 바 포함)
-const AtrRatioDisplay = ({ atrRatio }: { atrRatio: number | null }) => {
+// ATR Ratio 표시 컴포넌트 (게이지 바 포함) - 토스 스타일
+const AtrRatioDisplay = memo(({ atrRatio }: { atrRatio: number | null }) => {
+  const [barWidth, setBarWidth] = useState(atrRatio ? Math.min(atrRatio * 50, 100) : 0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const prevAtr = useRef(atrRatio);
+
+  useEffect(() => {
+    if (atrRatio === null) return;
+    if (prevAtr.current !== atrRatio) {
+      setIsAnimating(true);
+      setBarWidth(Math.min(atrRatio * 50, 100));
+      prevAtr.current = atrRatio;
+      const timer = setTimeout(() => setIsAnimating(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [atrRatio]);
+
   if (atrRatio === null) {
     return <span className="text-gray-500 text-xs">-</span>;
   }
@@ -323,22 +484,20 @@ const AtrRatioDisplay = ({ atrRatio }: { atrRatio: number | null }) => {
     label = '낮음';
   }
 
-  // ATR ratio는 보통 0.5~2.0 범위, 1.0이 50%로 표시
-  const barWidth = Math.min(atrRatio * 50, 100);
-
   return (
     <div className="flex items-center gap-1.5">
-      <div className="w-6 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+      <div className={`w-6 h-1.5 bg-gray-700 rounded-full overflow-hidden ${isAnimating ? 'animate-bar-glow' : ''}`}>
         <div
-          className={`h-full ${color} rounded-full transition-all`}
+          className={`h-full ${color} rounded-full transition-all duration-500 ease-out`}
           style={{ width: `${barWidth}%` }}
         />
       </div>
-      <span className={`text-xs font-mono ${textColor}`}>{atrRatio.toFixed(1)}x</span>
+      <AnimatedValue value={atrRatio} decimals={1} suffix="x" className={`text-xs font-mono ${textColor}`} />
       <span className={`text-[11px] ${textColor}`}>{label}</span>
     </div>
   );
-};
+});
+AtrRatioDisplay.displayName = 'AtrRatioDisplay';
 
 // 카운트다운 포맷 (캔들 마감까지)
 const formatCountdown = (seconds: number): string => {
@@ -497,7 +656,7 @@ const formatPrice = (price: number) => {
 };
 
 export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: propVah, val: propVal, fundingRate, orderBlocks: propOrderBlocks }: MTFOverviewProps) {
-  const { data, isLoading, isError, refetch, refetchTimeframe, volumeProfile, orderBlocks: hookOrderBlocks } = useMTF({ symbol });
+  const { data, isLoading, isError, isConnected, refetch, refetchTimeframe, volumeProfile, orderBlocks: hookOrderBlocks } = useMTFSocket({ symbol });
 
   // props 우선, 없으면 useMTF에서 계산/추출된 값 사용
   const poc = propPoc ?? volumeProfile?.poc;
@@ -510,6 +669,10 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
       <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-4">
         <div className="flex items-center gap-2 mb-3">
           <h3 className="text-sm font-bold text-gray-400">시간대별 분석</h3>
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span className="text-[10px] text-gray-500">연결 중...</span>
+          </div>
           <RefreshCw className="w-3.5 h-3.5 text-gray-500 animate-spin" />
         </div>
         <div className="h-32 flex items-center justify-center">
@@ -691,6 +854,11 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <h3 className="text-xs font-bold text-gray-400">시간대별 분석</h3>
+          {/* WebSocket 연결 상태 */}
+          <div className="flex items-center gap-1" title={isConnected ? '실시간 연결됨' : '연결 끊김'}>
+            <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-400 animate-live-pulse' : 'bg-red-400'}`} />
+            <span className="text-[9px] text-gray-500">{isConnected ? 'LIVE' : 'OFF'}</span>
+          </div>
           {/* 추세 일치 종합 */}
           <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border ${getStatusBg(data.overallTrend)}`}>
             <span className="text-[10px] text-gray-400">추세:</span>

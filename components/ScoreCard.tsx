@@ -1,9 +1,83 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { MTFOverviewData, OrderBlock } from '@/lib/types';
 import { calculateSignalScore, confidenceLabels, SignalScore, MarketStructureData } from '@/lib/scoring';
 import { TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
+
+// 개별 숫자 슬롯 컴포넌트
+const DigitSlot = ({ digit, direction, size = 'normal' }: { digit: string; direction: 'up' | 'down' | null; size?: 'normal' | 'large' }) => {
+  const [currentDigit, setCurrentDigit] = useState(digit);
+  const [prevDigit, setPrevDigit] = useState(digit);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const prevDigitRef = useRef(digit);
+
+  useEffect(() => {
+    if (prevDigitRef.current !== digit) {
+      setPrevDigit(prevDigitRef.current);
+      setCurrentDigit(digit);
+      setIsSpinning(true);
+      prevDigitRef.current = digit;
+
+      const timer = setTimeout(() => setIsSpinning(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [digit]);
+
+  const sizeClass = size === 'large' ? 'w-[0.65em] h-[1.3em]' : 'w-[0.6em] h-[1.2em]';
+
+  return (
+    <span className={`inline-block ${sizeClass} overflow-hidden relative`}>
+      {/* 이전 숫자 */}
+      {isSpinning && (
+        <span
+          className={`absolute inset-0 flex items-center justify-center ${
+            direction === 'up' ? 'animate-digit-out-up' : 'animate-digit-out-down'
+          }`}
+        >
+          {prevDigit}
+        </span>
+      )}
+      {/* 현재 숫자 */}
+      <span
+        className={`flex items-center justify-center ${
+          isSpinning
+            ? direction === 'up'
+              ? 'animate-digit-in-up'
+              : 'animate-digit-in-down'
+            : ''
+        }`}
+      >
+        {currentDigit}
+      </span>
+    </span>
+  );
+};
+
+// 공항 전광판 스타일 점수 컴포넌트
+const AnimatedNumber = ({ value, className }: { value: number; className?: string }) => {
+  const [direction, setDirection] = useState<'up' | 'down' | null>(null);
+  const previousValue = useRef(value);
+  const valueStr = String(value);
+
+  useEffect(() => {
+    if (previousValue.current !== value) {
+      setDirection(value > previousValue.current ? 'up' : 'down');
+      previousValue.current = value;
+
+      const timer = setTimeout(() => setDirection(null), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [value]);
+
+  return (
+    <span className={`inline-flex items-center ${className || ''}`}>
+      {valueStr.split('').map((char, i) => (
+        <DigitSlot key={i} digit={char} direction={direction} size="large" />
+      ))}
+    </span>
+  );
+};
 
 interface ScoreCardProps {
   mtfData: MTFOverviewData;
@@ -15,14 +89,25 @@ interface ScoreCardProps {
   val?: number;
 }
 
-// 프로그레스 바 컴포넌트 (컴팩트)
+// 토스 스타일 프로그레스 바 컴포넌트
 const ScoreBar = ({ score, maxScore, color }: { score: number; maxScore: number; color: string }) => {
   const percentage = (score / maxScore) * 100;
+  const [isAnimating, setIsAnimating] = useState(false);
+  const prevScore = useRef(score);
+
+  useEffect(() => {
+    if (prevScore.current !== score) {
+      setIsAnimating(true);
+      prevScore.current = score;
+      const timer = setTimeout(() => setIsAnimating(false), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [score]);
 
   return (
-    <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden">
+    <div className={`w-full h-1 bg-gray-700 rounded-full overflow-hidden ${isAnimating ? 'animate-bar-glow' : ''}`}>
       <div
-        className={`h-full ${color} rounded-full transition-all duration-500`}
+        className={`h-full ${color} rounded-full transition-all duration-500 ease-out ${isAnimating ? 'brightness-125' : ''}`}
         style={{ width: `${percentage}%` }}
       />
     </div>
@@ -132,8 +217,14 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
   return (
     <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-3 h-full">
       {/* 헤더 */}
-      <div className="mb-2">
-        <h3 className="text-xs font-bold text-gray-400">신호 점수</h3>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-xs font-bold text-gray-400">신호 점수</h3>
+          <span className="flex items-center gap-1 text-[10px] text-gray-500">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-live-pulse" />
+            실시간
+          </span>
+        </div>
       </div>
 
       {/* 롱/숏 전체 점수 비교 */}
@@ -146,7 +237,7 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
             {betterDirection === 'long' && <span className="text-[10px] text-green-400/60 ml-auto">추천</span>}
           </div>
           <div className="text-2xl font-bold font-mono text-green-400">
-            {longScore.total}
+            <AnimatedNumber value={longScore.total} />
           </div>
           {longScore.recommendation.action !== 'wait' ? (
             <div className="mt-1 text-[11px] text-gray-500">
@@ -169,7 +260,7 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
             {betterDirection === 'short' && <span className="text-[10px] text-red-400/60 ml-auto">추천</span>}
           </div>
           <div className="text-2xl font-bold font-mono text-red-400">
-            {shortScore.total}
+            <AnimatedNumber value={shortScore.total} />
           </div>
           {shortScore.recommendation.action !== 'wait' ? (
             <div className="mt-1 text-[11px] text-gray-500">
