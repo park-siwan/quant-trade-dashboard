@@ -3,11 +3,11 @@ import MTFOverview from '@/components/MTFOverview';
 
 export default function Home() {
   return (
-    <div className='min-h-screen p-8 bg-[#0c0908] bg-pattern relative overflow-hidden'>
-      {/* 배경 장식 - 따뜻한 블러 글로우 */}
-      <div className='absolute top-0 left-0 w-[500px] h-[500px] bg-orange-500/15 rounded-full blur-[120px] -translate-x-1/3 -translate-y-1/3'></div>
-      <div className='absolute bottom-0 right-0 w-[400px] h-[400px] bg-amber-600/12 rounded-full blur-[100px] translate-x-1/4 translate-y-1/4'></div>
-      <div className='absolute top-1/2 left-1/2 w-[300px] h-[300px] bg-orange-400/8 rounded-full blur-[80px] -translate-x-1/2 -translate-y-1/2'></div>
+    <div className='min-h-screen p-8 bg-[#0a0a0a] bg-pattern relative overflow-hidden'>
+      {/* 배경 장식 - 무채색 블러 글로우 */}
+      <div className='absolute top-0 left-0 w-[500px] h-[500px] bg-gray-500/10 rounded-full blur-[120px] -translate-x-1/3 -translate-y-1/3'></div>
+      <div className='absolute bottom-0 right-0 w-[400px] h-[400px] bg-gray-600/8 rounded-full blur-[100px] translate-x-1/4 translate-y-1/4'></div>
+      <div className='absolute top-1/2 left-1/2 w-[300px] h-[300px] bg-gray-400/5 rounded-full blur-[80px] -translate-x-1/2 -translate-y-1/2'></div>
 
       {/* 메인 콘텐츠 */}
       <div className='relative z-10 space-y-6'>

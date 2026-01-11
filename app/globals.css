@@ -1,15 +1,15 @@
 @import 'tailwindcss';
 
 :root {
-  --background: #0c0908;
+  --background: #0a0a0a;
   --foreground: #ededed;
   --card: rgba(255, 255, 255, 0.03);
   --card-foreground: #ededed;
-  --primary: #f59e0b;
+  --primary: #737373;
   --primary-foreground: #ffffff;
-  --secondary: #1a1512;
+  --secondary: #171717;
   --border: rgba(255, 255, 255, 0.08);
-  --ring: #f59e0b;
+  --ring: #525252;
 }
 
 * {
@@ -27,7 +27,7 @@ body {
   background: var(--background);
 }
 
-/* 배경 비트코인 이미지 */
+/* 배경 그라데이션 */
 .bg-pattern::before {
   content: '';
   position: fixed;
@@ -37,10 +37,7 @@ body {
   height: 100%;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.15;
-  background-image: url('/bitcoin-bg.png');
-  background-size: cover;
-  background-position: center;
+  background: radial-gradient(ellipse at top, #1a1a1a 0%, #0d0d0d 50%, #050505 100%);
 }
 
 /* 배경 노이즈 텍스처 (오버레이) */

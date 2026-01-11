@@ -322,16 +322,16 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-bold text-gray-400">MTF Overview</h3>
-          {/* MTF Alignment 종합 스코어 */}
+          {/* MTF 추세 일치 종합 스코어 */}
           <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg border ${getStatusBg(data.overallTrend)}`}>
-            <span className="text-xs text-gray-400">MTF Alignment:</span>
+            <span className="text-xs text-gray-400">추세 일치:</span>
             <span className={`text-sm font-bold ${
               data.overallTrend === 'bullish' ? 'text-green-400' :
               data.overallTrend === 'bearish' ? 'text-red-400' : 'text-gray-400'
             }`}>
-              {data.overallTrend === 'bullish' ? `${bullishCount}/${totalCount} Bullish` :
-               data.overallTrend === 'bearish' ? `${bearishCount}/${totalCount} Bearish` :
-               `${Math.max(bullishCount, bearishCount)}/${totalCount} Mixed`}
+              {data.overallTrend === 'bullish' ? `${bullishCount}/${totalCount} 상승` :
+               data.overallTrend === 'bearish' ? `${bearishCount}/${totalCount} 하락` :
+               `${Math.max(bullishCount, bearishCount)}/${totalCount} 혼조`}
             </span>
             <span className={`text-sm font-mono ${strengthInfo.color}`}>
               ({alignmentPercent}%)
