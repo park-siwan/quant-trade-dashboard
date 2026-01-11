@@ -939,22 +939,37 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
         </table>
       </div>
 
-      {/* 범례 (접이식) */}
-      <details className="mt-2 pt-2 border-t border-white/5 text-[11px] text-gray-500">
-        <summary className="cursor-pointer hover:text-gray-400">범례 보기</summary>
-        <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5">
-          <div><span className="text-green-400 font-bold">↑↑↑</span> <span className="text-gray-400">강한 상승 (8%+)</span></div>
-          <div><span className="text-teal-400 font-bold">↑↑</span> <span className="text-gray-400">상승 (4~8%)</span></div>
-          <div><span className="text-cyan-400 font-bold">↑</span> <span className="text-gray-400">약한 상승 (2~4%)</span></div>
-          <div><span className="text-gray-400">→</span> <span className="text-gray-400">횡보 (2% 미만)</span></div>
-          <div><span className="text-amber-400 font-bold">↓</span> <span className="text-gray-400">약한 하락 (2~4%)</span></div>
-          <div><span className="text-orange-400 font-bold">↓↓</span> <span className="text-gray-400">하락 (4~8%)</span></div>
-          <div><span className="text-red-400 font-bold">↓↓↓</span> <span className="text-gray-400">강한 하락 (8%+)</span></div>
-          <div><span className="text-orange-400">ADX25+🔥</span> <span className="text-gray-400">강한 추세</span></div>
-          <div><span className="text-red-400">ATR1.5x+</span> <span className="text-gray-400">고변동성 주의</span></div>
-          <div><span className="text-blue-400">ATR0.8x↓</span> <span className="text-gray-400">저변동성 (돌파 대기)</span></div>
+      {/* 범례 (스크롤 티커) */}
+      <div className="mt-2 pt-2 border-t border-white/5 overflow-hidden">
+        <div className="flex animate-ticker whitespace-nowrap text-[11px]">
+          <div className="flex items-center gap-6 px-4">
+            <span><span className="text-green-400 font-bold">↑↑↑</span> <span className="text-gray-500">강한상승</span></span>
+            <span><span className="text-teal-400 font-bold">↑↑</span> <span className="text-gray-500">상승</span></span>
+            <span><span className="text-cyan-400 font-bold">↑</span> <span className="text-gray-500">약상승</span></span>
+            <span><span className="text-gray-400">→</span> <span className="text-gray-500">횡보</span></span>
+            <span><span className="text-amber-400 font-bold">↓</span> <span className="text-gray-500">약하락</span></span>
+            <span><span className="text-orange-400 font-bold">↓↓</span> <span className="text-gray-500">하락</span></span>
+            <span><span className="text-red-400 font-bold">↓↓↓</span> <span className="text-gray-500">강한하락</span></span>
+            <span className="text-gray-600">│</span>
+            <span><span className="text-orange-400">ADX25+🔥</span> <span className="text-gray-500">강한추세</span></span>
+            <span><span className="text-red-400">ATR1.5x+</span> <span className="text-gray-500">고변동성</span></span>
+            <span><span className="text-blue-400">ATR0.8x↓</span> <span className="text-gray-500">저변동성</span></span>
+          </div>
+          <div className="flex items-center gap-6 px-4">
+            <span><span className="text-green-400 font-bold">↑↑↑</span> <span className="text-gray-500">강한상승</span></span>
+            <span><span className="text-teal-400 font-bold">↑↑</span> <span className="text-gray-500">상승</span></span>
+            <span><span className="text-cyan-400 font-bold">↑</span> <span className="text-gray-500">약상승</span></span>
+            <span><span className="text-gray-400">→</span> <span className="text-gray-500">횡보</span></span>
+            <span><span className="text-amber-400 font-bold">↓</span> <span className="text-gray-500">약하락</span></span>
+            <span><span className="text-orange-400 font-bold">↓↓</span> <span className="text-gray-500">하락</span></span>
+            <span><span className="text-red-400 font-bold">↓↓↓</span> <span className="text-gray-500">강한하락</span></span>
+            <span className="text-gray-600">│</span>
+            <span><span className="text-orange-400">ADX25+🔥</span> <span className="text-gray-500">강한추세</span></span>
+            <span><span className="text-red-400">ATR1.5x+</span> <span className="text-gray-500">고변동성</span></span>
+            <span><span className="text-blue-400">ATR0.8x↓</span> <span className="text-gray-500">저변동성</span></span>
+          </div>
         </div>
-      </details>
+      </div>
       </div>
     </div>
   );
