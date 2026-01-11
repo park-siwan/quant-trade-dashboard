@@ -161,14 +161,16 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
             bg: 'bg-green-500/20 border-green-500/30',
             text: 'text-green-400',
             icon: '↗',
-            label: '추세유지',
+            label: '상승추세 유지',
+            hideReason: true,
           };
         } else {
           return {
             bg: 'bg-red-500/20 border-red-500/30',
             text: 'text-red-400',
             icon: '↘',
-            label: '추세유지',
+            label: '하락추세 유지',
+            hideReason: true,
           };
         }
       case 'wait':
@@ -190,7 +192,7 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
         <span className={`text-xs ${style.text}`}>{style.icon}</span>
         <span className={`text-xs font-semibold ${style.text}`}>{style.label}</span>
       </div>
-      <span className="text-[9px] text-gray-500 mt-0.5">{reason}</span>
+      {!style.hideReason && <span className="text-[9px] text-gray-500 mt-0.5">{reason}</span>}
     </div>
   );
 };
