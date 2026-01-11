@@ -68,7 +68,7 @@ const DirectionStrengthDisplay = ({
   return <span className={`text-xs font-bold ${color}`}>{doubleArrow}</span>;
 };
 
-// 다이버전스 표시 (타입 + 시간)
+// 다이버전스 표시 (타입 + 시간 + 만료 여부)
 const DivergenceDisplay = ({ divergence, timeframe }: {
   divergence: MTFTimeframeData['divergence'];
   timeframe: string;
@@ -79,6 +79,7 @@ const DivergenceDisplay = ({ divergence, timeframe }: {
 
   const isBullish = divergence.direction === 'bullish';
   const typeLabel = divergence.type.toUpperCase();
+  const isExpired = divergence.isExpired;
 
   // 캔들 수로 시간 계산
   const candleIntervalMin = (CANDLE_INTERVALS_SEC[timeframe] || 300) / 60;
@@ -91,6 +92,18 @@ const DivergenceDisplay = ({ divergence, timeframe }: {
     timeAgo = `${Math.round(minutesAgo / 60)}h`;
   } else {
     timeAgo = `${Math.round(minutesAgo / 1440)}d`;
+  }
+
+  // 만료된 경우 회색 처리
+  if (isExpired) {
+    return (
+      <div className="flex flex-col items-start opacity-50">
+        <span className="text-xs font-semibold text-gray-500">
+          {isBullish ? '↑' : '↓'} {typeLabel}
+        </span>
+        <span className="text-[9px] text-gray-600">{timeAgo} (만료)</span>
+      </div>
+    );
   }
 
   return (
@@ -158,6 +171,42 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
       </div>
       <span className="text-[9px] text-gray-500 mt-0.5">{reason}</span>
     </div>
+  );
+};
+
+// ADX 표시 컴포넌트
+const AdxDisplay = ({ adx, isStrongTrend }: { adx: number | null; isStrongTrend: boolean }) => {
+  if (adx === null) {
+    return <span className="text-gray-500 text-xs">-</span>;
+  }
+
+  return (
+    <span className={`text-xs font-mono ${isStrongTrend ? 'text-orange-400 font-bold' : 'text-gray-400'}`}>
+      {adx.toFixed(0)}{isStrongTrend && ' 🔥'}
+    </span>
+  );
+};
+
+// ATR Ratio 표시 컴포넌트
+const AtrRatioDisplay = ({ atrRatio }: { atrRatio: number | null }) => {
+  if (atrRatio === null) {
+    return <span className="text-gray-500 text-xs">-</span>;
+  }
+
+  // 색상: 1.5 이상 = 고변동(빨강), 1.2 이상 = 높음(주황), 0.8 이하 = 낮음(파랑)
+  let color = 'text-gray-400';
+  if (atrRatio >= 1.5) {
+    color = 'text-red-400 font-bold';
+  } else if (atrRatio >= 1.2) {
+    color = 'text-orange-400';
+  } else if (atrRatio <= 0.8) {
+    color = 'text-blue-400';
+  }
+
+  return (
+    <span className={`text-xs font-mono ${color}`}>
+      {atrRatio.toFixed(1)}x
+    </span>
   );
 };
 
@@ -281,6 +330,12 @@ const TimeframeRow = ({
           direction={data.oiDirection}
           strength={data.oiStrength}
         />
+      </td>
+      <td className="px-3 py-2">
+        <AdxDisplay adx={data.adx} isStrongTrend={data.isStrongTrend} />
+      </td>
+      <td className="px-3 py-2">
+        <AtrRatioDisplay atrRatio={data.atrRatio} />
       </td>
       <td className="px-3 py-2">
         <DivergenceDisplay divergence={data.divergence} timeframe={data.timeframe} />
@@ -419,6 +474,8 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">RSI</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="CVD 방향/강도">CVD</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="OI 방향/강도">OI</th>
+              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="추세 강도 (25+ 강한 추세)">ADX</th>
+              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="평균 대비 변동성">ATR%</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">DIV</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="추천 액션">Action</th>
               <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="캔들 마감까지">

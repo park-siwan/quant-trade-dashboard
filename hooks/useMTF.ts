@@ -54,6 +54,20 @@ export const CANDLE_INTERVALS_SEC: Record<string, number> = {
   '1d': 24 * 60 * 60,
 };
 
+// 다이버전스 유효기간 (캔들 수 기준)
+// 5m~15m: 수 시간 → ~24캔들 (5m: 2시간, 15m: 6시간)
+// 30m~1h: 1~3일 → ~48캔들
+// 4h: 3~7일 → ~42캔들 (7일)
+// 1d: 7~14일 → ~14캔들
+export const DIVERGENCE_EXPIRY_CANDLES: Record<string, number> = {
+  '5m': 24,   // 2시간
+  '15m': 24,  // 6시간
+  '30m': 48,  // 1일
+  '1h': 72,   // 3일
+  '4h': 42,   // 7일
+  '1d': 14,   // 14일
+};
+
 interface UseMTFParams {
   symbol: string;
   limit?: number;
@@ -76,11 +90,17 @@ interface RawTimeframeData {
     direction: 'bullish' | 'bearish';
     timestamp: number;
     candlesAgo: number;
+    isExpired: boolean; // 유효기간 만료 여부
   } | null;
   currentPrice: number;
   ema20: number | null;
   ema50: number | null;
   ema200: number | null;
+  // ADX (추세 강도)
+  adx: number | null;
+  isStrongTrend: boolean; // ADX >= 25
+  // ATR Ratio (평균 대비 변동성)
+  atrRatio: number | null;
 }
 
 // 타임프레임 데이터 변환
@@ -122,11 +142,20 @@ const processTimeframeData = (
   // OI 분석 (방향 + 강도 + 변화율)
   const oiAnalysis = analyzeOi(data.data.indicators?.oi);
 
-  // 다이버전스 (최근 신호 + 시간 정보)
+  // 다이버전스 (최근 신호 + 시간 정보 + 만료 여부)
   const divergence = getLatestDivergence(
     data.data.signals?.divergence,
-    candles.length
+    candles.length,
+    timeframe
   );
+
+  // ADX 데이터
+  const adxData = data.data.adx;
+  const adx = adxData?.currentAdx ?? null;
+  const isStrongTrend = adx !== null && adx >= 25;
+
+  // ATR Ratio (평균 대비 변동성)
+  const atrRatio = data.data.vwapAtr?.atrRatio ?? null;
 
   return {
     timeframe,
@@ -143,6 +172,9 @@ const processTimeframeData = (
     ema20,
     ema50,
     ema200,
+    adx,
+    isStrongTrend,
+    atrRatio,
   };
 };
 
@@ -221,26 +253,32 @@ const analyzeOi = (oi: (number | null)[] | undefined): {
   return { direction, strength, change };
 };
 
-// 최근 다이버전스 가져오기 (타임스탬프 + 캔들 수 포함)
+// 최근 다이버전스 가져오기 (타임스탬프 + 캔들 수 + 만료 여부)
 const getLatestDivergence = (
   signals: { type: string; direction: string; phase: string; timestamp?: number; index?: number }[] | undefined,
-  totalCandles: number
-): MTFTimeframeData['divergence'] => {
+  totalCandles: number,
+  timeframe: string
+): RawTimeframeData['divergence'] => {
   if (!signals?.length) return null;
 
-  // start 신호만 필터링
-  const startSignals = signals.filter((s) => s.phase === 'start');
-  if (startSignals.length === 0) return null;
+  // end 신호 (다이버전스 확정 시점) 필터링
+  const endSignals = signals.filter((s) => s.phase === 'end');
+  if (endSignals.length === 0) return null;
 
-  // 가장 최근 신호
-  const latest = startSignals[startSignals.length - 1];
+  // 가장 최근 확정된 다이버전스
+  const latest = endSignals[endSignals.length - 1];
   const candlesAgo = latest.index !== undefined ? totalCandles - 1 - latest.index : 0;
+
+  // 유효기간 만료 여부 확인
+  const expiryCandles = DIVERGENCE_EXPIRY_CANDLES[timeframe] || 24;
+  const isExpired = candlesAgo > expiryCandles;
 
   return {
     type: latest.type as 'rsi' | 'obv' | 'cvd' | 'oi',
     direction: latest.direction as 'bullish' | 'bearish',
     timestamp: latest.timestamp || Date.now(),
     candlesAgo,
+    isExpired,
   };
 };
 
@@ -274,10 +312,10 @@ const calculateAction = (
   overallTrend: MTFStatus,
   higherTfTrend: MTFStatus // 4h or 1d trend
 ): MTFActionInfo => {
-  const { trend, divergence, rsi } = tfData;
+  const { trend, divergence, rsi, isStrongTrend, atrRatio } = tfData;
 
-  // 다이버전스가 있는 경우
-  if (divergence) {
+  // 다이버전스가 있고 만료되지 않은 경우
+  if (divergence && !divergence.isExpired) {
     const divDirection = divergence.direction;
 
     // 다이버전스가 상위TF 추세와 같은 방향 → OK
@@ -289,11 +327,14 @@ const calculateAction = (
     }
 
     // 다이버전스가 상위TF 추세와 반대 → 반전 주의
+    // ADX 강한 추세(🔥)에서 역추세 다이버전스 = 더 강한 경고
     if (divDirection === 'bullish' && (overallTrend === 'bearish' || higherTfTrend === 'bearish')) {
-      return { action: 'reversal_warn', reason: '역추세 다이버전스' };
+      const reason = isStrongTrend ? '강한추세 역행🔥' : '역추세 다이버전스';
+      return { action: 'reversal_warn', reason };
     }
     if (divDirection === 'bearish' && (overallTrend === 'bullish' || higherTfTrend === 'bullish')) {
-      return { action: 'reversal_warn', reason: '역추세 다이버전스' };
+      const reason = isStrongTrend ? '강한추세 역행🔥' : '역추세 다이버전스';
+      return { action: 'reversal_warn', reason };
     }
 
     // 중립 추세에서 다이버전스
@@ -304,14 +345,19 @@ const calculateAction = (
   }
 
   // 다이버전스 없는 경우
-  // RSI 과매수/과매도 체크
-  if (rsi !== null) {
+  // RSI 과매수/과매도 체크 (강한 추세에서는 무시)
+  if (rsi !== null && !isStrongTrend) {
     if (rsi >= 70 && trend === 'bullish') {
       return { action: 'reversal_warn', reason: 'RSI 과매수' };
     }
     if (rsi <= 30 && trend === 'bearish') {
       return { action: 'reversal_warn', reason: 'RSI 과매도' };
     }
+  }
+
+  // 횡보 + 저변동성 = 브레이크아웃 대기
+  if (trend === 'neutral' && atrRatio !== null && atrRatio < 0.8) {
+    return { action: 'wait', reason: '횡보 저변동' };
   }
 
   // 추세 유지

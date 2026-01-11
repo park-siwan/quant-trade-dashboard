@@ -367,11 +367,17 @@ export interface MTFTimeframeData {
     direction: 'bullish' | 'bearish';
     timestamp: number; // 발생 시간
     candlesAgo: number; // 몇 캔들 전
+    isExpired: boolean; // 유효기간 만료 여부
   } | null;
   currentPrice: number;
   ema20: number | null;
   ema50: number | null;
   ema200: number | null;
+  // ADX (추세 강도)
+  adx: number | null;
+  isStrongTrend: boolean; // ADX >= 25
+  // ATR Ratio (평균 대비 변동성)
+  atrRatio: number | null;
   actionInfo: MTFActionInfo; // 추천 액션
 }
 
