@@ -496,30 +496,56 @@ export default function MTFOverview({ symbol, currentPrice, poc, fundingRate }: 
       </div>
 
       {/* 범례 */}
-      <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap items-center gap-4 text-[10px] text-gray-500">
-        <div className="flex items-center gap-1">
-          <TrendingUp className="w-3 h-3 text-green-400" />
-          <span>상승</span>
+      <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-[10px] text-gray-500">
+        {/* CVD/OI 방향 */}
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-1">
+            <TrendingUp className="w-3 h-3 text-green-400" />
+            <span>상승</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <TrendingDown className="w-3 h-3 text-red-400" />
+            <span>하락</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-green-400 font-bold">↑↑</span>
+            <span>강한 상승</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-lime-400 font-bold">↑</span>
+            <span>약한 상승</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-gray-400">→</span>
+            <span>횡보</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-orange-400 font-bold">↓</span>
+            <span>약한 하락</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-red-400 font-bold">↓↓</span>
+            <span>강한 하락</span>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <TrendingDown className="w-3 h-3 text-red-400" />
-          <span>하락</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-green-400 font-bold">↑↑</span>
-          <span>강한 상승</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-lime-400 font-bold">↑</span>
-          <span>약한 상승</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-gray-400">→</span>
-          <span>횡보</span>
-        </div>
-        <div className="ml-auto text-gray-600">
-          <Clock className="w-3 h-3 inline mr-1" />
-          캔들 마감 시 자동 갱신
+        {/* ADX / ATR 기준 */}
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-1">
+            <span className="text-orange-400 font-bold">ADX 25+🔥</span>
+            <span>강한 추세</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-red-400 font-mono">ATR 1.5x+</span>
+            <span>고변동</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-blue-400 font-mono">ATR 0.8x↓</span>
+            <span>저변동</span>
+          </div>
+          <div className="ml-auto text-gray-600">
+            <Clock className="w-3 h-3 inline mr-1" />
+            캔들 마감 시 자동 갱신
+          </div>
         </div>
       </div>
     </div>
