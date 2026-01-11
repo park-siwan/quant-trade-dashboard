@@ -168,7 +168,7 @@ function generateLowConfidenceRecommendation({
         direction: 'long',
         triggerPrice: val,
         triggerType: 'approach',
-        requiredSignal: '상승 다이버전스 발생시 진입',
+        requiredSignal: '단기저점 도달시 진입 (역추세 - 상승 다이버전스 기대)',
         expectedScore: score.total + 15,
       });
       reasoning.push(`단기저점 접근 시 점수 상승 예상`);
@@ -182,7 +182,7 @@ function generateLowConfidenceRecommendation({
         direction: 'short',
         triggerPrice: vah,
         triggerType: 'touch',
-        requiredSignal: '하락 다이버전스 발생시 진입',
+        requiredSignal: '단기고점 도달시 진입 (역추세 - 하락 다이버전스 기대)',
         expectedScore: score.total + 15,
       });
       reasoning.push(`단기고점 터치 시 점수 상승 예상`);
@@ -234,7 +234,7 @@ function generateWaitRecommendation({
         direction: 'short',
         triggerPrice: vah,
         triggerType: 'touch',
-        requiredSignal: '하락 다이버전스 발생시 진입',
+        requiredSignal: '단기고점 도달시 진입 (역추세 - 하락 다이버전스 기대)',
         expectedScore: 45 + Math.min(10, Math.round((5 - distanceToVAH) * 2)),
       });
       reasoning.push(`단기고점($${vah.toLocaleString()})까지 ${distanceToVAH.toFixed(1)}%`);
@@ -249,7 +249,7 @@ function generateWaitRecommendation({
         direction: 'long',
         triggerPrice: val,
         triggerType: 'approach',
-        requiredSignal: '상승 다이버전스 발생시 진입',
+        requiredSignal: '단기저점 도달시 진입 (역추세 - 상승 다이버전스 기대)',
         expectedScore: 45 + Math.min(10, Math.round((7 - distanceToVAL) * 1.5)),
       });
       reasoning.push(`단기저점($${val.toLocaleString()})까지 ${distanceToVAL.toFixed(1)}%`);
@@ -289,7 +289,6 @@ function generateWaitRecommendation({
         }
 
         const direction = isBullishOB ? 'long' : 'short';
-        const signal = isBullishOB ? '상승 다이버전스' : '하락 다이버전스';
         const obType = isBullishOB ? '지지구간' : '저항구간';
 
         // 중복 방지
@@ -302,7 +301,7 @@ function generateWaitRecommendation({
             direction,
             triggerPrice: obMidPrice,
             triggerType: 'touch',
-            requiredSignal: `${signal} + ${obType} 반응시 진입`,
+            requiredSignal: `${obType} 도달시 진입 (추세추종 - ${isBullishOB ? '매수세 유입 예상' : '매도세 유입 예상'})`,
             expectedScore: 50,
           });
         }
