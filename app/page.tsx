@@ -4,17 +4,19 @@ import { useState } from 'react';
 import ChartAdapter from '@/components/ChartAdapter';
 import MTFOverview from '@/components/MTFOverview';
 import { BarChart3, Table2, BookOpen } from 'lucide-react';
+import { useBTCPrice } from '@/hooks/useBTCPrice';
 
 type TabType = 'chart' | 'mtf' | 'glossary';
 
 const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
-  { id: 'chart', label: '차트', icon: <BarChart3 className="w-4 h-4" /> },
   { id: 'mtf', label: '분석', icon: <Table2 className="w-4 h-4" /> },
+  { id: 'chart', label: '차트', icon: <BarChart3 className="w-4 h-4" /> },
   { id: 'glossary', label: '용어', icon: <BookOpen className="w-4 h-4" /> },
 ];
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<TabType>('chart');
+  const [activeTab, setActiveTab] = useState<TabType>('mtf');
+  const btcPrice = useBTCPrice();
 
   return (
     <div className='min-h-screen bg-[#0a0a0a] bg-pattern relative overflow-hidden'>
@@ -25,21 +27,37 @@ export default function Home() {
 
       {/* 탭 네비게이션 - 상단 고정 */}
       <div className='sticky top-0 z-50 backdrop-blur-xl bg-[#0a0a0a]/80 border-b border-white/10'>
-        <div className='flex items-center gap-1 p-2'>
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === tab.id
-                  ? 'bg-white/10 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
+        <div className='flex items-center justify-between p-2'>
+          <div className='flex items-center gap-1'>
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {/* 실시간 BTC 가격 */}
+          {btcPrice && (
+            <div className='flex items-center gap-2 px-3'>
+              <span className='text-xs text-gray-500'>BTC</span>
+              <span className='text-lg font-bold font-mono text-white'>
+                ${btcPrice.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </span>
+              {btcPrice.changePercent24h !== 0 && (
+                <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${btcPrice.changePercent24h >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {btcPrice.changePercent24h >= 0 ? '+' : ''}{btcPrice.changePercent24h.toFixed(2)}%
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -102,8 +120,8 @@ export default function Home() {
               <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs mt-2'>
                 <div><span className='text-red-400'>━</span><span className='text-blue-400'>━</span><span className='text-green-400'>━</span><span className='text-gray-400'> EMA 20/50/200</span></div>
                 <div><span className='text-yellow-400 font-semibold'>━ 목표(POC)</span><span className='text-gray-400'> - 최대 거래량 가격</span></div>
-                <div><span className='text-red-400 font-semibold'>┄ 숏(VAH)</span><span className='text-gray-400'> - 저항/숏 진입 구간</span></div>
-                <div><span className='text-lime-400 font-semibold'>┄ 롱(VAL)</span><span className='text-gray-400'> - 지지/롱 진입 구간</span></div>
+                <div><span className='text-red-400 font-semibold'>┄ 단기고점</span><span className='text-gray-400'> - 저항/숏 진입 구간</span></div>
+                <div><span className='text-lime-400 font-semibold'>┄ 단기저점</span><span className='text-gray-400'> - 지지/롱 진입 구간</span></div>
                 <div><span className='text-purple-400 font-semibold'>━ 기관 기준선(VWAP)</span><span className='text-gray-400'> - 거래량 가중 평균</span></div>
               </div>
             </div>

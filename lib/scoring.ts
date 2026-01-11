@@ -61,7 +61,7 @@ const checkNearOrderBlock = (
     const nearRange = isNearLevel(currentPrice, ob.low, 1.0) || isNearLevel(currentPrice, ob.high, 1.0);
 
     if (inRange || nearRange) {
-      // 불리시 오더블록 = 지지 (롱 유리), 베어리시 오더블록 = 저항 (숏 유리)
+      // 상승 오더블록 = 지지 (롱 유리), 하락 오더블록 = 저항 (숏 유리)
       if (ob.type === 'bullish') {
         return { isNear: true, type: 'support' };
       } else {

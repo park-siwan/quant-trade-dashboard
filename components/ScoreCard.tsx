@@ -15,12 +15,12 @@ interface ScoreCardProps {
   val?: number;
 }
 
-// 프로그레스 바 컴포넌트
+// 프로그레스 바 컴포넌트 (컴팩트)
 const ScoreBar = ({ score, maxScore, color }: { score: number; maxScore: number; color: string }) => {
   const percentage = (score / maxScore) * 100;
 
   return (
-    <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+    <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden">
       <div
         className={`h-full ${color} rounded-full transition-all duration-500`}
         style={{ width: `${percentage}%` }}
@@ -29,7 +29,7 @@ const ScoreBar = ({ score, maxScore, color }: { score: number; maxScore: number;
   );
 };
 
-// 카테고리 상세 컴포넌트 (상단 박스와 50/50 정렬)
+// 카테고리 상세 컴포넌트 (컴팩트)
 const CategoryRow = ({
   label,
   longScore,
@@ -57,34 +57,34 @@ const CategoryRow = ({
   };
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+        className="w-full text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
       >
         {/* 라벨 행 */}
-        <div className="flex items-center gap-1 mb-1">
-          {isOpen ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+        <div className="flex items-center gap-1 mb-0.5">
+          {isOpen ? <ChevronUp className="w-2 h-2" /> : <ChevronDown className="w-2 h-2" />}
           <span>{label}</span>
         </div>
 
-        {/* 프로그레스바 - 상단 박스와 동일한 grid-cols-2 gap-4 */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* 프로그레스바 */}
+        <div className="grid grid-cols-2 gap-3">
           <ScoreBar score={longScore} maxScore={maxScore} color={getBarColor(longScore)} />
           <ScoreBar score={shortScore} maxScore={maxScore} color={getBarColor(shortScore)} />
         </div>
       </button>
       {isOpen && (
-        <div className="grid grid-cols-2 gap-4 text-[9px] text-gray-600 pt-1">
+        <div className="grid grid-cols-2 gap-3 text-[10px] text-gray-600 pt-0.5">
           <div>
-            <span className="text-green-400/80 font-mono">{longScore}/{maxScore}점</span>
-            <ul className="space-y-0.5 mt-1">
+            <span className="text-green-400/80 font-mono">{longScore}/{maxScore}</span>
+            <ul className="space-y-0">
               {longDetails.map((d, i) => <li key={i}>• {d}</li>)}
             </ul>
           </div>
           <div>
-            <span className="text-red-400/80 font-mono">{shortScore}/{maxScore}점</span>
-            <ul className="space-y-0.5 mt-1">
+            <span className="text-red-400/80 font-mono">{shortScore}/{maxScore}</span>
+            <ul className="space-y-0">
               {shortDetails.map((d, i) => <li key={i}>• {d}</li>)}
             </ul>
           </div>
@@ -130,31 +130,31 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
   const betterDirection = longScore.total > shortScore.total ? 'long' : longScore.total < shortScore.total ? 'short' : 'neutral';
 
   return (
-    <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-4">
+    <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-3 h-full">
       {/* 헤더 */}
-      <div className="mb-3">
-        <h3 className="text-sm font-bold text-gray-400">Signal Score</h3>
+      <div className="mb-2">
+        <h3 className="text-xs font-bold text-gray-400">신호 점수</h3>
       </div>
 
       {/* 롱/숏 전체 점수 비교 */}
-      <div className="grid grid-cols-2 gap-4 mb-4 pb-4 border-b border-white/10">
+      <div className="grid grid-cols-2 gap-3 mb-3 pb-3 border-b border-white/10">
         {/* 롱 점수 */}
-        <div className={`p-3 rounded-lg border relative ${betterDirection === 'long' ? 'border-green-500/30 bg-green-500/5' : 'border-white/5 bg-white/[0.01]'}`}>
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="w-4 h-4 text-green-400" />
-            <span className="text-xs text-green-400 font-semibold">롱</span>
-            {betterDirection === 'long' && <span className="text-[9px] text-green-400/60 ml-auto">추천</span>}
+        <div className={`p-2 rounded-lg border relative ${betterDirection === 'long' ? 'border-green-500/30 bg-green-500/5' : 'border-white/5 bg-white/[0.01]'}`}>
+          <div className="flex items-center gap-1.5 mb-1">
+            <TrendingUp className="w-3 h-3 text-green-400" />
+            <span className="text-[10px] text-green-400 font-semibold">롱</span>
+            {betterDirection === 'long' && <span className="text-[10px] text-green-400/60 ml-auto">추천</span>}
           </div>
-          <div className="text-3xl font-bold font-mono text-green-400">
+          <div className="text-2xl font-bold font-mono text-green-400">
             {longScore.total}
           </div>
           {longScore.recommendation.action !== 'wait' ? (
-            <div className="mt-2 text-[10px] text-gray-500">
+            <div className="mt-1 text-[11px] text-gray-500">
               {longScore.recommendation.leverage} · {longScore.recommendation.seedRatio}
             </div>
           ) : (
-            <div className="absolute bottom-2 right-2">
-              <span className={`text-[9px] px-1.5 py-0.5 rounded border ${getConfidenceBadgeStyle(longScore.confidence)}`}>
+            <div className="absolute bottom-1.5 right-1.5">
+              <span className={`text-[10px] px-1 py-0.5 rounded border ${getConfidenceBadgeStyle(longScore.confidence)}`}>
                 {longConfidence.label}
               </span>
             </div>
@@ -162,22 +162,22 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
         </div>
 
         {/* 숏 점수 */}
-        <div className={`p-3 rounded-lg border relative ${betterDirection === 'short' ? 'border-red-500/30 bg-red-500/5' : 'border-white/5 bg-white/[0.01]'}`}>
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingDown className="w-4 h-4 text-red-400" />
-            <span className="text-xs text-red-400 font-semibold">숏</span>
-            {betterDirection === 'short' && <span className="text-[9px] text-red-400/60 ml-auto">추천</span>}
+        <div className={`p-2 rounded-lg border relative ${betterDirection === 'short' ? 'border-red-500/30 bg-red-500/5' : 'border-white/5 bg-white/[0.01]'}`}>
+          <div className="flex items-center gap-1.5 mb-1">
+            <TrendingDown className="w-3 h-3 text-red-400" />
+            <span className="text-[10px] text-red-400 font-semibold">숏</span>
+            {betterDirection === 'short' && <span className="text-[10px] text-red-400/60 ml-auto">추천</span>}
           </div>
-          <div className="text-3xl font-bold font-mono text-red-400">
+          <div className="text-2xl font-bold font-mono text-red-400">
             {shortScore.total}
           </div>
           {shortScore.recommendation.action !== 'wait' ? (
-            <div className="mt-2 text-[10px] text-gray-500">
+            <div className="mt-1 text-[11px] text-gray-500">
               {shortScore.recommendation.leverage} · {shortScore.recommendation.seedRatio}
             </div>
           ) : (
-            <div className="absolute bottom-2 right-2">
-              <span className={`text-[9px] px-1.5 py-0.5 rounded border ${getConfidenceBadgeStyle(shortScore.confidence)}`}>
+            <div className="absolute bottom-1.5 right-1.5">
+              <span className={`text-[10px] px-1 py-0.5 rounded border ${getConfidenceBadgeStyle(shortScore.confidence)}`}>
                 {shortConfidence.label}
               </span>
             </div>
@@ -186,9 +186,9 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
       </div>
 
       {/* 카테고리별 점수 비교 */}
-      <div className="space-y-2 mb-3">
+      <div className="space-y-1.5 mb-2">
         <CategoryRow
-          label="MTF 정렬"
+          label="추세 종합"
           longScore={longScore.mtfAlignment.score}
           shortScore={shortScore.mtfAlignment.score}
           maxScore={30}
@@ -196,7 +196,7 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
           shortDetails={shortScore.mtfAlignment.details}
         />
         <CategoryRow
-          label="다이버전스"
+          label="다이버전스 (가격↔지표 괴리)"
           longScore={longScore.divergence.score}
           shortScore={shortScore.divergence.score}
           maxScore={30}
@@ -204,7 +204,7 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
           shortDetails={shortScore.divergence.details}
         />
         <CategoryRow
-          label="시장 구조"
+          label="시장 구조 (지지/저항·목표가·변동성)"
           longScore={longScore.marketStructure.score}
           shortScore={shortScore.marketStructure.score}
           maxScore={20}
@@ -212,7 +212,7 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
           shortDetails={shortScore.marketStructure.details}
         />
         <CategoryRow
-          label="외부 요인"
+          label="외부 요인 (펀딩비·매수세·포지션)"
           longScore={longScore.externalFactors.score}
           shortScore={shortScore.externalFactors.score}
           maxScore={20}
@@ -220,32 +220,6 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
           shortDetails={shortScore.externalFactors.details}
         />
       </div>
-
-      {/* 디버그 정보 (접이식) */}
-      <details className="text-[10px]">
-        <summary className="text-gray-600 cursor-pointer hover:text-gray-400">디버그 정보</summary>
-        <div className="mt-2 p-2 bg-gray-900/50 rounded text-gray-500 space-y-1">
-          <div>추세: {mtfData.timeframes.map(tf => `${tf.timeframe}:${tf.trend === 'bullish' ? '↑' : tf.trend === 'bearish' ? '↓' : '-'}`).join(', ')}</div>
-          <div>
-            다이버전스:{' '}
-            {mtfData.timeframes.filter(tf => tf.divergence).length === 0 ? (
-              <span>없음</span>
-            ) : (
-              mtfData.timeframes.filter(tf => tf.divergence).map((tf, i) => (
-                <span key={tf.timeframe}>
-                  {i > 0 && ', '}
-                  <span className={tf.divergence?.isExpired ? 'text-gray-700' : ''}>
-                    {tf.timeframe}:{tf.divergence?.direction === 'bullish' ? '↑' : '↓'}{tf.divergence?.type}
-                    {tf.divergence?.isExpired && <span className="text-gray-700">(만료)</span>}
-                  </span>
-                </span>
-              ))
-            )}
-          </div>
-          <div>현재가: {currentPrice ? `$${currentPrice.toLocaleString()}` : 'N/A'}</div>
-          <div>POC: {poc ? `$${poc.toLocaleString()}` : '-'} | VAH: {vah ? `$${vah.toLocaleString()}` : '-'} | VAL: {val ? `$${val.toLocaleString()}` : '-'}</div>
-        </div>
-      </details>
     </div>
   );
 }

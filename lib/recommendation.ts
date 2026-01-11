@@ -168,10 +168,10 @@ function generateLowConfidenceRecommendation({
         direction: 'long',
         triggerPrice: val,
         triggerType: 'approach',
-        requiredSignal: '불리시 다이버전스 추가 발생',
+        requiredSignal: '상승 다이버전스 추가 발생',
         expectedScore: score.total + 15,
       });
-      reasoning.push(`VAL 접근 시 점수 상승 예상`);
+      reasoning.push(`단기저점 접근 시 점수 상승 예상`);
     }
   }
 
@@ -182,10 +182,10 @@ function generateLowConfidenceRecommendation({
         direction: 'short',
         triggerPrice: vah,
         triggerType: 'touch',
-        requiredSignal: '베어리시 다이버전스 추가 발생',
+        requiredSignal: '하락 다이버전스 추가 발생',
         expectedScore: score.total + 15,
       });
-      reasoning.push(`VAH 터치 시 점수 상승 예상`);
+      reasoning.push(`단기고점 터치 시 점수 상승 예상`);
     }
   }
 
@@ -234,10 +234,10 @@ function generateWaitRecommendation({
         direction: 'short',
         triggerPrice: vah,
         triggerType: 'touch',
-        requiredSignal: '베어리시 다이버전스 발생',
+        requiredSignal: '하락 다이버전스 발생',
         expectedScore: 45 + Math.min(10, Math.round((5 - distanceToVAH) * 2)),
       });
-      reasoning.push(`VAH($${vah.toLocaleString()})까지 ${distanceToVAH.toFixed(1)}%`);
+      reasoning.push(`단기고점($${vah.toLocaleString()})까지 ${distanceToVAH.toFixed(1)}%`);
     }
   }
 
@@ -249,10 +249,10 @@ function generateWaitRecommendation({
         direction: 'long',
         triggerPrice: val,
         triggerType: 'approach',
-        requiredSignal: '불리시 다이버전스 발생',
+        requiredSignal: '상승 다이버전스 발생',
         expectedScore: 45 + Math.min(10, Math.round((7 - distanceToVAL) * 1.5)),
       });
-      reasoning.push(`VAL($${val.toLocaleString()})까지 ${distanceToVAL.toFixed(1)}%`);
+      reasoning.push(`단기저점($${val.toLocaleString()})까지 ${distanceToVAL.toFixed(1)}%`);
     }
   }
 
@@ -289,8 +289,8 @@ function generateWaitRecommendation({
         }
 
         const direction = isBullishOB ? 'long' : 'short';
-        const signal = isBullishOB ? '불리시 다이버전스' : '베어리시 다이버전스';
-        const obType = isBullishOB ? '지지 OB' : '저항 OB';
+        const signal = isBullishOB ? '상승 다이버전스' : '하락 다이버전스';
+        const obType = isBullishOB ? '지지구간' : '저항구간';
 
         // 중복 방지
         const exists = conditions.some(

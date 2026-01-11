@@ -79,7 +79,7 @@ const RsiDisplay = ({ rsi }: { rsi: number | null }) => {
         />
       </div>
       <span className={`text-xs font-mono ${textColor}`}>{rsi.toFixed(0)}</span>
-      {label && <span className={`text-[9px] ${textColor}`}>{label}</span>}
+      {label && <span className={`text-[11px] ${textColor}`}>{label}</span>}
     </div>
   );
 };
@@ -143,14 +143,14 @@ const DivergenceDisplay = ({ divergence, timeframe }: {
     timeAgo = `${Math.round(minutesAgo / 1440)}d`;
   }
 
-  // 만료된 경우 회색 처리
+  // 만료된 경우 취소선 + 만료 배지
   if (isExpired) {
     return (
-      <div className="flex flex-col items-start opacity-50">
-        <span className="text-xs font-semibold text-gray-500">
+      <div className="flex flex-col items-start">
+        <span className="text-xs font-semibold text-gray-500 line-through">
           {isBullish ? '↑' : '↓'} {typeLabel}
         </span>
-        <span className="text-[9px] text-gray-600">{timeAgo} (만료)</span>
+        <span className="text-[10px] px-1 py-0.5 bg-gray-700 text-gray-400 rounded">만료 {timeAgo}</span>
       </div>
     );
   }
@@ -160,7 +160,7 @@ const DivergenceDisplay = ({ divergence, timeframe }: {
       <span className={`text-xs font-semibold ${isBullish ? 'text-green-400' : 'text-red-400'}`}>
         {isBullish ? '↑' : '↓'} {typeLabel}
       </span>
-      <span className="text-[9px] text-gray-500">{timeAgo} ago</span>
+      <span className="text-[11px] text-gray-500">{timeAgo} ago</span>
     </div>
   );
 };
@@ -249,7 +249,7 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
         <span className={`text-xs ${style.text}`}>{style.icon}</span>
         <span className={`text-xs font-semibold ${style.text}`}>{style.label}</span>
       </div>
-      {!style.hideReason && <span className="text-[9px] text-gray-500 mt-0.5">{reason}</span>}
+      {!style.hideReason && <span className="text-[11px] text-gray-500 mt-0.5">{reason}</span>}
     </div>
   );
 };
@@ -293,7 +293,7 @@ const AdxDisplay = ({ adx, isStrongTrend }: { adx: number | null; isStrongTrend:
         />
       </div>
       <span className={`text-xs font-mono ${textColor}`}>{adx.toFixed(0)}</span>
-      <span className={`text-[9px] ${textColor}`}>{label}</span>
+      <span className={`text-[11px] ${textColor}`}>{label}</span>
     </div>
   );
 };
@@ -335,7 +335,7 @@ const AtrRatioDisplay = ({ atrRatio }: { atrRatio: number | null }) => {
         />
       </div>
       <span className={`text-xs font-mono ${textColor}`}>{atrRatio.toFixed(1)}x</span>
-      <span className={`text-[9px] ${textColor}`}>{label}</span>
+      <span className={`text-[11px] ${textColor}`}>{label}</span>
     </div>
   );
 };
@@ -431,13 +431,13 @@ const TimeframeRow = ({
 }) => {
   return (
     <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-      <td className="px-3 py-2 text-xs font-mono font-semibold text-gray-300">
+      <td className="px-2 py-1.5 text-[10px] font-mono font-semibold text-gray-300">
         {data.timeframe}
       </td>
-      <td className="px-3 py-2">
-        <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border ${getStatusBg(data.trend)}`}>
+      <td className="px-2 py-1.5">
+        <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${getStatusBg(data.trend)}`}>
           <StatusIcon status={data.trend} />
-          <span className={`text-xs ${
+          <span className={`text-[10px] ${
             data.trend === 'bullish' ? 'text-green-400' :
             data.trend === 'bearish' ? 'text-red-400' : 'text-gray-400'
           }`}>
@@ -446,34 +446,34 @@ const TimeframeRow = ({
           </span>
         </div>
       </td>
-      <td className="px-3 py-2">
+      <td className="px-2 py-1.5">
         <RsiDisplay rsi={data.rsi} />
       </td>
-      <td className="px-3 py-2 text-center">
+      <td className="px-2 py-1.5 text-center">
         <DirectionStrengthDisplay
           direction={data.cvdDirection}
           strength={data.cvdStrength}
         />
       </td>
-      <td className="px-3 py-2 text-center">
+      <td className="px-2 py-1.5 text-center">
         <DirectionStrengthDisplay
           direction={data.oiDirection}
           strength={data.oiStrength}
         />
       </td>
-      <td className="px-3 py-2">
+      <td className="px-2 py-1.5">
         <AdxDisplay adx={data.adx} isStrongTrend={data.isStrongTrend} />
       </td>
-      <td className="px-3 py-2">
+      <td className="px-2 py-1.5">
         <AtrRatioDisplay atrRatio={data.atrRatio} />
       </td>
-      <td className="px-3 py-2">
+      <td className="px-2 py-1.5">
         <DivergenceDisplay divergence={data.divergence} timeframe={data.timeframe} />
       </td>
-      <td className="px-3 py-2">
+      <td className="px-2 py-1.5">
         <ActionDisplay actionInfo={data.actionInfo} />
       </td>
-      <td className="px-3 py-2">
+      <td className="px-2 py-1.5">
         <CandleCountdown
           timeframe={data.timeframe}
           onRefresh={onRefresh}
@@ -509,7 +509,7 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
     return (
       <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-4">
         <div className="flex items-center gap-2 mb-3">
-          <h3 className="text-sm font-bold text-gray-400">MTF Overview</h3>
+          <h3 className="text-sm font-bold text-gray-400">시간대별 분석</h3>
           <RefreshCw className="w-3.5 h-3.5 text-gray-500 animate-spin" />
         </div>
         <div className="h-32 flex items-center justify-center">
@@ -523,7 +523,7 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
     return (
       <div className="backdrop-blur-sm bg-white/[0.02] border border-red-500/20 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-bold text-gray-400">MTF Overview</h3>
+          <h3 className="text-sm font-bold text-gray-400">시간대별 분석</h3>
           <button onClick={() => refetch()} className="text-xs text-gray-500 hover:text-gray-300">
             다시 시도
           </button>
@@ -544,8 +544,99 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
   // 실제 현재가 (MTF 데이터에서 5m 기준)
   const actualPrice = currentPrice || data.timeframes.find(t => t.timeframe === '5m')?.currentPrice || 0;
 
+  // 추세 방향 텍스트
+  const trendText = data.overallTrend === 'bullish'
+    ? `📈 상승추세 ${bullishCount}/${totalCount} (${alignmentPercent}%)`
+    : data.overallTrend === 'bearish'
+    ? `📉 하락추세 ${bearishCount}/${totalCount} (${alignmentPercent}%)`
+    : `➡️ 횡보 (${alignmentPercent}%)`;
+
+  // RSI 과매수/과매도 체크
+  const overboughtTFs = data.timeframes.filter(tf => tf.rsi && tf.rsi >= 70);
+  const oversoldTFs = data.timeframes.filter(tf => tf.rsi && tf.rsi <= 30);
+
+  // 강한 추세 타임프레임 (ADX >= 25)
+  const strongTrendTFs = data.timeframes.filter(tf => tf.isStrongTrend);
+
+  // 평균 ATR
+  const atrRatios = data.timeframes.map(tf => tf.atrRatio).filter((r): r is number => r !== null);
+  const avgATR = atrRatios.length > 0 ? atrRatios.reduce((a, b) => a + b, 0) / atrRatios.length : null;
+
+  // CVD/OI 방향 일치
+  const cvdBullish = data.timeframes.filter(tf => tf.cvdDirection === 'bullish').length;
+  const cvdBearish = data.timeframes.filter(tf => tf.cvdDirection === 'bearish').length;
+  const oiBullish = data.timeframes.filter(tf => tf.oiDirection === 'bullish').length;
+  const oiBearish = data.timeframes.filter(tf => tf.oiDirection === 'bearish').length;
+
+  // 다이버전스 정보
+  const activeDivergences = data.timeframes.filter(tf => tf.divergence && !tf.divergence.isExpired);
+  const bullishDivs = activeDivergences.filter(tf => tf.divergence?.direction === 'bullish');
+  const bearishDivs = activeDivergences.filter(tf => tf.divergence?.direction === 'bearish');
+
+  // EMA 위치 체크 (일봉 기준)
+  const tf1d = data.timeframes.find(tf => tf.timeframe === '1d');
+  const aboveEMA200 = tf1d && tf1d.ema200 && actualPrice > tf1d.ema200;
+  const belowEMA200 = tf1d && tf1d.ema200 && actualPrice < tf1d.ema200;
+
+  // 현재 시간
+  const now = new Date();
+  const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+  // 티커 콘텐츠 배열
+  const tickerItems = [
+    `⏰ ${timeStr} 업데이트`,
+    trendText,
+    fundingRate !== undefined && `펀딩 ${fundingRate > 0 ? '+' : ''}${fundingRate.toFixed(4)}%${fundingRate > 0.01 ? ' 🔴롱과열' : fundingRate < -0.01 ? ' 🟢숏과열' : ''}`,
+    aboveEMA200 && '✅ 일봉 EMA200 위 (상승구조)',
+    belowEMA200 && '⛔ 일봉 EMA200 아래 (하락구조)',
+    vah && `단기고점 $${formatPrice(vah)} (${((vah - actualPrice) / actualPrice * 100).toFixed(1)}%${vah > actualPrice ? '↑' : '↓'})`,
+    val && `단기저점 $${formatPrice(val)} (${((actualPrice - val) / actualPrice * 100).toFixed(1)}%${val < actualPrice ? '↓' : '↑'})`,
+    poc && `목표가 $${formatPrice(poc)} (${Math.abs((poc - actualPrice) / actualPrice * 100).toFixed(1)}%${poc > actualPrice ? '↑' : '↓'})`,
+    overboughtTFs.length > 0 && `🔴 RSI 과매수 ${overboughtTFs.map(tf => tf.timeframe).join(',')}`,
+    oversoldTFs.length > 0 && `🟢 RSI 과매도 ${oversoldTFs.map(tf => tf.timeframe).join(',')}`,
+    strongTrendTFs.length > 0 && `🔥 강한추세 ${strongTrendTFs.length}개 TF (ADX 25+)`,
+    strongTrendTFs.length === 0 && '😐 약한추세 (ADX 25 미만)',
+    avgATR && avgATR > 1.5 && `⚡ 고변동성 ATR ${avgATR.toFixed(1)}x - 손절 넓게`,
+    avgATR && avgATR < 0.8 && `😴 저변동성 ATR ${avgATR.toFixed(1)}x - 돌파 대기`,
+    avgATR && avgATR >= 0.8 && avgATR <= 1.5 && `📈 정상 변동성 ATR ${avgATR.toFixed(1)}x`,
+    cvdBullish > cvdBearish + 2 && `💪 매수세 우위 CVD ${cvdBullish}/${totalCount}`,
+    cvdBearish > cvdBullish + 2 && `👎 매도세 우위 CVD ${cvdBearish}/${totalCount}`,
+    cvdBullish === cvdBearish && `⚖️ 매수/매도 균형 CVD`,
+    oiBullish > oiBearish + 2 && `📊 포지션 증가 OI ${oiBullish}/${totalCount} - 신규 진입`,
+    oiBearish > oiBullish + 2 && `📉 포지션 감소 OI ${oiBearish}/${totalCount} - 청산 중`,
+    bullishDivs.length > 0 && `🟢 상승 다이버전스 ${bullishDivs.map(tf => tf.timeframe).join(',')} - 반등 가능`,
+    bearishDivs.length > 0 && `🔴 하락 다이버전스 ${bearishDivs.map(tf => tf.timeframe).join(',')} - 하락 가능`,
+    orderBlocks && orderBlocks.filter(ob => ob.type === 'bullish').length > 0 && `🟩 지지구간 ${orderBlocks.filter(ob => ob.type === 'bullish').length}개`,
+    orderBlocks && orderBlocks.filter(ob => ob.type === 'bearish').length > 0 && `🟥 저항구간 ${orderBlocks.filter(ob => ob.type === 'bearish').length}개`,
+    bullishCount > bearishCount + 2 && '🚀 롱 우세 환경',
+    bearishCount > bullishCount + 2 && '🐻 숏 우세 환경',
+    alignmentPercent >= 80 && '⭐ 추세 강력 일치 (80%+)',
+    alignmentPercent >= 60 && alignmentPercent < 80 && '👍 추세 일치 양호',
+    alignmentPercent < 40 && '⚠️ 추세 혼조 - 관망 권장',
+  ].filter(Boolean);
+
   return (
     <div className="space-y-4">
+      {/* 스크롤 배너 - 최상단 */}
+      {actualPrice > 0 && tickerItems.length > 0 && (
+        <div className="overflow-hidden bg-gray-900/80 border border-white/10 rounded-lg">
+          <div className="animate-ticker whitespace-nowrap py-2 text-[11px] text-gray-300">
+            <span className="inline-flex">
+              {[0, 1].map((repeat) => (
+                <span key={repeat} className="inline-flex">
+                  {tickerItems.map((item, i) => (
+                    <span key={`${repeat}-${i}`} className="inline-flex items-center">
+                      <span>{item}</span>
+                      <span className="mx-2 text-gray-600">•</span>
+                    </span>
+                  ))}
+                </span>
+              ))}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* 스코어 카드 & 추천 타점 */}
       {(() => {
         // 점수 계산
@@ -577,74 +668,51 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
         });
 
         return (
-          <>
+          <div className="grid grid-cols-3 gap-4">
             <RecommendationCard recommendation={recommendation} />
-            <ScoreCard
-              mtfData={data}
-              fundingRate={fundingRate}
-              currentPrice={actualPrice}
-              orderBlocks={orderBlocks}
-              poc={poc}
-              vah={vah}
-              val={val}
-            />
-          </>
+            <div className="col-span-2 h-full">
+              <ScoreCard
+                mtfData={data}
+                fundingRate={fundingRate}
+                currentPrice={actualPrice}
+                orderBlocks={orderBlocks}
+                poc={poc}
+                vah={vah}
+                val={val}
+              />
+            </div>
+          </div>
         );
       })()}
 
-      {/* MTF 테이블 */}
-      <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-4">
-      {/* 현재가 요약 */}
-      {actualPrice > 0 && (
-        <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/10 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="text-gray-500">Current:</span>
-            <span className="font-mono font-bold text-white">${formatPrice(actualPrice)}</span>
-          </div>
-          {poc && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-gray-500">POC:</span>
-              <span className="font-mono text-yellow-400">${formatPrice(poc)}</span>
-            </div>
-          )}
-          {fundingRate !== undefined && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-gray-500">Funding:</span>
-              <span className={`font-mono ${fundingRate > 0 ? 'text-green-400' : fundingRate < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-                {fundingRate > 0 ? '+' : ''}{fundingRate.toFixed(4)}%
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
+      {/* 시간대별 분석 테이블 */}
+      <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-3">
       {/* 헤더 */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <h3 className="text-sm font-bold text-gray-400">MTF Overview</h3>
-          {/* MTF 추세 일치 종합 스코어 */}
-          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg border ${getStatusBg(data.overallTrend)}`}>
-            <span className="text-xs text-gray-400">추세 일치:</span>
-            <span className={`text-sm font-bold ${
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-xs font-bold text-gray-400">시간대별 분석</h3>
+          {/* 추세 일치 종합 */}
+          <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border ${getStatusBg(data.overallTrend)}`}>
+            <span className="text-[10px] text-gray-400">추세:</span>
+            <span className={`text-[10px] font-bold ${
               data.overallTrend === 'bullish' ? 'text-green-400' :
               data.overallTrend === 'bearish' ? 'text-red-400' : 'text-gray-400'
             }`}>
-              {data.overallTrend === 'bullish' ? `${bullishCount}/${totalCount} 상승` :
-               data.overallTrend === 'bearish' ? `${bearishCount}/${totalCount} 하락` :
-               `${Math.max(bullishCount, bearishCount)}/${totalCount} 혼조`}
+              {data.overallTrend === 'bullish' ? `${bullishCount}/${totalCount}↑` :
+               data.overallTrend === 'bearish' ? `${bearishCount}/${totalCount}↓` :
+               `${Math.max(bullishCount, bearishCount)}/${totalCount}`}
             </span>
-            <span className={`text-sm font-mono ${strengthInfo.color}`}>
+            <span className={`text-[10px] font-mono ${strengthInfo.color}`}>
               ({alignmentPercent}%)
             </span>
-            <StatusIcon status={data.overallTrend} />
           </div>
         </div>
         <button
           onClick={() => refetch()}
-          className="p-1.5 rounded hover:bg-white/10 transition-colors"
+          className="p-1 rounded hover:bg-white/10 transition-colors"
           title="전체 새로고침"
         >
-          <RefreshCw className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300" />
+          <RefreshCw className="w-3 h-3 text-gray-500 hover:text-gray-300" />
         </button>
       </div>
 
@@ -653,17 +721,32 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-white/10">
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">TF</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">Trend</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">RSI</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase text-center" title="CVD 방향/강도">CVD</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase text-center" title="OI 방향/강도">OI</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="추세 강도 (25+ 강한 추세)">ADX</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="평균 대비 변동성">ATR%</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase">DIV</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="추천 액션">Action</th>
-              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase" title="캔들 마감까지">
-                <Clock className="w-3 h-3 inline" />
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">시간</th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">추세</th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">RSI</th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 text-center relative group cursor-help">
+                매수세<span className="text-gray-600">(CVD)</span>
+                <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">누적 거래량 델타 (매수-매도 차이)</span>
+              </th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 text-center relative group cursor-help">
+                포지션<span className="text-gray-600">(OI)</span>
+                <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">미결제약정 (포지션 증감)</span>
+              </th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 relative group cursor-help">
+                추세력<span className="text-gray-600">(ADX)</span>
+                <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">추세 강도 (25+ 강한 추세🔥)</span>
+              </th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 relative group cursor-help">
+                변동성<span className="text-gray-600">(ATR)</span>
+                <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">평균 변동폭 대비 (1.0x = 평균)</span>
+              </th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 relative group cursor-help">
+                괴리<span className="text-gray-600">(DIV)</span>
+                <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">가격↔지표 다이버전스</span>
+              </th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">신호</th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">
+                <Clock className="w-2.5 h-2.5 inline" />
               </th>
             </tr>
           </thead>
@@ -679,59 +762,25 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
         </table>
       </div>
 
-      {/* 범례 */}
-      <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-[10px] text-gray-500">
-        {/* CVD/OI 방향 */}
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-1">
+      {/* 범례 (접이식) */}
+      <details className="mt-2 pt-2 border-t border-white/5 text-[11px] text-gray-500">
+        <summary className="cursor-pointer hover:text-gray-400">범례</summary>
+        <div className="mt-1.5 space-y-1">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="text-green-400 font-bold">↑↑↑</span>
-            <span>강한 상승</span>
-          </div>
-          <div className="flex items-center gap-1">
             <span className="text-teal-400 font-bold">↑↑</span>
-            <span>상승</span>
-          </div>
-          <div className="flex items-center gap-1">
             <span className="text-cyan-400 font-bold">↑</span>
-            <span>약한 상승</span>
-          </div>
-          <div className="flex items-center gap-1">
             <span className="text-gray-400">→</span>
-            <span>횡보</span>
-          </div>
-          <div className="flex items-center gap-1">
             <span className="text-amber-400 font-bold">↓</span>
-            <span>약한 하락</span>
-          </div>
-          <div className="flex items-center gap-1">
             <span className="text-orange-400 font-bold">↓↓</span>
-            <span>하락</span>
-          </div>
-          <div className="flex items-center gap-1">
             <span className="text-red-400 font-bold">↓↓↓</span>
-            <span>강한 하락</span>
+            <span className="text-gray-600">|</span>
+            <span className="text-orange-400">ADX25+🔥</span>
+            <span className="text-red-400">ATR1.5x+</span>
+            <span className="text-blue-400">ATR0.8x↓</span>
           </div>
         </div>
-        {/* ADX / ATR 기준 */}
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-1">
-            <span className="text-orange-400 font-bold">ADX 25+🔥</span>
-            <span>강한 추세</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-red-400 font-mono">ATR 1.5x+</span>
-            <span>고변동</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-blue-400 font-mono">ATR 0.8x↓</span>
-            <span>저변동</span>
-          </div>
-          <div className="ml-auto text-gray-600">
-            <Clock className="w-3 h-3 inline mr-1" />
-            캔들 마감 시 자동 갱신
-          </div>
-        </div>
-      </div>
+      </details>
       </div>
     </div>
   );
