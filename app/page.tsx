@@ -114,12 +114,10 @@ export default function Home() {
           {/* 실시간 BTC 가격 - 좌측 */}
           {btcPrice && (
             <div className='flex items-center gap-2 px-3'>
-              <div className='flex items-center gap-1.5'>
-                <span className='w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center'>
-                  <Bitcoin className='w-3.5 h-3.5 text-black' strokeWidth={2.5} />
-                </span>
-                <span className='text-xs text-gray-400 font-medium'>BTC/USDT</span>
-              </div>
+              <span className='w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center flex-shrink-0'>
+                <Bitcoin className='w-3.5 h-3.5 text-black' strokeWidth={2.5} />
+              </span>
+              <span className='text-xs text-gray-400 font-medium leading-none'>BTC/USDT</span>
               <span className='text-lg font-bold font-mono text-white'>
                 <AnimatedPrice value={btcPrice.price} />
               </span>
