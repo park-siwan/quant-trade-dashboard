@@ -131,7 +131,7 @@ const DivergenceDisplay = ({ divergence, timeframe }: {
 const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
   const { action, reason } = actionInfo;
 
-  const getActionStyle = (action: MTFAction) => {
+  const getActionStyle = (action: MTFAction, reason: string) => {
     switch (action) {
       case 'long_ok':
         return {
@@ -155,12 +155,22 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
           label: '반전주의',
         };
       case 'trend_hold':
-        return {
-          bg: 'bg-blue-500/20 border-blue-500/30',
-          text: 'text-blue-400',
-          icon: '→',
-          label: '추세유지',
-        };
+        // 상승추세면 초록, 하락추세면 빨강
+        if (reason.includes('상승')) {
+          return {
+            bg: 'bg-green-500/20 border-green-500/30',
+            text: 'text-green-400',
+            icon: '↗',
+            label: '추세유지',
+          };
+        } else {
+          return {
+            bg: 'bg-red-500/20 border-red-500/30',
+            text: 'text-red-400',
+            icon: '↘',
+            label: '추세유지',
+          };
+        }
       case 'wait':
       default:
         return {
@@ -172,7 +182,7 @@ const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
     }
   };
 
-  const style = getActionStyle(action);
+  const style = getActionStyle(action, reason);
 
   return (
     <div className="flex flex-col items-start">
