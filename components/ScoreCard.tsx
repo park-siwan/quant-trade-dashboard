@@ -109,14 +109,16 @@ const ScoreDetails = ({
   score: SignalScore;
   type: 'long' | 'short';
 }) => {
-  const color = type === 'long' ? 'green' : 'red';
+  const colorClass = type === 'long' ? 'text-green-400' : 'text-red-400';
+  const colorClassMuted = type === 'long' ? 'text-green-400/80' : 'text-red-400/80';
   const Icon = type === 'long' ? TrendingUp : TrendingDown;
 
+  // 레이더 차트와 동일한 순서 (대척점: 추세↔다이버전스, 거래량↔지지/저항, 모멘텀↔시장심리)
   const categories = [
     { key: 'trendAlignment', data: score.trendAlignment },
-    { key: 'divergence', data: score.divergence },
-    { key: 'momentum', data: score.momentum },
     { key: 'volume', data: score.volume },
+    { key: 'momentum', data: score.momentum },
+    { key: 'divergence', data: score.divergence },
     { key: 'levels', data: score.levels },
     { key: 'sentiment', data: score.sentiment },
   ];
@@ -124,12 +126,12 @@ const ScoreDetails = ({
   return (
     <div className="space-y-2">
       {/* 총점 헤더 */}
-      <div className={`flex items-center gap-2 pb-2 border-b border-white/10`}>
-        <Icon className={`w-4 h-4 text-${color}-400`} />
-        <span className={`text-sm font-bold text-${color}-400`}>
+      <div className="flex items-center gap-2 pb-2 border-b border-white/10">
+        <Icon className={`w-4 h-4 ${colorClass}`} />
+        <span className={`text-sm font-bold ${colorClass}`}>
           {type === 'long' ? '롱' : '숏'}
         </span>
-        <span className={`text-xl font-bold font-mono text-${color}-400 ml-auto`}>
+        <span className={`text-xl font-bold font-mono ${colorClass} ml-auto`}>
           <AnimatedNumber value={score.total} />
           <span className="text-xs text-gray-500 font-normal">/100</span>
         </span>
@@ -146,7 +148,7 @@ const ScoreDetails = ({
               {/* 카테고리 헤더 */}
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">{name}</span>
-                <span className={`font-mono text-${color}-400/80`}>
+                <span className={`font-mono ${colorClassMuted}`}>
                   {data.score}/{max}
                 </span>
               </div>
