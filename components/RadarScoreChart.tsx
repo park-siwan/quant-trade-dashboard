@@ -114,7 +114,7 @@ export default function RadarScoreChart({ longScores, shortScores, size = 'norma
     return null;
   };
 
-  const height = size === 'large' ? 'h-[340px]' : 'h-[220px]';
+  const height = size === 'large' ? 'h-[300px]' : 'h-[200px]';
   const outerRadius = size === 'large' ? '85%' : '75%';
 
   return (
