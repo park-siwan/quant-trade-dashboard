@@ -272,26 +272,45 @@ const AdxDisplay = ({ adx, isStrongTrend }: { adx: number | null; isStrongTrend:
   );
 };
 
-// ATR Ratio 표시 컴포넌트
+// ATR Ratio 표시 컴포넌트 (게이지 바 포함)
 const AtrRatioDisplay = ({ atrRatio }: { atrRatio: number | null }) => {
   if (atrRatio === null) {
     return <span className="text-gray-500 text-xs">-</span>;
   }
 
-  // 색상: 1.5 이상 = 고변동(빨강), 1.2 이상 = 높음(주황), 0.8 이하 = 낮음(파랑)
-  let color = 'text-gray-400';
+  // 색상 및 라벨: 1.5+ 고변동, 1.2+ 높음, 0.8- 낮음
+  let color = 'bg-gray-500';
+  let textColor = 'text-gray-400';
+  let label = '보통';
+
   if (atrRatio >= 1.5) {
-    color = 'text-red-400 font-bold';
+    color = 'bg-red-400';
+    textColor = 'text-red-400';
+    label = '고변동';
   } else if (atrRatio >= 1.2) {
-    color = 'text-orange-400';
+    color = 'bg-orange-400';
+    textColor = 'text-orange-400';
+    label = '높음';
   } else if (atrRatio <= 0.8) {
-    color = 'text-blue-400';
+    color = 'bg-blue-400';
+    textColor = 'text-blue-400';
+    label = '낮음';
   }
 
+  // ATR ratio는 보통 0.5~2.0 범위, 1.0이 50%로 표시
+  const barWidth = Math.min(atrRatio * 50, 100);
+
   return (
-    <span className={`text-xs font-mono ${color}`}>
-      {atrRatio.toFixed(1)}x
-    </span>
+    <div className="flex items-center gap-1.5">
+      <div className="w-6 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${color} rounded-full transition-all`}
+          style={{ width: `${barWidth}%` }}
+        />
+      </div>
+      <span className={`text-xs font-mono ${textColor}`}>{atrRatio.toFixed(1)}x</span>
+      <span className={`text-[9px] ${textColor}`}>{label}</span>
+    </div>
   );
 };
 
