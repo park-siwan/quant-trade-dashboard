@@ -108,6 +108,29 @@ export default function Home() {
               </div>
             </div>
 
+            {/* CVD/OI 방향 */}
+            <div className='border border-green-500/20 rounded-lg p-3'>
+              <h4 className='text-xs font-bold text-green-400 mb-2 border border-green-400/50 px-1.5 py-0.5 rounded inline-block'>CVD/OI 방향</h4>
+              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs mt-2'>
+                <div><span className='text-green-400 font-semibold'>↑↑↑</span><span className='text-gray-400'> - 강한 상승 (5%+ 증가)</span></div>
+                <div><span className='text-lime-400 font-semibold'>↑</span><span className='text-gray-400'> - 약한 상승 (2~5% 증가)</span></div>
+                <div><span className='text-gray-400 font-semibold'>→</span><span className='text-gray-400'> - 횡보 (2% 미만 변동)</span></div>
+                <div><span className='text-orange-400 font-semibold'>↓</span><span className='text-gray-400'> - 약한 하락 (2~5% 감소)</span></div>
+                <div><span className='text-red-400 font-semibold'>↓↓↓</span><span className='text-gray-400'> - 강한 하락 (5%+ 감소)</span></div>
+              </div>
+            </div>
+
+            {/* ADX/ATR 기준 */}
+            <div className='border border-orange-500/20 rounded-lg p-3'>
+              <h4 className='text-xs font-bold text-orange-400 mb-2 border border-orange-400/50 px-1.5 py-0.5 rounded inline-block'>ADX/ATR</h4>
+              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs mt-2'>
+                <div><span className='text-orange-400 font-semibold'>ADX 25+🔥</span><span className='text-gray-400'> - 강한 추세. 역추세 진입 위험</span></div>
+                <div><span className='text-gray-400 font-semibold'>ADX 25 미만</span><span className='text-gray-400'> - 약한 추세. 횡보 가능성</span></div>
+                <div><span className='text-red-400 font-semibold'>ATR 1.5x+</span><span className='text-gray-400'> - 고변동. 손절 넓게, 포지션 작게</span></div>
+                <div><span className='text-blue-400 font-semibold'>ATR 0.8x↓</span><span className='text-gray-400'> - 저변동. 브레이크아웃 대기</span></div>
+              </div>
+            </div>
+
             {/* MTF Action 설명 추가 */}
             <div className='border border-blue-500/20 rounded-lg p-3'>
               <h4 className='text-xs font-bold text-blue-400 mb-2 border border-blue-400/50 px-1.5 py-0.5 rounded inline-block'>MTF Action</h4>
