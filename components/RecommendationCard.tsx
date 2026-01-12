@@ -394,30 +394,23 @@ function DirectionCompareCard({ long, short, primaryDirection }: {
             : 'bg-red-500/10 border-red-500/30'
           : 'bg-white/[0.02] border-white/5'
       }`}>
-        {/* 헤더: 방향 + 점수 */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5">
-            {isLong ? (
-              <TrendingUp className={`w-4 h-4 ${isPrimary ? 'text-green-400' : 'text-gray-400'}`} />
-            ) : (
-              <TrendingDown className={`w-4 h-4 ${isPrimary ? 'text-red-400' : 'text-gray-400'}`} />
-            )}
-            <span className={`text-sm font-bold ${
-              isPrimary
-                ? isLong ? 'text-green-400' : 'text-red-400'
-                : 'text-gray-400'
-            }`}>
-              {isLong ? '롱' : '숏'}
-            </span>
-            {isPrimary && (
-              <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1 rounded">추천</span>
-            )}
-          </div>
-          <span className={`text-lg font-bold ${
-            rec.score >= 50 ? 'text-green-400' : rec.score >= 35 ? 'text-yellow-400' : 'text-gray-400'
+        {/* 헤더: 방향 */}
+        <div className="flex items-center gap-1.5 mb-2">
+          {isLong ? (
+            <TrendingUp className={`w-4 h-4 ${isPrimary ? 'text-green-400' : 'text-gray-400'}`} />
+          ) : (
+            <TrendingDown className={`w-4 h-4 ${isPrimary ? 'text-red-400' : 'text-gray-400'}`} />
+          )}
+          <span className={`text-sm font-bold ${
+            isPrimary
+              ? isLong ? 'text-green-400' : 'text-red-400'
+              : 'text-gray-400'
           }`}>
-            {rec.score}점
+            {isLong ? '롱' : '숏'}
           </span>
+          {isPrimary && (
+            <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1 rounded">추천</span>
+          )}
         </div>
 
         {/* 가격 정보 */}
