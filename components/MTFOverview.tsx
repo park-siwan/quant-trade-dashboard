@@ -804,12 +804,12 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
 
       {/* 스코어 카드 & 추천 타점 */}
       {(() => {
-        // 점수 계산
+        // 점수 계산 (fearGreedIndex 포함 - ScoreCard와 동일)
         const marketData: MarketStructureData | undefined = actualPrice
           ? { currentPrice: actualPrice, orderBlocks, poc, vah, val }
           : undefined;
-        const longScore = calculateSignalScore(data, 'bullish', fundingRate, marketData);
-        const shortScore = calculateSignalScore(data, 'bearish', fundingRate, marketData);
+        const longScore = calculateSignalScore(data, 'bullish', fundingRate, marketData, fearGreedIndex);
+        const shortScore = calculateSignalScore(data, 'bearish', fundingRate, marketData, fearGreedIndex);
 
         // 평균 ATR 계산 (달러 단위)
         const atrRatios = data.timeframes
