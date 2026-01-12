@@ -109,9 +109,15 @@ function generateEntryRecommendation({
 
   let takeProfit: number;
   if (direction === 'long') {
-    takeProfit = vah ? Math.min(vah, currentPrice + atr * 4) : currentPrice + atr * 4;
+    // 롱: 익절은 현재가보다 높아야 함
+    const defaultTP = currentPrice + atr * 4;
+    // VAH가 현재가보다 높을 때만 VAH를 고려
+    takeProfit = (vah && vah > currentPrice) ? Math.min(vah, defaultTP) : defaultTP;
   } else {
-    takeProfit = val ? Math.max(val, currentPrice - atr * 4) : currentPrice - atr * 4;
+    // 숏: 익절은 현재가보다 낮아야 함
+    const defaultTP = currentPrice - atr * 4;
+    // VAL이 현재가보다 낮을 때만 VAL을 고려
+    takeProfit = (val && val < currentPrice) ? Math.max(val, defaultTP) : defaultTP;
   }
 
   const riskReward = Math.abs(takeProfit - currentPrice) / Math.abs(stopLoss - currentPrice);
