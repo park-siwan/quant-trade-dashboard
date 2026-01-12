@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ChartAdapter from '@/components/ChartAdapter';
 import MTFOverview from '@/components/MTFOverview';
-import AlertSnackbar from '@/components/AlertSnackbar';
+import AlertSnackbar, { AlertItem } from '@/components/AlertSnackbar';
 import { BarChart3, Table2, BookOpen, Bitcoin, Volume2, VolumeX } from 'lucide-react';
 import { useBTCPrice } from '@/hooks/useBTCPrice';
 import { useTradeAlert } from '@/hooks/useTradeAlert';
@@ -147,6 +147,23 @@ export default function Home() {
       }
     });
   }, [alertHistory, tradeAlert]);
+
+  // 알림 재생 핸들러
+  const handleReplay = useCallback((alert: AlertItem) => {
+    if (!tradeAlert.isUnlocked || tradeAlert.isPlaying) return;
+
+    if (alert.type === 'strong_signal') {
+      const dir = alert.direction === 'long' || alert.direction === 'bullish' ? 'long' : 'short';
+      tradeAlert.triggerStrongSignal(dir);
+    } else if (alert.type === 'entry' && alert.score !== undefined && alert.riskReward !== undefined) {
+      const dir = alert.direction as 'long' | 'short';
+      tradeAlert.triggerEntryAlert(dir, alert.score, alert.riskReward);
+    } else if (alert.type === 'divergence' && alert.timeframe) {
+      const tf = alert.timeframe as '5m' | '15m' | '1h' | '4h';
+      const dir = alert.direction as 'bullish' | 'bearish';
+      tradeAlert.triggerDivergenceAlert(tf, dir);
+    }
+  }, [tradeAlert]);
 
   return (
     <div className='min-h-screen bg-[#0a0a0a] bg-pattern relative overflow-hidden'>
@@ -321,6 +338,8 @@ export default function Home() {
         onDismissAll={alertHistory.dismissAllAlerts}
         onMarkRead={alertHistory.markRead}
         onMarkAllRead={alertHistory.markAllRead}
+        onReplay={handleReplay}
+        isPlaying={tradeAlert.isPlaying}
       />
     </div>
   );

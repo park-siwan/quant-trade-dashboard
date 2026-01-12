@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Bell, Volume2, Check, Trash2 } from 'lucide-react';
+import { X, Bell, Volume2, Check, Trash2, Play } from 'lucide-react';
 
 export interface AlertItem {
   id: string;
@@ -21,6 +21,8 @@ interface AlertSnackbarProps {
   onDismissAll: () => void;
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
+  onReplay?: (alert: AlertItem) => void;
+  isPlaying?: boolean;
 }
 
 // 시간 포맷
@@ -63,6 +65,8 @@ export default function AlertSnackbar({
   onDismissAll,
   onMarkRead,
   onMarkAllRead,
+  onReplay,
+  isPlaying = false,
 }: AlertSnackbarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const unreadCount = alerts.filter(a => !a.read).length;
@@ -177,6 +181,24 @@ export default function AlertSnackbar({
                       <p className="text-xs text-gray-400 mt-0.5 truncate">{alert.message}</p>
                       <span className="text-[10px] text-gray-600">{getTimeAgo(alert.timestamp)}</span>
                     </div>
+                    {/* 재생 */}
+                    {onReplay && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onReplay(alert);
+                        }}
+                        disabled={isPlaying}
+                        className={`flex-shrink-0 p-1.5 rounded transition-colors ${
+                          isPlaying
+                            ? 'text-gray-600 cursor-not-allowed'
+                            : 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/20'
+                        }`}
+                        title="다시 듣기"
+                      >
+                        <Play className="w-3 h-3" />
+                      </button>
+                    )}
                     {/* 삭제 */}
                     <button
                       onClick={(e) => {

@@ -7,6 +7,7 @@ import { useLiquidations } from '@/hooks/useLiquidations';
 import { useWhales } from '@/hooks/useWhales';
 import { useFundingRate } from '@/hooks/useFundingRate';
 import { useCoinglass } from '@/hooks/useCoinglass';
+import { useMTFSocket } from '@/hooks/useMTFSocket';
 import ChartRenderer from '@/components/chart/ChartRenderer';
 import RefreshCountdown from '@/components/chart/RefreshCountdown';
 import { CandlestickData, LineData } from 'lightweight-charts';
@@ -84,6 +85,12 @@ export default function ChartAdapter({
   const { data: coinglassData } = useCoinglass({
     symbol: symbol.replace('/USDT', '').replace('/', ''),
     refreshInterval: 60000, // 1분마다 갱신
+  });
+
+  // MTF WebSocket에서 추가 다이버전스 가져오기 (REST API에서 누락된 것들)
+  const { getRawDivergences } = useMTFSocket({
+    symbol: symbol.replace('/', ''),
+    enabled: true,
   });
 
   // API 응답을 CandlestickData 형식으로 변환 (데이터가 없으면 빈 배열)
@@ -271,9 +278,25 @@ export default function ChartAdapter({
   // 크로스오버 이벤트 (백엔드에서 볼륨 필터링 처리)
   const crossoverEvents: CrossoverEvent[] = data?.data?.crossoverEvents || [];
 
-  // 다이버전스 시그널
-  const divergenceSignals: DivergenceSignal[] =
-    data?.data?.signals?.divergence || [];
+  // 다이버전스 시그널 (WebSocket 전용 - MTF 분석과 동일 데이터)
+  const divergenceSignals: DivergenceSignal[] = useMemo(() => {
+    const wsSignals = getRawDivergences(selectedTimeframe);
+
+    return wsSignals.map((s: {
+      type: string;
+      direction: string;
+      phase: string;
+      timestamp?: number;
+      index?: number;
+    }) => ({
+      index: s.index ?? 0,
+      type: s.type as 'rsi' | 'obv' | 'cvd' | 'oi',
+      direction: s.direction as 'bullish' | 'bearish',
+      phase: s.phase as 'start' | 'end' | 'entry',
+      timestamp: s.timestamp ?? Date.now(),
+      datetime: new Date(s.timestamp ?? Date.now()).toISOString(),
+    }));
+  }, [getRawDivergences, selectedTimeframe]);
 
   // 다이버전스 요약 정보
   const summary = data?.data?.summary || {

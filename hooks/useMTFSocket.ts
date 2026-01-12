@@ -667,6 +667,13 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
     }
   }, [symbol]);
 
+  // 특정 타임프레임의 원본 다이버전스 시그널 가져오기
+  const getRawDivergences = useCallback((timeframe: string) => {
+    if (!backendData?.timeframes) return [];
+    const tf = backendData.timeframes.find(t => t.timeframe === timeframe);
+    return tf?.signals?.divergence || [];
+  }, [backendData]);
+
   return {
     data: processedData.mtfData,
     isLoading,
@@ -685,5 +692,6 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
       processedData.mtfData
         ? validateMTFSignal(signalDirection, entryTimeframe, processedData.mtfData)
         : null,
+    getRawDivergences, // 원본 다이버전스 시그널 (차트용)
   };
 }

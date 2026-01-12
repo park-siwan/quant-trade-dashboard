@@ -3,11 +3,39 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { AlertItem } from '@/components/AlertSnackbar';
 
+const STORAGE_KEY = 'trade-alerts';
+const ALERT_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24시간 후 자동 삭제
+
 interface UseAlertHistoryOptions {
   maxAlerts?: number; // 최대 알림 개수
   reminderInterval?: number; // 재알림 간격 (ms), 기본 5분
   enabled?: boolean;
 }
+
+// localStorage에서 알림 로드
+const loadAlerts = (): AlertItem[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return [];
+    const alerts: AlertItem[] = JSON.parse(stored);
+    // 24시간 지난 알림 필터링
+    const now = Date.now();
+    return alerts.filter(a => now - a.timestamp < ALERT_EXPIRY_MS);
+  } catch {
+    return [];
+  }
+};
+
+// localStorage에 알림 저장
+const saveAlerts = (alerts: AlertItem[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(alerts));
+  } catch {
+    // localStorage 용량 초과 등 에러 무시
+  }
+};
 
 export function useAlertHistory(options: UseAlertHistoryOptions = {}) {
   const {
@@ -18,6 +46,25 @@ export function useAlertHistory(options: UseAlertHistoryOptions = {}) {
 
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const reminderCallbackRef = useRef<(() => void) | null>(null);
+  const isInitializedRef = useRef(false);
+
+  // 초기 로드
+  useEffect(() => {
+    if (!isInitializedRef.current) {
+      const loaded = loadAlerts();
+      if (loaded.length > 0) {
+        setAlerts(loaded);
+      }
+      isInitializedRef.current = true;
+    }
+  }, []);
+
+  // 알림 변경 시 저장
+  useEffect(() => {
+    if (isInitializedRef.current) {
+      saveAlerts(alerts);
+    }
+  }, [alerts]);
 
   // 알림 추가
   const addAlert = useCallback((

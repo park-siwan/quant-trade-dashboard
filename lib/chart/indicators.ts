@@ -381,8 +381,15 @@ export function addDivergenceLines(
     }
   }
 
-  // 디버깅: 매칭된 쌍 출력
+  // 디버깅: 원본 시그널 및 매칭된 쌍 출력
+  console.log('📊 다이버전스 시그널 원본:', signals);
   console.log('🔗 매칭된 다이버전스 쌍:', divergencePairs);
+  console.log('📈 타입별 다이버전스:', {
+    rsi: divergencePairs.filter(p => p.start.type === 'rsi').length,
+    obv: divergencePairs.filter(p => p.start.type === 'obv').length,
+    cvd: divergencePairs.filter(p => p.start.type === 'cvd').length,
+    oi: divergencePairs.filter(p => p.start.type === 'oi').length,
+  });
 
   // 각 다이버전스 쌍에 대해 선 그리기
   divergencePairs.forEach((pair) => {
@@ -404,12 +411,15 @@ export function addDivergenceLines(
       startPrice = pair.start.priceValue;
       endPrice = pair.end.priceValue;
     } else {
-      // 폴백: 캔들 데이터에서 찾기
+      // 폴백: 캔들 데이터에서 찾기 (±1초 허용)
+      const startTimeSec = pair.start.timestamp / 1000;
+      const endTimeSec = pair.end.timestamp / 1000;
+
       const startCandle = candleData.find(
-        (c) => c.time === pair.start.timestamp / 1000,
+        (c) => Math.abs(c.time - startTimeSec) <= 1,
       );
       const endCandle = candleData.find(
-        (c) => c.time === pair.end.timestamp / 1000,
+        (c) => Math.abs(c.time - endTimeSec) <= 1,
       );
 
       if (startCandle && endCandle) {
@@ -418,10 +428,31 @@ export function addDivergenceLines(
           pair.direction === 'bearish' ? startCandle.high : startCandle.low;
         endPrice =
           pair.direction === 'bearish' ? endCandle.high : endCandle.low;
+      } else {
+        console.warn(`⚠️ ${pair.start.type} 다이버전스 캔들 매칭 실패:`, {
+          startTimeSec,
+          endTimeSec,
+          candleDataRange: candleData.length > 0
+            ? `${candleData[0].time} ~ ${candleData[candleData.length - 1].time}`
+            : 'empty',
+        });
       }
     }
 
     if (startPrice !== undefined && endPrice !== undefined) {
+      const startTime = pair.start.timestamp / 1000;
+      const endTime = pair.end.timestamp / 1000;
+      console.log(`✅ ${pair.start.type.toUpperCase()} 다이버전스 가격선:`, {
+        type: pair.start.type,
+        direction: pair.direction,
+        startPrice: startPrice.toFixed(2),
+        endPrice: endPrice.toFixed(2),
+        startTime: new Date(startTime * 1000).toLocaleString(),
+        endTime: new Date(endTime * 1000).toLocaleString(),
+        isFiltered: pair.isFiltered,
+        color,
+      });
+
       // 가격 라인 시리즈로 선 그리기
       const priceLineSeries = chart.addSeries(
         LineSeries,
