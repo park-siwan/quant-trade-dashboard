@@ -35,25 +35,26 @@ export function timeframeToSeconds(timeframe: string): number {
 }
 
 /**
- * 타임프레임을 Bybit WebSocket 형식으로 변환
- * Bybit 형식: 1, 3, 5, 15, 30, 60, 120, 240, 360, 720, D, W, M
+ * 타임프레임을 Binance WebSocket 형식으로 변환
+ * Binance 형식: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M
  */
-export function timeframeToBybit(timeframe: string): string {
+export function timeframeToBinance(timeframe: string): string {
+  // Binance는 우리가 사용하는 형식과 동일, 일부만 매핑
   const map: Record<string, string> = {
-    '1m': '1',
-    '3m': '3',
-    '5m': '5',
-    '15m': '15',
-    '30m': '30',
-    '1h': '60',
-    '2h': '120',
-    '4h': '240',
-    '6h': '360',
-    '12h': '720',
-    '1d': 'D',
-    '1w': 'W',
+    '1m': '1m',
+    '3m': '3m',
+    '5m': '5m',
+    '15m': '15m',
+    '30m': '30m',
+    '1h': '1h',
+    '2h': '2h',
+    '4h': '4h',
+    '6h': '6h',
+    '12h': '12h',
+    '1d': '1d',
+    '1w': '1w',
   };
-  return map[timeframe] || '5';
+  return map[timeframe] || '5m';
 }
 
 /**

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchCandles } from '@/lib/api/exchange';
-import { timeframeToBybit, getRefreshInterval } from '@/lib/timeframe';
+import { timeframeToBinance, getRefreshInterval } from '@/lib/timeframe';
 
 interface UseCandlesParams {
   symbol: string;
@@ -73,21 +73,21 @@ export function useCandles({
     }
   }, [query.data]);
 
-  // WebSocket 연결 (실시간 캔들 업데이트) - Bybit
+  // WebSocket 연결 (실시간 캔들 업데이트) - Binance Futures
   useEffect(() => {
     if (!enableWebSocket) return;
     if (typeof window === 'undefined') {
       return;
     }
 
-    // 심볼 변환: BTC/USDT -> BTCUSDT
-    const wsSymbol = symbol.replace('/', '').toUpperCase();
-    const wsTimeframe = timeframeToBybit(timeframe);
-    const wsUrl = 'wss://stream.bybit.com/v5/public/linear';
+    // 심볼 변환: BTC/USDT -> btcusdt (Binance는 소문자)
+    const wsSymbol = symbol.replace('/', '').toLowerCase();
+    const wsTimeframe = timeframeToBinance(timeframe);
+    const streamName = `${wsSymbol}@kline_${wsTimeframe}`;
+    const wsUrl = `wss://fstream.binance.com/ws/${streamName}`;
 
     let isIntentionalClose = false;
     let reconnectTimeout: NodeJS.Timeout | null = null;
-    let pingInterval: NodeJS.Timeout | null = null;
 
     const connectWebSocket = () => {
       // 이미 의도적으로 닫힌 경우 재연결 안함
@@ -98,104 +98,90 @@ export function useCandles({
         wsRef.current = ws;
 
         ws.onopen = () => {
-          // Bybit은 연결 후 구독 메시지를 보내야 함
-          const subscribeMsg = {
-            op: 'subscribe',
-            args: [`kline.${wsTimeframe}.${wsSymbol}`],
-          };
-          ws.send(JSON.stringify(subscribeMsg));
-
-          // Bybit은 20초마다 ping을 보내야 연결 유지
-          pingInterval = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ op: 'ping' }));
-            }
-          }, 20000);
+          // Binance는 URL에 스트림을 포함하므로 별도 구독 불필요
+          // ping도 자동 처리됨
         };
 
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
 
-            // Bybit kline 데이터 처리
-            if (data.topic && data.topic.startsWith('kline.') && data.data) {
-              const klineArray = data.data;
-              if (klineArray.length > 0) {
-                const kline = klineArray[0];
-                const currentCandleTime = kline.start;
-                const now = Date.now();
+            // Binance kline 데이터 처리
+            if (data.e === 'kline' && data.k) {
+              const kline = data.k;
+              const currentCandleTime = kline.t; // 캔들 시작 시간
 
-                // 캔들 데이터 파싱
-                const rawOpen = parseFloat(kline.open);
-                const rawHigh = parseFloat(kline.high);
-                const rawLow = parseFloat(kline.low);
-                const rawClose = parseFloat(kline.close);
-                const rawVolume = parseFloat(kline.volume);
+              // 캔들 데이터 파싱
+              const rawOpen = parseFloat(kline.o);
+              const rawHigh = parseFloat(kline.h);
+              const rawLow = parseFloat(kline.l);
+              const rawClose = parseFloat(kline.c);
+              const rawVolume = parseFloat(kline.v);
+              const isFinal = kline.x; // 캔들 종료 여부
 
-                // 새 캔들 시작 감지 (캔들 시간이 바뀜)
-                const isNewCandle = currentCandleTime !== currentCandleTimeRef.current;
+              // 새 캔들 시작 감지 (캔들 시간이 바뀜)
+              const isNewCandle = currentCandleTime !== currentCandleTimeRef.current;
 
-                // throttle: 500ms마다 UI 업데이트 (더 실시간)
-                const now2 = Date.now();
-                const shouldUpdate = now2 - lastUpdateTimeRef.current > 500;
+              // throttle: 500ms마다 UI 업데이트 (더 실시간)
+              const now = Date.now();
+              const shouldUpdate = now - lastUpdateTimeRef.current > 500;
 
-                if (shouldUpdate) {
-                  lastUpdateTimeRef.current = now2;
+              if (shouldUpdate) {
+                lastUpdateTimeRef.current = now;
 
-                  let adjustedOpen = rawOpen;
-                  let adjustedLow = rawLow;
-                  let adjustedHigh = rawHigh;
+                let adjustedOpen = rawOpen;
+                let adjustedLow = rawLow;
+                let adjustedHigh = rawHigh;
 
-                  // 새 캔들이 시작되고, 이전 캔들 close가 있으면 갭 보정
-                  if (isNewCandle && prevCandleCloseRef.current > 0) {
-                    // open을 이전 캔들의 close로 설정 (갭 제거)
-                    adjustedOpen = prevCandleCloseRef.current;
-                    // low/high도 보정된 open 포함하도록 조정
-                    adjustedLow = Math.min(rawLow, adjustedOpen, rawClose);
-                    adjustedHigh = Math.max(rawHigh, adjustedOpen, rawClose);
-                  }
-
-                  // 캔들이 종료되면 close 저장 (다음 캔들 시작 시 사용)
-                  if (kline.confirm) {
-                    prevCandleCloseRef.current = rawClose;
-                  }
-
-                  // 현재 캔들 시간 업데이트
-                  currentCandleTimeRef.current = currentCandleTime;
-
-                  // 새로운 캔들 데이터로 업데이트
-                  setWsData({
-                    timestamp: currentCandleTime,
-                    open: adjustedOpen,
-                    high: adjustedHigh,
-                    low: adjustedLow,
-                    close: rawClose,
-                    volume: parseFloat(kline.volume),
-                    isFinal: kline.confirm,
-                  });
+                // 새 캔들이 시작되고, 이전 캔들 close가 있으면 갭 보정
+                if (isNewCandle && prevCandleCloseRef.current > 0) {
+                  // open을 이전 캔들의 close로 설정 (갭 제거)
+                  adjustedOpen = prevCandleCloseRef.current;
+                  // low/high도 보정된 open 포함하도록 조정
+                  adjustedLow = Math.min(rawLow, adjustedOpen, rawClose);
+                  adjustedHigh = Math.max(rawHigh, adjustedOpen, rawClose);
                 }
 
-                // 캔들이 닫히면 캐시 증분 업데이트 (전체 refetch 대신)
-                if (kline.confirm && currentCandleTime !== lastCandleTimeRef.current) {
-                  lastCandleTimeRef.current = currentCandleTime;
+                // 캔들이 종료되면 close 저장 (다음 캔들 시작 시 사용)
+                if (isFinal) {
+                  prevCandleCloseRef.current = rawClose;
+                }
 
-                  // 새 캔들 데이터로 캐시 업데이트
-                  const confirmedCandle = [
-                    currentCandleTime,
-                    rawOpen,
-                    rawHigh,
-                    rawLow,
-                    rawClose,
-                    rawVolume,
-                  ];
-                  appendCandleToCache(confirmedCandle);
+                // 현재 캔들 시간 업데이트
+                currentCandleTimeRef.current = currentCandleTime;
 
-                  // 10번마다 한 번씩 전체 동기화 (데이터 정합성 보장)
-                  syncCountRef.current++;
-                  if (syncCountRef.current >= 10) {
-                    syncCountRef.current = 0;
-                    refetchRef.current();
-                  }
+                // 새로운 캔들 데이터로 업데이트
+                setWsData({
+                  timestamp: currentCandleTime,
+                  open: adjustedOpen,
+                  high: adjustedHigh,
+                  low: adjustedLow,
+                  close: rawClose,
+                  volume: rawVolume,
+                  isFinal,
+                });
+              }
+
+              // 캔들이 닫히면 캐시 증분 업데이트 (전체 refetch 대신)
+              if (isFinal && currentCandleTime !== lastCandleTimeRef.current) {
+                lastCandleTimeRef.current = currentCandleTime;
+
+                // 새 캔들 데이터로 캐시 업데이트
+                const confirmedCandle = [
+                  currentCandleTime,
+                  rawOpen,
+                  rawHigh,
+                  rawLow,
+                  rawClose,
+                  rawVolume,
+                ];
+                appendCandleToCache(confirmedCandle);
+
+                // 10번마다 한 번씩 전체 동기화 (데이터 정합성 보장)
+                syncCountRef.current++;
+                if (syncCountRef.current >= 10) {
+                  syncCountRef.current = 0;
+                  refetchRef.current();
                 }
               }
             }
@@ -207,12 +193,6 @@ export function useCandles({
         ws.onerror = () => {};
 
         ws.onclose = () => {
-          // ping interval 정리
-          if (pingInterval) {
-            clearInterval(pingInterval);
-            pingInterval = null;
-          }
-
           // 의도적 종료가 아니면 재연결 시도
           if (!isIntentionalClose) {
             reconnectTimeout = setTimeout(() => {
@@ -230,12 +210,6 @@ export function useCandles({
     // 클린업
     return () => {
       isIntentionalClose = true;
-
-      // ping interval 정리
-      if (pingInterval) {
-        clearInterval(pingInterval);
-        pingInterval = null;
-      }
 
       // 재연결 timeout 취소
       if (reconnectTimeout) {

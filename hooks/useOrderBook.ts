@@ -19,12 +19,12 @@ export interface RatioHistoryPoint {
 
 interface UseOrderBookProps {
   symbol?: string;
-  limit?: number; // 표시할 호가 단계 (1, 50, 200, 500)
+  limit?: number; // 표시할 호가 단계 (5, 10, 20)
 }
 
-export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookProps = {}) {
-  // Bybit Linear가 지원하는 depth 레벨로 조정 (1, 50, 200, 500)
-  const validLimit = limit <= 1 ? 1 : limit <= 50 ? 50 : limit <= 200 ? 200 : 500;
+export function useOrderBook({ symbol = 'BTCUSDT', limit = 20 }: UseOrderBookProps = {}) {
+  // Binance가 지원하는 depth 레벨로 조정 (5, 10, 20)
+  const validLimit = limit <= 5 ? 5 : limit <= 10 ? 10 : 20;
   const [orderBook, setOrderBook] = useState<OrderBookData>({
     bids: [],
     asks: [],
@@ -35,13 +35,7 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookPro
   const [error, setError] = useState<Error | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const lastUpdateTimeRef = useRef<number>(0);
   const lastRatioUpdateRef = useRef<number>(0);
-  // 오더북 데이터를 ref로 관리 (delta 병합용)
-  const orderBookRef = useRef<{ bids: Map<string, number>; asks: Map<string, number> }>({
-    bids: new Map(),
-    asks: new Map(),
-  });
 
   useEffect(() => {
     // SSR 방지 - 브라우저 환경에서만 실행
@@ -49,13 +43,12 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookPro
       return;
     }
 
-    // Bybit 선물 WebSocket 엔드포인트
-    const wsUrl = 'wss://stream.bybit.com/v5/public/linear';
-    const wsSymbol = symbol.toUpperCase();
+    // Binance Futures partial book depth 스트림 (매번 스냅샷 전송)
+    const wsSymbol = symbol.toLowerCase();
+    const wsUrl = `wss://fstream.binance.com/ws/${wsSymbol}@depth${validLimit}@100ms`;
 
     let isIntentionalClose = false;
     let reconnectTimeout: NodeJS.Timeout | null = null;
-    let pingInterval: NodeJS.Timeout | null = null;
 
     const connectWebSocket = () => {
       // 이미 의도적으로 닫힌 경우 재연결 안함
@@ -68,112 +61,59 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookPro
         ws.onopen = () => {
           setIsConnected(true);
           setError(null);
-
-          // Bybit은 연결 후 구독 메시지를 보내야 함
-          const subscribeMsg = {
-            op: 'subscribe',
-            args: [`orderbook.${validLimit}.${wsSymbol}`],
-          };
-          ws.send(JSON.stringify(subscribeMsg));
-
-          // Bybit은 20초마다 ping을 보내야 연결 유지
-          pingInterval = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ op: 'ping' }));
-            }
-          }, 20000);
+          // Binance는 URL에 스트림 포함, 별도 구독 불필요
         };
 
         ws.onmessage = (event) => {
           try {
-            const message = JSON.parse(event.data);
+            const data = JSON.parse(event.data);
+            const now = Date.now();
 
-            // Bybit orderbook 데이터 처리 (snapshot 또는 delta)
-            if (message.topic && message.topic.startsWith('orderbook.') && message.data) {
-              const orderbookData = message.data;
-              const now = Date.now();
+            // Binance partial book depth 데이터 처리
+            if (data.bids && data.asks) {
+              // 배열을 OrderBookLevel로 변환
+              const parseLevels = (levels: string[][], ascending: boolean): OrderBookLevel[] => {
+                const arr = levels.map(([price, qty]) => ({
+                  price: parseFloat(price),
+                  quantity: parseFloat(qty),
+                  total: 0,
+                }));
 
-              // delta 업데이트 적용 함수
-              const applyDelta = (levels: string[][], map: Map<string, number>) => {
-                levels.forEach((level: string[]) => {
-                  const price = level[0];
-                  const qty = parseFloat(level[1]);
-                  if (qty === 0) {
-                    map.delete(price);
-                  } else {
-                    map.set(price, qty);
-                  }
-                });
-              };
+                // 정렬
+                arr.sort((a, b) => ascending ? a.price - b.price : b.price - a.price);
 
-              // Map을 정렬된 배열로 변환
-              const mapToSortedArray = (map: Map<string, number>, ascending: boolean): OrderBookLevel[] => {
-                const arr = Array.from(map.entries())
-                  .map(([price, qty]) => ({ price: parseFloat(price), quantity: qty, total: 0 }))
-                  .sort((a, b) => ascending ? a.price - b.price : b.price - a.price);
-
+                // 누적 합계 계산
                 let total = 0;
-                arr.forEach(item => { total += item.quantity; item.total = total; });
+                arr.forEach(item => {
+                  total += item.quantity;
+                  item.total = total;
+                });
+
                 return arr;
               };
 
-              // 비율 히스토리 업데이트 함수 (3초마다, 최근 15분 유지)
-              const updateRatioHistory = (bids: OrderBookLevel[], asks: OrderBookLevel[]) => {
-                if (now - lastRatioUpdateRef.current > 3000) {
-                  lastRatioUpdateRef.current = now;
-                  const totalBid = bids.reduce((sum, b) => sum + b.quantity, 0);
-                  const totalAsk = asks.reduce((sum, a) => sum + a.quantity, 0);
-                  const total = totalBid + totalAsk;
-                  const bidRatio = total > 0 ? (totalBid / total) * 100 : 50;
+              const newBids = parseLevels(data.bids, false); // 내림차순
+              const newAsks = parseLevels(data.asks, true);  // 오름차순
 
-                  setRatioHistory(prev => {
-                    const fifteenMinutesAgo = now - 15 * 60 * 1000;
-                    const filtered = prev.filter(p => p.timestamp > fifteenMinutesAgo);
-                    return [...filtered, { timestamp: now, bidRatio }];
-                  });
-                }
-              };
+              setOrderBook({
+                bids: newBids,
+                asks: newAsks,
+                lastUpdateId: data.lastUpdateId || 0,
+              });
 
-              // snapshot: ref 초기화 + 즉시 렌더
-              if (message.type === 'snapshot') {
-                orderBookRef.current.bids.clear();
-                orderBookRef.current.asks.clear();
+              // 비율 히스토리 업데이트 (3초마다, 최근 15분 유지)
+              if (now - lastRatioUpdateRef.current > 3000) {
+                lastRatioUpdateRef.current = now;
+                const totalBid = newBids.reduce((sum, b) => sum + b.quantity, 0);
+                const totalAsk = newAsks.reduce((sum, a) => sum + a.quantity, 0);
+                const total = totalBid + totalAsk;
+                const bidRatio = total > 0 ? (totalBid / total) * 100 : 50;
 
-                (orderbookData.b || []).forEach((level: string[]) => {
-                  orderBookRef.current.bids.set(level[0], parseFloat(level[1]));
+                setRatioHistory(prev => {
+                  const fifteenMinutesAgo = now - 15 * 60 * 1000;
+                  const filtered = prev.filter(p => p.timestamp > fifteenMinutesAgo);
+                  return [...filtered, { timestamp: now, bidRatio }];
                 });
-                (orderbookData.a || []).forEach((level: string[]) => {
-                  orderBookRef.current.asks.set(level[0], parseFloat(level[1]));
-                });
-
-                lastUpdateTimeRef.current = now;
-                const newBids = mapToSortedArray(orderBookRef.current.bids, false);
-                const newAsks = mapToSortedArray(orderBookRef.current.asks, true);
-                setOrderBook({
-                  bids: newBids,
-                  asks: newAsks,
-                  lastUpdateId: orderbookData.u || 0,
-                });
-                updateRatioHistory(newBids, newAsks);
-              }
-              // delta: ref에 병합 + throttle 렌더
-              else if (message.type === 'delta') {
-                // ref에 delta 즉시 병합
-                applyDelta(orderbookData.b || [], orderBookRef.current.bids);
-                applyDelta(orderbookData.a || [], orderBookRef.current.asks);
-
-                // throttle: 100ms마다만 UI 업데이트
-                if (now - lastUpdateTimeRef.current > 100) {
-                  lastUpdateTimeRef.current = now;
-                  const newBids = mapToSortedArray(orderBookRef.current.bids, false);
-                  const newAsks = mapToSortedArray(orderBookRef.current.asks, true);
-                  setOrderBook({
-                    bids: newBids,
-                    asks: newAsks,
-                    lastUpdateId: orderbookData.u || 0,
-                  });
-                  updateRatioHistory(newBids, newAsks);
-                }
               }
             }
           } catch (err) {
@@ -188,12 +128,6 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookPro
 
         ws.onclose = () => {
           setIsConnected(false);
-
-          // ping interval 정리
-          if (pingInterval) {
-            clearInterval(pingInterval);
-            pingInterval = null;
-          }
 
           // 의도적 종료가 아니면 재연결 시도
           if (!isIntentionalClose) {
@@ -212,12 +146,6 @@ export function useOrderBook({ symbol = 'BTCUSDT', limit = 50 }: UseOrderBookPro
     // 클린업
     return () => {
       isIntentionalClose = true;
-
-      // ping interval 정리
-      if (pingInterval) {
-        clearInterval(pingInterval);
-        pingInterval = null;
-      }
 
       // 재연결 timeout 취소
       if (reconnectTimeout) {
