@@ -430,24 +430,56 @@ function DirectionCompareCard({ long, short, primaryDirection }: {
             <span className="text-gray-500">손절</span>
             <span className="font-mono text-red-400">
               ${rec.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              <span className="text-gray-500 ml-1">(-{slPercent.toFixed(1)}%)</span>
             </span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">익절</span>
             <span className="font-mono text-green-400">
               ${rec.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              <span className="text-gray-500 ml-1">(+{tpPercent.toFixed(1)}%)</span>
             </span>
           </div>
-          <div className="flex justify-between border-t border-white/5 pt-1 mt-1">
-            <span className="text-gray-500">R:R</span>
-            <span className={`font-mono font-bold ${
-              rec.riskReward >= 2 ? 'text-green-400' : rec.riskReward >= 1.5 ? 'text-yellow-400' : 'text-red-400'
-            }`}>
-              1:{rec.riskReward.toFixed(1)}
-            </span>
-          </div>
+        </div>
+
+        {/* 레버리지별 손익 테이블 */}
+        <div className="mt-2 pt-2 border-t border-white/5">
+          <table className="w-full text-[10px]">
+            <thead>
+              <tr className="text-gray-500">
+                <th className="text-left font-normal"></th>
+                <th className="text-right font-normal">5x</th>
+                <th className="text-right font-normal">10x</th>
+                <th className="text-right font-normal">20x</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="text-gray-500 py-0.5">익절</td>
+                {[5, 10, 20].map((lev) => (
+                  <td key={lev} className="text-right font-mono text-green-400 py-0.5">
+                    +{(tpPercent * lev).toFixed(0)}%
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="text-gray-500 py-0.5">손절</td>
+                {[5, 10, 20].map((lev) => (
+                  <td key={lev} className="text-right font-mono text-red-400 py-0.5">
+                    -{(slPercent * lev).toFixed(0)}%
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* R:R */}
+        <div className="flex justify-between mt-2 pt-1 border-t border-white/5 text-[11px]">
+          <span className="text-gray-500">R:R</span>
+          <span className={`font-mono font-bold ${
+            rec.riskReward >= 2 ? 'text-green-400' : rec.riskReward >= 1.5 ? 'text-yellow-400' : 'text-red-400'
+          }`}>
+            1:{rec.riskReward.toFixed(1)}
+          </span>
         </div>
       </div>
     );
