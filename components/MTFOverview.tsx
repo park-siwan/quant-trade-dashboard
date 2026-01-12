@@ -834,7 +834,7 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
 
         return (
           <div className="grid grid-cols-3 gap-4">
-            <RecommendationCard recommendation={recommendation} currentPrice={actualPrice} />
+            <RecommendationCard recommendation={recommendation} />
             <div className="col-span-2 h-full">
               <ScoreCard
                 mtfData={data}
