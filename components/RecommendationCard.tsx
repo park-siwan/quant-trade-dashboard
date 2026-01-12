@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Recommendation, WaitCondition } from '@/lib/recommendation';
+import { Recommendation, WaitCondition, DirectionRecommendation } from '@/lib/recommendation';
 import { TrendingUp, TrendingDown, Ban, Clock, CheckCircle, Target, ShieldAlert, Crosshair, Scale } from 'lucide-react';
 
 interface RecommendationCardProps {
@@ -369,6 +369,98 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
   );
 }
 
+// 롱/숏 비교 카드 (둘 다 표시)
+function DirectionCompareCard({ long, short, primaryDirection }: {
+  long?: DirectionRecommendation;
+  short?: DirectionRecommendation;
+  primaryDirection: 'long' | 'short' | null;
+}) {
+  if (!long || !short) return null;
+
+  const renderDirection = (rec: DirectionRecommendation, isPrimary: boolean) => {
+    const isLong = rec.direction === 'long';
+    const slPercent = isLong
+      ? ((rec.entryPrice - rec.stopLoss) / rec.entryPrice) * 100
+      : ((rec.stopLoss - rec.entryPrice) / rec.entryPrice) * 100;
+    const tpPercent = isLong
+      ? ((rec.takeProfit - rec.entryPrice) / rec.entryPrice) * 100
+      : ((rec.entryPrice - rec.takeProfit) / rec.entryPrice) * 100;
+
+    return (
+      <div className={`flex-1 p-2 rounded-lg border ${
+        isPrimary
+          ? isLong
+            ? 'bg-green-500/10 border-green-500/30'
+            : 'bg-red-500/10 border-red-500/30'
+          : 'bg-white/[0.02] border-white/5'
+      }`}>
+        {/* 헤더: 방향 + 점수 */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            {isLong ? (
+              <TrendingUp className={`w-4 h-4 ${isPrimary ? 'text-green-400' : 'text-gray-400'}`} />
+            ) : (
+              <TrendingDown className={`w-4 h-4 ${isPrimary ? 'text-red-400' : 'text-gray-400'}`} />
+            )}
+            <span className={`text-sm font-bold ${
+              isPrimary
+                ? isLong ? 'text-green-400' : 'text-red-400'
+                : 'text-gray-400'
+            }`}>
+              {isLong ? '롱' : '숏'}
+            </span>
+            {isPrimary && (
+              <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1 rounded">추천</span>
+            )}
+          </div>
+          <span className={`text-lg font-bold ${
+            rec.score >= 50 ? 'text-green-400' : rec.score >= 35 ? 'text-yellow-400' : 'text-gray-400'
+          }`}>
+            {rec.score}점
+          </span>
+        </div>
+
+        {/* 가격 정보 */}
+        <div className="space-y-1 text-[11px]">
+          <div className="flex justify-between">
+            <span className="text-gray-500">진입</span>
+            <span className="font-mono text-gray-300">${rec.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">손절</span>
+            <span className="font-mono text-red-400">
+              ${rec.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              <span className="text-gray-500 ml-1">(-{slPercent.toFixed(1)}%)</span>
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">익절</span>
+            <span className="font-mono text-green-400">
+              ${rec.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              <span className="text-gray-500 ml-1">(+{tpPercent.toFixed(1)}%)</span>
+            </span>
+          </div>
+          <div className="flex justify-between border-t border-white/5 pt-1 mt-1">
+            <span className="text-gray-500">R:R</span>
+            <span className={`font-mono font-bold ${
+              rec.riskReward >= 2 ? 'text-green-400' : rec.riskReward >= 1.5 ? 'text-yellow-400' : 'text-red-400'
+            }`}>
+              1:{rec.riskReward.toFixed(1)}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex gap-2">
+      {renderDirection(long, primaryDirection === 'long')}
+      {renderDirection(short, primaryDirection === 'short')}
+    </div>
+  );
+}
+
 export default function RecommendationCard({ recommendation }: RecommendationCardProps) {
   const style = statusStyles[recommendation.status];
   const StatusIcon = style.icon;
@@ -386,29 +478,32 @@ export default function RecommendationCard({ recommendation }: RecommendationCar
         </div>
       </div>
 
-      {/* 진입 가능한 경우 */}
-      {recommendation.status === 'entry' && <EntryInfo recommendation={recommendation} />}
+      {/* 롱/숏 비교 카드 (항상 표시) */}
+      {(recommendation.long || recommendation.short) && (
+        <div className="mb-2">
+          <DirectionCompareCard
+            long={recommendation.long}
+            short={recommendation.short}
+            primaryDirection={recommendation.direction}
+          />
+        </div>
+      )}
 
-      {/* 조건부 대기 - 진입 정보 + 조건 */}
-      {recommendation.status === 'wait' && (
-        <div className="space-y-2">
-          <EntryInfo recommendation={recommendation} />
-          {recommendation.conditions.length > 0 && (
-            <div>
-              <div className="text-[12px] text-gray-500 mb-1">추가 확신 조건:</div>
-              <div className="space-y-1.5">
-                {recommendation.conditions.map((cond, i) => (
-                  <ConditionCard key={i} condition={cond} index={i} />
-                ))}
-              </div>
-            </div>
-          )}
+      {/* 조건부 대기 - 조건만 */}
+      {recommendation.status === 'wait' && recommendation.conditions.length > 0 && (
+        <div>
+          <div className="text-[12px] text-gray-500 mb-1">추가 확신 조건:</div>
+          <div className="space-y-1.5">
+            {recommendation.conditions.map((cond, i) => (
+              <ConditionCard key={i} condition={cond} index={i} />
+            ))}
+          </div>
         </div>
       )}
 
       {/* 진입 금지 - 대기 조건만 */}
       {recommendation.status === 'forbidden' && recommendation.conditions.length > 0 && (
-        <div className="mb-2">
+        <div>
           <div className="text-[12px] text-gray-500 mb-1">대기 조건:</div>
           <div className="space-y-1.5">
             {recommendation.conditions.map((cond, i) => (

@@ -10,10 +10,25 @@ export interface WaitCondition {
   expectedScore: number;
 }
 
+// 개별 방향 추천 타입
+export interface DirectionRecommendation {
+  direction: 'long' | 'short';
+  score: number;
+  confidence: string;
+  entryPrice: number;
+  stopLoss: number;
+  takeProfit: number;
+  stopLossReason: string;
+  takeProfitReason: string;
+  leverage: string;
+  seedRatio: string;
+  riskReward: number;
+}
+
 // 추천 결과 타입
 export interface Recommendation {
   status: 'entry' | 'wait' | 'forbidden';
-  direction: 'long' | 'short' | null;
+  direction: 'long' | 'short' | null;  // 우선 추천 방향
   conditions: WaitCondition[];
   entryPrice?: number;
   stopLoss?: number;
@@ -23,6 +38,9 @@ export interface Recommendation {
   leverage?: string;
   seedRatio?: string;
   reasoning: string[];
+  // 롱/숏 둘 다 표시용
+  long?: DirectionRecommendation;
+  short?: DirectionRecommendation;
 }
 
 interface RecommendationParams {
@@ -85,6 +103,57 @@ export function generateRecommendation({
   });
 }
 
+// 개별 방향 추천 계산 헬퍼
+function calculateDirectionRecommendation(
+  dir: 'long' | 'short',
+  score: SignalScore,
+  currentPrice: number,
+  atr: number,
+  vah?: number,
+  val?: number,
+): DirectionRecommendation {
+  const stopLoss = dir === 'long' ? currentPrice - atr * 2 : currentPrice + atr * 2;
+
+  let takeProfit: number;
+  let takeProfitReason: string;
+
+  if (dir === 'long') {
+    const defaultTP = currentPrice + atr * 4;
+    if (vah && vah > currentPrice && vah < defaultTP) {
+      takeProfit = vah;
+      takeProfitReason = 'VAH 저항대';
+    } else {
+      takeProfit = defaultTP;
+      takeProfitReason = '4ATR';
+    }
+  } else {
+    const defaultTP = currentPrice - atr * 4;
+    if (val && val < currentPrice && val > defaultTP) {
+      takeProfit = val;
+      takeProfitReason = 'VAL 지지대';
+    } else {
+      takeProfit = defaultTP;
+      takeProfitReason = '4ATR';
+    }
+  }
+
+  const riskReward = Math.abs(takeProfit - currentPrice) / Math.abs(stopLoss - currentPrice);
+
+  return {
+    direction: dir,
+    score: score.total,
+    confidence: score.confidence,
+    entryPrice: currentPrice,
+    stopLoss,
+    takeProfit,
+    stopLossReason: '2ATR',
+    takeProfitReason,
+    leverage: score.recommendation.leverage,
+    seedRatio: score.recommendation.seedRatio,
+    riskReward,
+  };
+}
+
 // 진입 가능 추천 생성
 function generateEntryRecommendation({
   longScore,
@@ -105,55 +174,31 @@ function generateEntryRecommendation({
   const score = direction === 'long' ? longScore : shortScore;
   const atr = avgATR || currentPrice * 0.01; // ATR 없으면 1% 기본값
 
-  // 손절/익절 계산
-  const stopLoss =
-    direction === 'long' ? currentPrice - atr * 2 : currentPrice + atr * 2;
+  // 롱/숏 둘 다 계산
+  const longRec = calculateDirectionRecommendation('long', longScore, currentPrice, atr, vah, val);
+  const shortRec = calculateDirectionRecommendation('short', shortScore, currentPrice, atr, vah, val);
 
-  let takeProfit: number;
-  let takeProfitReason: string;
-
-  if (direction === 'long') {
-    // 롱: 익절은 현재가보다 높아야 함
-    const defaultTP = currentPrice + atr * 4;
-    // VAH가 현재가보다 높을 때만 VAH를 고려
-    if (vah && vah > currentPrice && vah < defaultTP) {
-      takeProfit = vah;
-      takeProfitReason = 'VAH 저항대';
-    } else {
-      takeProfit = defaultTP;
-      takeProfitReason = '4ATR';
-    }
-  } else {
-    // 숏: 익절은 현재가보다 낮아야 함
-    const defaultTP = currentPrice - atr * 4;
-    // VAL이 현재가보다 낮을 때만 VAL을 고려
-    if (val && val < currentPrice && val > defaultTP) {
-      takeProfit = val;
-      takeProfitReason = 'VAL 지지대';
-    } else {
-      takeProfit = defaultTP;
-      takeProfitReason = '4ATR';
-    }
-  }
-
-  const riskReward = Math.abs(takeProfit - currentPrice) / Math.abs(stopLoss - currentPrice);
+  // 우선 방향 기준 값들
+  const primaryRec = direction === 'long' ? longRec : shortRec;
 
   return {
     status: 'entry',
     direction,
     conditions: [],
     entryPrice: currentPrice,
-    stopLoss,
-    takeProfit,
+    stopLoss: primaryRec.stopLoss,
+    takeProfit: primaryRec.takeProfit,
     stopLossReason: '2ATR',
-    takeProfitReason,
+    takeProfitReason: primaryRec.takeProfitReason,
     leverage: score.recommendation.leverage,
     seedRatio: score.recommendation.seedRatio,
+    long: longRec,
+    short: shortRec,
     reasoning: [
       `${direction === 'long' ? '롱' : '숏'} ${score.total}점 (${score.confidence})`,
-      `손절: $${stopLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })} (2ATR)`,
-      `익절: $${takeProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} (${takeProfitReason})`,
-      `R:R = 1:${riskReward.toFixed(1)}`,
+      `손절: $${primaryRec.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })} (2ATR)`,
+      `익절: $${primaryRec.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} (${primaryRec.takeProfitReason})`,
+      `R:R = 1:${primaryRec.riskReward.toFixed(1)}`,
     ],
   };
 }
@@ -177,6 +222,35 @@ function generateLowConfidenceRecommendation({
   const direction = longScore.total > shortScore.total ? 'long' : 'short';
   const score = direction === 'long' ? longScore : shortScore;
   const atr = avgATR || currentPrice * 0.01;
+
+  // 롱/숏 둘 다 계산 (보수적 TP 적용)
+  const longRec: DirectionRecommendation = {
+    direction: 'long',
+    score: longScore.total,
+    confidence: longScore.confidence,
+    entryPrice: currentPrice,
+    stopLoss: currentPrice - atr * 2,
+    takeProfit: currentPrice + atr * 3,
+    stopLossReason: '2ATR',
+    takeProfitReason: '3ATR (보수적)',
+    leverage: longScore.recommendation.leverage,
+    seedRatio: longScore.recommendation.seedRatio,
+    riskReward: 1.5,
+  };
+
+  const shortRec: DirectionRecommendation = {
+    direction: 'short',
+    score: shortScore.total,
+    confidence: shortScore.confidence,
+    entryPrice: currentPrice,
+    stopLoss: currentPrice + atr * 2,
+    takeProfit: currentPrice - atr * 3,
+    stopLossReason: '2ATR',
+    takeProfitReason: '3ATR (보수적)',
+    leverage: shortScore.recommendation.leverage,
+    seedRatio: shortScore.recommendation.seedRatio,
+    riskReward: 1.5,
+  };
 
   const conditions: WaitCondition[] = [];
   const reasoning: string[] = [
@@ -213,17 +287,21 @@ function generateLowConfidenceRecommendation({
     }
   }
 
+  const primaryRec = direction === 'long' ? longRec : shortRec;
+
   return {
     status: 'wait',
     direction,
     conditions,
     entryPrice: currentPrice,
-    stopLoss: direction === 'long' ? currentPrice - atr * 2 : currentPrice + atr * 2,
-    takeProfit: direction === 'long' ? currentPrice + atr * 3 : currentPrice - atr * 3,
+    stopLoss: primaryRec.stopLoss,
+    takeProfit: primaryRec.takeProfit,
     stopLossReason: '2ATR',
     takeProfitReason: '3ATR (보수적)',
     leverage: score.recommendation.leverage,
     seedRatio: score.recommendation.seedRatio,
+    long: longRec,
+    short: shortRec,
     reasoning,
   };
 }
@@ -340,10 +418,42 @@ function generateWaitRecommendation({
     reasoning.push('명확한 지지/저항 레벨 대기');
   }
 
+  // 롱/숏 정보 (참고용 - 진입 금지 상태에서도 점수 표시)
+  const atr = currentPrice * 0.01; // 기본 1%
+  const longRec: DirectionRecommendation = {
+    direction: 'long',
+    score: longScore.total,
+    confidence: longScore.confidence,
+    entryPrice: currentPrice,
+    stopLoss: currentPrice - atr * 2,
+    takeProfit: currentPrice + atr * 4,
+    stopLossReason: '2ATR',
+    takeProfitReason: '4ATR',
+    leverage: longScore.recommendation.leverage,
+    seedRatio: longScore.recommendation.seedRatio,
+    riskReward: 2,
+  };
+
+  const shortRec: DirectionRecommendation = {
+    direction: 'short',
+    score: shortScore.total,
+    confidence: shortScore.confidence,
+    entryPrice: currentPrice,
+    stopLoss: currentPrice + atr * 2,
+    takeProfit: currentPrice - atr * 4,
+    stopLossReason: '2ATR',
+    takeProfitReason: '4ATR',
+    leverage: shortScore.recommendation.leverage,
+    seedRatio: shortScore.recommendation.seedRatio,
+    riskReward: 2,
+  };
+
   return {
     status: 'forbidden',
     direction: null,
     conditions,
+    long: longRec,
+    short: shortRec,
     reasoning,
   };
 }
