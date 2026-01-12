@@ -394,20 +394,34 @@ export function addDivergenceLines(
       : 'rgba(248, 113, 113, 0.9)'; // red-400 (숏 타점 - 투명도 90%)
 
     // 1. 가격 패널에 선 그리기
-    const startCandle = candleData.find(
-      (c) => c.time === pair.start.timestamp / 1000,
-    );
-    const endCandle = candleData.find(
-      (c) => c.time === pair.end.timestamp / 1000,
-    );
+    // priceValue가 있으면 직접 사용 (백엔드에서 계산된 정확한 가격)
+    // 없으면 캔들 데이터에서 찾기 (폴백)
+    let startPrice: number | undefined;
+    let endPrice: number | undefined;
 
-    if (startCandle && endCandle) {
-      // bearish: 고점 연결, bullish: 저점 연결
-      const startPrice =
-        pair.direction === 'bearish' ? startCandle.high : startCandle.low;
-      const endPrice =
-        pair.direction === 'bearish' ? endCandle.high : endCandle.low;
+    if (pair.start.priceValue !== undefined && pair.end.priceValue !== undefined) {
+      // 백엔드에서 전달된 정확한 가격 사용
+      startPrice = pair.start.priceValue;
+      endPrice = pair.end.priceValue;
+    } else {
+      // 폴백: 캔들 데이터에서 찾기
+      const startCandle = candleData.find(
+        (c) => c.time === pair.start.timestamp / 1000,
+      );
+      const endCandle = candleData.find(
+        (c) => c.time === pair.end.timestamp / 1000,
+      );
 
+      if (startCandle && endCandle) {
+        // bearish: 고점 연결, bullish: 저점 연결
+        startPrice =
+          pair.direction === 'bearish' ? startCandle.high : startCandle.low;
+        endPrice =
+          pair.direction === 'bearish' ? endCandle.high : endCandle.low;
+      }
+    }
+
+    if (startPrice !== undefined && endPrice !== undefined) {
       // 가격 라인 시리즈로 선 그리기
       const priceLineSeries = chart.addSeries(
         LineSeries,

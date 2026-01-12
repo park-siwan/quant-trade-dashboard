@@ -15,6 +15,7 @@ export interface DivergenceSignal {
   phase: 'start' | 'end' | 'entry';
   timestamp: number;
   datetime: string;
+  priceValue?: number; // 해당 위치의 가격 (bearish: high, bullish: low) - 차트 라인용
   isFiltered?: boolean; // 필터링 여부
   reason?: string; // 필터링 사유
   emaFilter?: SignalClassification; // EMA 필터 결과

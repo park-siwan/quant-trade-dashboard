@@ -144,7 +144,7 @@ function ConditionCard({ condition, index }: { condition: WaitCondition; index: 
     <div className="bg-white/[0.02] rounded p-2 border border-white/5">
       <div className="flex items-center gap-1.5 mb-1">
         <span
-          className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+          className={`text-[12px] font-bold px-1.5 py-0.5 rounded ${
             isLong ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
           }`}
         >
@@ -156,7 +156,7 @@ function ConditionCard({ condition, index }: { condition: WaitCondition; index: 
           <TrendingDown className="w-3 h-3 text-red-400" />
         )}
       </div>
-      <div className="text-[11px] text-gray-300">
+      <div className="text-[12px] text-gray-300">
         <span className="font-mono text-white">
           ${condition.triggerPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </span>{' '}
@@ -164,7 +164,7 @@ function ConditionCard({ condition, index }: { condition: WaitCondition; index: 
         {' + '}
         <span className="text-gray-400">{condition.requiredSignal}</span>
       </div>
-      <div className="text-[10px] text-gray-500">
+      <div className="text-[12px] text-gray-500">
         예상{' '}
         <span className={condition.expectedScore >= 50 ? 'text-green-400' : 'text-yellow-400'}>
           {condition.expectedScore}점
@@ -215,29 +215,29 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
         return (
           <div className="grid grid-cols-3 gap-1 bg-white/[0.02] rounded p-1.5 border border-white/5">
             <div className="text-center">
-              <div className="flex items-center justify-center gap-1 text-[10px] text-gray-500 mb-0.5">
+              <div className="flex items-center justify-center gap-1 text-[12px] text-gray-500 mb-0.5">
                 <Crosshair className="w-3 h-3 text-blue-400" />
                 <span>진입가</span>
               </div>
-              <div className="font-mono text-gray-300 text-[11px]">
+              <div className="font-mono text-gray-300 text-[12px]">
                 <AnimatedPrice value={entryPrice} prefix="$" />
               </div>
             </div>
             <div className="text-center border-x border-white/5">
-              <div className="flex items-center justify-center gap-1 text-[10px] text-gray-500 mb-0.5">
+              <div className="flex items-center justify-center gap-1 text-[12px] text-gray-500 mb-0.5">
                 <ShieldAlert className="w-3 h-3 text-red-400" />
                 <span>손절 (-{Math.abs(slPercent).toFixed(1)}%)</span>
               </div>
-              <div className="font-mono text-gray-300 text-[11px]">
+              <div className="font-mono text-gray-300 text-[12px]">
                 <AnimatedPrice value={stopLoss} prefix="$" />
               </div>
             </div>
             <div className="text-center">
-              <div className="flex items-center justify-center gap-1 text-[10px] text-gray-500 mb-0.5">
+              <div className="flex items-center justify-center gap-1 text-[12px] text-gray-500 mb-0.5">
                 <Target className="w-3 h-3 text-green-400" />
                 <span>익절 (+{Math.abs(tpPercent).toFixed(1)}%)</span>
               </div>
-              <div className="font-mono text-gray-300 text-[11px]">
+              <div className="font-mono text-gray-300 text-[12px]">
                 <AnimatedPrice value={takeProfit} prefix="$" />
               </div>
             </div>
@@ -285,7 +285,7 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
 
               return (
                 <div className="bg-white/[0.02] rounded border border-white/5 overflow-hidden">
-                  <table className="w-full text-[10px]">
+                  <table className="w-full text-[12px]">
                     <thead>
                       <tr className="border-b border-white/5 bg-white/[0.02]">
                         <th className="py-1.5 px-2 text-left text-gray-500 font-medium"></th>
@@ -312,7 +312,7 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
                           </td>
                         ))}
                         <td className="py-1.5 px-2 text-right">
-                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] ${tpStyle.text} ${tpStyle.glow}`}>
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${tpStyle.text} ${tpStyle.glow}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${tpStyle.bg}`} />
                             {tpReason}
                           </span>
@@ -333,7 +333,7 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
                           </td>
                         ))}
                         <td className="py-1.5 px-2 text-right">
-                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] ${slStyle.text} ${slStyle.glow}`}>
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${slStyle.text} ${slStyle.glow}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${slStyle.bg}`} />
                             {slReason}
                           </span>
@@ -351,7 +351,7 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
                           </span>
                         </td>
                         <td className="py-1.5 px-2 text-right">
-                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] ${rrStyle.text} ${rrStyle.glow}`}>
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${rrStyle.text} ${rrStyle.glow}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${rrStyle.bg} animate-pulse`} />
                             {rrStyle.label}
                           </span>
@@ -382,7 +382,7 @@ export default function RecommendationCard({ recommendation }: RecommendationCar
           className={`flex items-center gap-1 px-2 py-0.5 rounded-full border ${style.bg} ${style.border}`}
         >
           <StatusIcon className={`w-3 h-3 ${style.text}`} />
-          <span className={`text-[10px] font-semibold ${style.text}`}>{style.label}</span>
+          <span className={`text-[12px] font-semibold ${style.text}`}>{style.label}</span>
         </div>
       </div>
 
@@ -395,7 +395,7 @@ export default function RecommendationCard({ recommendation }: RecommendationCar
           <EntryInfo recommendation={recommendation} />
           {recommendation.conditions.length > 0 && (
             <div>
-              <div className="text-[10px] text-gray-500 mb-1">추가 확신 조건:</div>
+              <div className="text-[12px] text-gray-500 mb-1">추가 확신 조건:</div>
               <div className="space-y-1.5">
                 {recommendation.conditions.map((cond, i) => (
                   <ConditionCard key={i} condition={cond} index={i} />
@@ -409,7 +409,7 @@ export default function RecommendationCard({ recommendation }: RecommendationCar
       {/* 진입 금지 - 대기 조건만 */}
       {recommendation.status === 'forbidden' && recommendation.conditions.length > 0 && (
         <div className="mb-2">
-          <div className="text-[10px] text-gray-500 mb-1">대기 조건:</div>
+          <div className="text-[12px] text-gray-500 mb-1">대기 조건:</div>
           <div className="space-y-1.5">
             {recommendation.conditions.map((cond, i) => (
               <ConditionCard key={i} condition={cond} index={i} />
