@@ -446,6 +446,7 @@ function DirectionCompareCard({ long, short, primaryDirection }: {
             <thead>
               <tr className="text-gray-500">
                 <th className="text-left font-normal"></th>
+                <th className="text-right font-normal">3x</th>
                 <th className="text-right font-normal">5x</th>
                 <th className="text-right font-normal">10x</th>
                 <th className="text-right font-normal">20x</th>
@@ -454,7 +455,7 @@ function DirectionCompareCard({ long, short, primaryDirection }: {
             <tbody>
               <tr>
                 <td className="text-gray-500 py-0.5">익절</td>
-                {[5, 10, 20].map((lev) => (
+                {[3, 5, 10, 20].map((lev) => (
                   <td key={lev} className="text-right font-mono text-green-400 py-0.5">
                     +{(tpPercent * lev).toFixed(0)}%
                   </td>
@@ -462,7 +463,7 @@ function DirectionCompareCard({ long, short, primaryDirection }: {
               </tr>
               <tr>
                 <td className="text-gray-500 py-0.5">손절</td>
-                {[5, 10, 20].map((lev) => (
+                {[3, 5, 10, 20].map((lev) => (
                   <td key={lev} className="text-right font-mono text-red-400 py-0.5">
                     -{(slPercent * lev).toFixed(0)}%
                   </td>
