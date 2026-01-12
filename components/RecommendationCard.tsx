@@ -1,12 +1,115 @@
 'use client';
 
+import { useState, useEffect, useRef } from 'react';
 import { Recommendation, WaitCondition } from '@/lib/recommendation';
-import { TrendingUp, TrendingDown, Ban, Clock, CheckCircle, Target, ShieldAlert, Crosshair, Percent } from 'lucide-react';
+import { TrendingUp, TrendingDown, Ban, Clock, CheckCircle, Target, ShieldAlert, Crosshair, Scale } from 'lucide-react';
 
 interface RecommendationCardProps {
   recommendation: Recommendation;
   currentPrice?: number;
 }
+
+// 개별 숫자 슬롯 컴포넌트
+const DigitSlot = ({ digit, direction, size = 'normal' }: { digit: string; direction: 'up' | 'down' | null; size?: 'normal' | 'large' }) => {
+  const [currentDigit, setCurrentDigit] = useState(digit);
+  const [prevDigit, setPrevDigit] = useState(digit);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const prevDigitRef = useRef(digit);
+
+  useEffect(() => {
+    if (prevDigitRef.current !== digit) {
+      setPrevDigit(prevDigitRef.current);
+      setCurrentDigit(digit);
+      setIsSpinning(true);
+      prevDigitRef.current = digit;
+
+      const timer = setTimeout(() => setIsSpinning(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [digit]);
+
+  const sizeClass = size === 'large' ? 'w-[0.55em] h-[1.2em]' : 'w-[0.5em] h-[1.1em]';
+
+  return (
+    <span className={`inline-block ${sizeClass} overflow-hidden relative`}>
+      {isSpinning && (
+        <span
+          className={`absolute inset-0 flex items-center justify-center ${
+            direction === 'up' ? 'animate-digit-out-up' : 'animate-digit-out-down'
+          }`}
+        >
+          {prevDigit}
+        </span>
+      )}
+      <span
+        className={`flex items-center justify-center ${
+          isSpinning
+            ? direction === 'up'
+              ? 'animate-digit-in-up'
+              : 'animate-digit-in-down'
+            : ''
+        }`}
+      >
+        {currentDigit}
+      </span>
+    </span>
+  );
+};
+
+// 애니메이션 숫자 컴포넌트
+const AnimatedPrice = ({ value, prefix = '', suffix = '', className = '' }: { value: number; prefix?: string; suffix?: string; className?: string }) => {
+  const [direction, setDirection] = useState<'up' | 'down' | null>(null);
+  const previousValue = useRef(value);
+  const formatted = value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+  useEffect(() => {
+    if (previousValue.current !== value) {
+      setDirection(value > previousValue.current ? 'up' : 'down');
+      previousValue.current = value;
+
+      const timer = setTimeout(() => setDirection(null), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [value]);
+
+  return (
+    <span className={`flex items-baseline justify-center ${className}`}>
+      <span className="h-[1.2em] flex items-center -translate-y-[0.7px]">{prefix}</span>
+      {formatted.split('').map((char, i) => (
+        char === ',' ? <span key={i} className="h-[1.2em] flex items-center">,</span> : <DigitSlot key={i} digit={char} direction={direction} size="large" />
+      ))}
+      {suffix && <span className="h-[1.2em] flex items-center">{suffix}</span>}
+    </span>
+  );
+};
+
+// 애니메이션 퍼센트 컴포넌트
+const AnimatedPercent = ({ value, showSign = true, className = '' }: { value: number; showSign?: boolean; className?: string }) => {
+  const [direction, setDirection] = useState<'up' | 'down' | null>(null);
+  const previousValue = useRef(value);
+  const formatted = Math.abs(value).toFixed(0);
+  const sign = showSign ? (value >= 0 ? '+' : '-') : '';
+
+  useEffect(() => {
+    if (previousValue.current !== value) {
+      setDirection(value > previousValue.current ? 'up' : 'down');
+      previousValue.current = value;
+
+      const timer = setTimeout(() => setDirection(null), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [value]);
+
+  return (
+    <span className={`flex items-baseline justify-center ${className}`}>
+      <span className="h-[1.1em] flex items-center">{sign}</span>
+      {formatted.split('').map((char, i) => (
+        <DigitSlot key={i} digit={char} direction={direction} size="normal" />
+      ))}
+      <span className="h-[1.1em] flex items-center">%</span>
+    </span>
+  );
+};
 
 // 상태별 스타일
 const statusStyles = {
@@ -102,53 +205,166 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
         </div>
       </div>
 
-      {/* 가격 정보 */}
-      <div className="grid grid-cols-3 gap-2 text-[11px]">
-        <div className="bg-white/[0.02] rounded p-1.5 border border-white/5">
-          <div className="flex items-center gap-1 text-[11px] text-gray-500">
-            <Crosshair className="w-3 h-3" />진입가
-          </div>
-          <div className="font-mono text-white">
-            ${entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-          </div>
-        </div>
-        <div className="bg-white/[0.02] rounded p-1.5 border border-red-500/20">
-          <div className="flex items-center gap-1 text-[11px] text-red-400">
-            <ShieldAlert className="w-3 h-3" />손절가
-          </div>
-          <div className="font-mono text-red-300">
-            ${recommendation.stopLoss?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-          </div>
-        </div>
-        <div className="bg-white/[0.02] rounded p-1.5 border border-green-500/20">
-          <div className="flex items-center gap-1 text-[11px] text-green-400">
-            <Target className="w-3 h-3" />익절 ({tpPercent > 0 ? '+' : ''}{tpPercent.toFixed(1)}%)
-          </div>
-          <div className="font-mono text-green-300">
-            ${takeProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-          </div>
-        </div>
-      </div>
+      {/* 가격 정보 - 1/3씩 한 줄에 */}
+      {(() => {
+        const stopLoss = recommendation.stopLoss || entryPrice;
+        const slPercent = isLong
+          ? ((entryPrice - stopLoss) / entryPrice) * 100
+          : ((stopLoss - entryPrice) / entryPrice) * 100;
 
-      {/* 레버리지별 익절 시 예상 수익 */}
-      <div className="bg-white/[0.02] rounded p-2 border border-white/5">
-        <div className="flex items-center gap-1 text-[10px] text-gray-500 mb-1.5">
-          <Percent className="w-3 h-3" />익절 시 예상 수익
-        </div>
-        <div className="grid grid-cols-3 gap-2 text-center">
-          {[5, 10, 20].map((lev) => {
-            const profit = Math.abs(tpPercent) * lev;
-            return (
-              <div key={lev} className="text-[11px]">
-                <div className="text-gray-500 font-medium">{lev}x</div>
-                <div className="font-mono font-bold text-green-400">
-                  +{profit.toFixed(0)}%
-                </div>
+        return (
+          <div className="grid grid-cols-3 gap-1 bg-white/[0.02] rounded p-1.5 border border-white/5">
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-1 text-[10px] text-gray-500 mb-0.5">
+                <Crosshair className="w-3 h-3 text-blue-400" />
+                <span>진입가</span>
               </div>
-            );
-          })}
-        </div>
-      </div>
+              <div className="font-mono text-gray-300 text-[11px]">
+                <AnimatedPrice value={entryPrice} prefix="$" />
+              </div>
+            </div>
+            <div className="text-center border-x border-white/5">
+              <div className="flex items-center justify-center gap-1 text-[10px] text-gray-500 mb-0.5">
+                <ShieldAlert className="w-3 h-3 text-red-400" />
+                <span>손절 (-{Math.abs(slPercent).toFixed(1)}%)</span>
+              </div>
+              <div className="font-mono text-gray-300 text-[11px]">
+                <AnimatedPrice value={stopLoss} prefix="$" />
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-1 text-[10px] text-gray-500 mb-0.5">
+                <Target className="w-3 h-3 text-green-400" />
+                <span>익절 (+{Math.abs(tpPercent).toFixed(1)}%)</span>
+              </div>
+              <div className="font-mono text-gray-300 text-[11px]">
+                <AnimatedPrice value={takeProfit} prefix="$" />
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 손익비 + 익절/손절 카드 */}
+      {(() => {
+        const stopLoss = recommendation.stopLoss || entryPrice;
+        const slPercent = isLong
+          ? ((entryPrice - stopLoss) / entryPrice) * 100
+          : ((stopLoss - entryPrice) / entryPrice) * 100;
+        const riskReward = Math.abs(tpPercent) / Math.abs(slPercent);
+
+        return (
+          <div className="space-y-2">
+            {/* 통합 테이블: 손익비 + 레버리지별 수익/손실 */}
+            {(() => {
+              const rrRounded = Math.round(riskReward * 10) / 10;
+              const rrStyle = rrRounded >= 2
+                ? { bg: 'bg-green-500', glow: 'shadow-[0_0_8px_rgba(34,197,94,0.6)]', text: 'text-green-400', label: '좋음' }
+                : rrRounded >= 1.5
+                ? { bg: 'bg-yellow-500', glow: 'shadow-[0_0_8px_rgba(234,179,8,0.6)]', text: 'text-yellow-400', label: '보통' }
+                : { bg: 'bg-red-500', glow: 'shadow-[0_0_8px_rgba(239,68,68,0.6)]', text: 'text-red-400', label: '위험' };
+
+              // 근거별 스타일 (신호등)
+              const getReasonStyle = (reason: string) => {
+                if (reason.includes('VAH') || reason.includes('VAL')) {
+                  return { bg: 'bg-purple-500', glow: 'shadow-[0_0_6px_rgba(168,85,247,0.5)]', text: 'text-purple-300' };
+                }
+                if (reason.includes('POC')) {
+                  return { bg: 'bg-yellow-500', glow: 'shadow-[0_0_6px_rgba(234,179,8,0.5)]', text: 'text-yellow-300' };
+                }
+                if (reason.includes('보수적')) {
+                  return { bg: 'bg-orange-500', glow: 'shadow-[0_0_6px_rgba(249,115,22,0.5)]', text: 'text-orange-300' };
+                }
+                return { bg: 'bg-blue-500', glow: 'shadow-[0_0_6px_rgba(59,130,246,0.5)]', text: 'text-blue-300' };
+              };
+
+              const tpReason = recommendation.takeProfitReason || '4ATR';
+              const slReason = recommendation.stopLossReason || '2ATR';
+              const tpStyle = getReasonStyle(tpReason);
+              const slStyle = getReasonStyle(slReason);
+
+              return (
+                <div className="bg-white/[0.02] rounded border border-white/5 overflow-hidden">
+                  <table className="w-full text-[10px]">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-white/[0.02]">
+                        <th className="py-1.5 px-2 text-left text-gray-500 font-medium"></th>
+                        <th className="py-1.5 px-2 text-center text-gray-500 font-medium">1x</th>
+                        {[5, 10, 20].map((lev) => (
+                          <th key={lev} className="py-1.5 px-2 text-center text-gray-400 font-medium">{lev}x</th>
+                        ))}
+                        <th className="py-1.5 px-2 text-right text-gray-500 font-medium">근거</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-white/5">
+                        <td className="py-1.5 px-2 text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <Target className="w-3 h-3 text-green-400" />익절
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-2 text-center font-mono text-gray-500">
+                          +{Math.abs(tpPercent).toFixed(1)}%
+                        </td>
+                        {[5, 10, 20].map((lev) => (
+                          <td key={lev} className="py-1.5 px-2 text-center font-mono font-bold text-green-400">
+                            <AnimatedPercent value={Math.abs(tpPercent) * lev} />
+                          </td>
+                        ))}
+                        <td className="py-1.5 px-2 text-right">
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] ${tpStyle.text} ${tpStyle.glow}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${tpStyle.bg}`} />
+                            {tpReason}
+                          </span>
+                        </td>
+                      </tr>
+                      <tr className="border-b border-white/5">
+                        <td className="py-1.5 px-2 text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <ShieldAlert className="w-3 h-3 text-red-400" />손절
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-2 text-center font-mono text-gray-500">
+                          -{Math.abs(slPercent).toFixed(1)}%
+                        </td>
+                        {[5, 10, 20].map((lev) => (
+                          <td key={lev} className="py-1.5 px-2 text-center font-mono font-bold text-red-400">
+                            <AnimatedPercent value={-(Math.abs(slPercent) * lev)} />
+                          </td>
+                        ))}
+                        <td className="py-1.5 px-2 text-right">
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] ${slStyle.text} ${slStyle.glow}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${slStyle.bg}`} />
+                            {slReason}
+                          </span>
+                        </td>
+                      </tr>
+                      <tr className="bg-white/[0.02]">
+                        <td className="py-1.5 px-2 text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <Scale className="w-3 h-3 text-blue-400" />손익비
+                          </span>
+                        </td>
+                        <td colSpan={4} className="py-1.5 px-2 text-center">
+                          <span className={`font-mono font-bold ${rrStyle.text}`}>
+                            1 : {rrRounded.toFixed(1)}
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-2 text-right">
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] ${rrStyle.text} ${rrStyle.glow}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${rrStyle.bg} animate-pulse`} />
+                            {rrStyle.label}
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -156,12 +372,6 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
 export default function RecommendationCard({ recommendation }: RecommendationCardProps) {
   const style = statusStyles[recommendation.status];
   const StatusIcon = style.icon;
-
-  // 점수 정보와 거리 정보 제외 (티커와 신호점수 카드에서 표시)
-  const filteredReasoning = recommendation.reasoning.filter(
-    (r) => !r.includes('점 /') && !r.includes('점수') && !r.includes('35점 미만') &&
-           !r.includes('까지') && !r.includes('접근 시') && !r.includes('터치 시')
-  );
 
   return (
     <div className={`backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-3 h-full flex flex-col`}>
@@ -203,19 +413,6 @@ export default function RecommendationCard({ recommendation }: RecommendationCar
           <div className="space-y-1.5">
             {recommendation.conditions.map((cond, i) => (
               <ConditionCard key={i} condition={cond} index={i} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 근거 (점수 제외) */}
-      {filteredReasoning.length > 0 && (
-        <div className="mt-auto pt-2 border-t border-white/5">
-          <div className="space-y-0">
-            {filteredReasoning.map((r, i) => (
-              <div key={i} className="text-[10px] text-gray-500 leading-tight">
-                • {r}
-              </div>
             ))}
           </div>
         </div>

@@ -72,7 +72,7 @@ const AnimatedNumber = ({ value, className }: { value: number; className?: strin
   }, [value]);
 
   return (
-    <span className={`inline-flex items-center ${className || ''}`}>
+    <span className={`inline-flex items-center justify-center ${className || ''}`}>
       {valueStr.split('').map((char, i) => (
         <DigitSlot key={i} digit={char} direction={direction} size="large" />
       ))}

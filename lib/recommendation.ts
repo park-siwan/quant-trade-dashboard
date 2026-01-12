@@ -18,6 +18,8 @@ export interface Recommendation {
   entryPrice?: number;
   stopLoss?: number;
   takeProfit?: number;
+  stopLossReason?: string;  // 손절 근거
+  takeProfitReason?: string;  // 익절 근거
   leverage?: string;
   seedRatio?: string;
   reasoning: string[];
@@ -108,16 +110,30 @@ function generateEntryRecommendation({
     direction === 'long' ? currentPrice - atr * 2 : currentPrice + atr * 2;
 
   let takeProfit: number;
+  let takeProfitReason: string;
+
   if (direction === 'long') {
     // 롱: 익절은 현재가보다 높아야 함
     const defaultTP = currentPrice + atr * 4;
     // VAH가 현재가보다 높을 때만 VAH를 고려
-    takeProfit = (vah && vah > currentPrice) ? Math.min(vah, defaultTP) : defaultTP;
+    if (vah && vah > currentPrice && vah < defaultTP) {
+      takeProfit = vah;
+      takeProfitReason = 'VAH 저항대';
+    } else {
+      takeProfit = defaultTP;
+      takeProfitReason = '4ATR';
+    }
   } else {
     // 숏: 익절은 현재가보다 낮아야 함
     const defaultTP = currentPrice - atr * 4;
     // VAL이 현재가보다 낮을 때만 VAL을 고려
-    takeProfit = (val && val < currentPrice) ? Math.max(val, defaultTP) : defaultTP;
+    if (val && val < currentPrice && val > defaultTP) {
+      takeProfit = val;
+      takeProfitReason = 'VAL 지지대';
+    } else {
+      takeProfit = defaultTP;
+      takeProfitReason = '4ATR';
+    }
   }
 
   const riskReward = Math.abs(takeProfit - currentPrice) / Math.abs(stopLoss - currentPrice);
@@ -129,12 +145,14 @@ function generateEntryRecommendation({
     entryPrice: currentPrice,
     stopLoss,
     takeProfit,
+    stopLossReason: '2ATR',
+    takeProfitReason,
     leverage: score.recommendation.leverage,
     seedRatio: score.recommendation.seedRatio,
     reasoning: [
       `${direction === 'long' ? '롱' : '숏'} ${score.total}점 (${score.confidence})`,
       `손절: $${stopLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })} (2ATR)`,
-      `익절: $${takeProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+      `익절: $${takeProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} (${takeProfitReason})`,
       `R:R = 1:${riskReward.toFixed(1)}`,
     ],
   };
@@ -202,6 +220,8 @@ function generateLowConfidenceRecommendation({
     entryPrice: currentPrice,
     stopLoss: direction === 'long' ? currentPrice - atr * 2 : currentPrice + atr * 2,
     takeProfit: direction === 'long' ? currentPrice + atr * 3 : currentPrice - atr * 3,
+    stopLossReason: '2ATR',
+    takeProfitReason: '3ATR (보수적)',
     leverage: score.recommendation.leverage,
     seedRatio: score.recommendation.seedRatio,
     reasoning,
