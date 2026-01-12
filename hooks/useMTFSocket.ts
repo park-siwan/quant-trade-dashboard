@@ -95,6 +95,14 @@ interface BackendMTFData {
   timeframes: BackendTimeframeData[];
 }
 
+interface DivergenceInfo {
+  type: 'rsi' | 'obv' | 'cvd' | 'oi';
+  direction: 'bullish' | 'bearish';
+  timestamp: number;
+  candlesAgo: number;
+  isExpired: boolean;
+}
+
 interface RawTimeframeData {
   timeframe: string;
   trend: MTFStatus;
@@ -105,13 +113,8 @@ interface RawTimeframeData {
   oiDirection: MTFStatus;
   oiStrength: MTFStrength;
   oiChange: number;
-  divergence: {
-    type: 'rsi' | 'obv' | 'cvd' | 'oi';
-    direction: 'bullish' | 'bearish';
-    timestamp: number;
-    candlesAgo: number;
-    isExpired: boolean;
-  } | null;
+  divergence: DivergenceInfo | null;
+  divergences: DivergenceInfo[]; // 모든 다이버전스 (우선순위 정렬)
   currentPrice: number;
   ema20: number | null;
   ema50: number | null;
@@ -213,29 +216,60 @@ const analyzeOi = (oi: (number | null)[] | undefined): {
   return { direction, strength, change };
 };
 
-// 다이버전스 추출
+// 타입별 우선순위 (RSI가 가장 중요)
+const DIVERGENCE_TYPE_PRIORITY: Record<string, number> = {
+  'rsi': 4,
+  'cvd': 3,
+  'obv': 2,
+  'oi': 1,
+};
+
+// 모든 다이버전스 추출 (우선순위 정렬)
+const getAllDivergences = (
+  signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number }> | undefined,
+  totalCandles: number,
+  timeframe: string
+): DivergenceInfo[] => {
+  if (!signals?.length) return [];
+
+  const endSignals = signals.filter((s) => s.phase === 'end');
+  if (endSignals.length === 0) return [];
+
+  const expiryCandles = DIVERGENCE_EXPIRY_CANDLES[timeframe] || 24;
+
+  const divergences = endSignals.map(signal => {
+    const candlesAgo = signal.index !== undefined ? totalCandles - 1 - signal.index : 0;
+    const isExpired = candlesAgo > expiryCandles;
+    return {
+      type: signal.type as 'rsi' | 'obv' | 'cvd' | 'oi',
+      direction: signal.direction as 'bullish' | 'bearish',
+      timestamp: signal.timestamp || Date.now(),
+      candlesAgo,
+      isExpired,
+    };
+  });
+
+  // 우선순위 정렬: 1) 만료 여부, 2) 타입 우선순위, 3) 최신순
+  return divergences.sort((a, b) => {
+    // 만료되지 않은 것이 우선
+    if (a.isExpired !== b.isExpired) return a.isExpired ? 1 : -1;
+    // 타입 우선순위
+    const priorityA = DIVERGENCE_TYPE_PRIORITY[a.type] || 0;
+    const priorityB = DIVERGENCE_TYPE_PRIORITY[b.type] || 0;
+    if (priorityA !== priorityB) return priorityB - priorityA;
+    // 최신순
+    return a.candlesAgo - b.candlesAgo;
+  });
+};
+
+// 다이버전스 추출 (우선순위: RSI > CVD > OBV > OI) - 대표 1개
 const getLatestDivergence = (
   signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number }> | undefined,
   totalCandles: number,
   timeframe: string
-): RawTimeframeData['divergence'] => {
-  if (!signals?.length) return null;
-
-  const endSignals = signals.filter((s) => s.phase === 'end');
-  if (endSignals.length === 0) return null;
-
-  const latest = endSignals[endSignals.length - 1];
-  const candlesAgo = latest.index !== undefined ? totalCandles - 1 - latest.index : 0;
-  const expiryCandles = DIVERGENCE_EXPIRY_CANDLES[timeframe] || 24;
-  const isExpired = candlesAgo > expiryCandles;
-
-  return {
-    type: latest.type as 'rsi' | 'obv' | 'cvd' | 'oi',
-    direction: latest.direction as 'bullish' | 'bearish',
-    timestamp: latest.timestamp || Date.now(),
-    candlesAgo,
-    isExpired,
-  };
+): DivergenceInfo | null => {
+  const all = getAllDivergences(signals, totalCandles, timeframe);
+  return all.length > 0 ? all[0] : null;
 };
 
 // 백엔드 데이터 → RawTimeframeData 변환
@@ -269,11 +303,14 @@ const processBackendData = (tf: BackendTimeframeData): RawTimeframeData | null =
   const cvdAnalysis = analyzeCvd(cvd);
   const oiAnalysis = analyzeOi(oi);
 
-  const divergence = getLatestDivergence(
+  // 모든 다이버전스 추출 (우선순위 정렬)
+  const divergences = getAllDivergences(
     tf.signals?.divergence,
     candles.length,
     tf.timeframe
   );
+  // 대표 다이버전스 (첫 번째)
+  const divergence = divergences.length > 0 ? divergences[0] : null;
 
   const adx = tf.adx?.currentAdx ?? null;
   const isStrongTrend = adx !== null && adx >= 25;
@@ -290,6 +327,7 @@ const processBackendData = (tf: BackendTimeframeData): RawTimeframeData | null =
     oiStrength: oiAnalysis.strength,
     oiChange: oiAnalysis.change,
     divergence,
+    divergences,
     currentPrice,
     ema20,
     ema50,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, memo, useMemo } from 'react';
 import { useMTFSocket, getSecondsUntilClose, CANDLE_INTERVALS_SEC } from '@/hooks/useMTFSocket';
 import { MTFStatus, MTFStrength, MTFTimeframeData, MTFAction, MTFActionInfo, OrderBlock } from '@/lib/types/index';
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock, Activity, Zap, Target, BarChart3, ArrowUpDown, Layers, AlertTriangle } from 'lucide-react';
@@ -127,6 +127,18 @@ const AnimatedCell = memo(({ children, dataKey }: { children: React.ReactNode; d
 });
 AnimatedCell.displayName = 'AnimatedCell';
 
+// TradeAlert 훅 반환 타입
+interface TradeAlertReturn {
+  isPlaying: boolean;
+  isUnlocked: boolean;
+  checkScoreAlert: (longScore: any, shortScore: any, rr?: { long: number; short: number }) => void;
+  checkDivergenceAlert: (timeframe: string, divergence: any) => void;
+  triggerEntryAlert: (direction: 'long' | 'short', score: number, riskReward: number) => void;
+  triggerStrongSignal: (direction: 'long' | 'short') => void;
+  triggerDivergenceAlert: (timeframe: '5m' | '15m' | '1h' | '4h', direction: 'bullish' | 'bearish') => void;
+  stop: () => void;
+}
+
 interface MTFOverviewProps {
   symbol: string;
   currentPrice?: number;
@@ -135,6 +147,9 @@ interface MTFOverviewProps {
   val?: number;
   fundingRate?: number;
   orderBlocks?: OrderBlock[];
+  // TTS 알림 관련 props (page.tsx에서 전달)
+  alertEnabled?: boolean;
+  tradeAlert?: TradeAlertReturn;
 }
 
 // 상태별 아이콘 컴포넌트
@@ -659,7 +674,17 @@ const formatPrice = (price: number) => {
   return price.toLocaleString('en-US', { maximumFractionDigits: 0 });
 };
 
-export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: propVah, val: propVal, fundingRate, orderBlocks: propOrderBlocks }: MTFOverviewProps) {
+export default function MTFOverview({
+  symbol,
+  currentPrice,
+  poc: propPoc,
+  vah: propVah,
+  val: propVal,
+  fundingRate,
+  orderBlocks: propOrderBlocks,
+  alertEnabled = false,
+  tradeAlert,
+}: MTFOverviewProps) {
   const { data, isLoading, isError, isConnected, refetch, refetchTimeframe, volumeProfile, orderBlocks: hookOrderBlocks } = useMTFSocket({ symbol });
 
   // Coinglass 데이터 (공포탐욕지수)
@@ -675,6 +700,134 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
   const val = propVal ?? volumeProfile?.val;
   const orderBlocks = propOrderBlocks ?? hookOrderBlocks;
 
+  // 데이터에서 파생된 값들 (메모이제이션) - 모든 Hook은 조건부 return 전에 호출해야 함
+  const derivedData = useMemo(() => {
+    if (!data) return null;
+
+    const strengthInfo = getStrengthLabel(data.alignmentScore);
+    const bullishCount = data.timeframes.filter(t => t.trend === 'bullish').length;
+    const bearishCount = data.timeframes.filter(t => t.trend === 'bearish').length;
+    const totalCount = data.timeframes.length;
+    const alignmentPercent = Math.round(data.alignmentScore * 100);
+
+    // 실제 현재가 (MTF 데이터에서 5m 기준)
+    const actualPrice = currentPrice || data.timeframes.find(t => t.timeframe === '5m')?.currentPrice || 0;
+
+    // RSI 과매수/과매도 체크
+    const overboughtTFs = data.timeframes.filter(tf => tf.rsi && tf.rsi >= 70);
+    const oversoldTFs = data.timeframes.filter(tf => tf.rsi && tf.rsi <= 30);
+
+    // 강한 추세 타임프레임 (ADX >= 25)
+    const strongTrendTFs = data.timeframes.filter(tf => tf.isStrongTrend);
+
+    // 평균 ATR
+    const atrRatios = data.timeframes.map(tf => tf.atrRatio).filter((r): r is number => r !== null);
+    const avgATR = atrRatios.length > 0 ? atrRatios.reduce((a, b) => a + b, 0) / atrRatios.length : null;
+
+    // CVD/OI 방향 일치
+    const cvdBullish = data.timeframes.filter(tf => tf.cvdDirection === 'bullish').length;
+    const cvdBearish = data.timeframes.filter(tf => tf.cvdDirection === 'bearish').length;
+    const oiBullish = data.timeframes.filter(tf => tf.oiDirection === 'bullish').length;
+    const oiBearish = data.timeframes.filter(tf => tf.oiDirection === 'bearish').length;
+
+    // 다이버전스 정보
+    const activeDivergences = data.timeframes.filter(tf => tf.divergence && !tf.divergence.isExpired);
+    const bullishDivs = activeDivergences.filter(tf => tf.divergence?.direction === 'bullish');
+    const bearishDivs = activeDivergences.filter(tf => tf.divergence?.direction === 'bearish');
+
+    return {
+      strengthInfo,
+      bullishCount,
+      bearishCount,
+      totalCount,
+      alignmentPercent,
+      actualPrice,
+      overboughtTFs,
+      oversoldTFs,
+      strongTrendTFs,
+      avgATR,
+      cvdBullish,
+      cvdBearish,
+      oiBullish,
+      oiBearish,
+      activeDivergences,
+      bullishDivs,
+      bearishDivs,
+    };
+  }, [data, currentPrice]);
+
+  // 점수 계산 (메모이제이션)
+  const marketData: MarketStructureData | undefined = useMemo(() =>
+    derivedData?.actualPrice ? { currentPrice: derivedData.actualPrice, orderBlocks, poc, vah, val } : undefined,
+    [derivedData?.actualPrice, orderBlocks, poc, vah, val]
+  );
+
+  const { longScore, shortScore, recommendation } = useMemo(() => {
+    if (!data || !derivedData) {
+      return {
+        longScore: null,
+        shortScore: null,
+        recommendation: {
+          status: 'wait' as const,
+          direction: null,
+          conditions: [],
+          reasoning: ['데이터 로딩 중...'],
+        },
+      };
+    }
+
+    const long = calculateSignalScore(data, 'bullish', fundingRate, marketData, fearGreedIndex);
+    const short = calculateSignalScore(data, 'bearish', fundingRate, marketData, fearGreedIndex);
+
+    // 평균 ATR 계산 (달러 단위)
+    const atrRatiosCalc = data.timeframes
+      .map((tf) => tf.atrRatio)
+      .filter((r): r is number => r !== null);
+    const avgATRRatio = atrRatiosCalc.length > 0
+      ? atrRatiosCalc.reduce((sum, r) => sum + r, 0) / atrRatiosCalc.length
+      : 0.01;
+    const avgATRValue = derivedData.actualPrice * avgATRRatio * 0.01;
+
+    const rec = generateRecommendation({
+      longScore: long,
+      shortScore: short,
+      currentPrice: derivedData.actualPrice,
+      poc,
+      vah,
+      val,
+      orderBlocks,
+      avgATR: avgATRValue,
+    });
+
+    return { longScore: long, shortScore: short, recommendation: rec };
+  }, [data, derivedData, fundingRate, marketData, fearGreedIndex, poc, vah, val, orderBlocks]);
+
+  // TTS 알림 체크 (점수 변화 감지)
+  useEffect(() => {
+    if (!alertEnabled || !tradeAlert || !longScore || !shortScore) return;
+
+    // 손익비 계산
+    const rr = {
+      long: recommendation.long?.riskReward ?? 2,
+      short: recommendation.short?.riskReward ?? 2,
+    };
+
+    tradeAlert.checkScoreAlert(longScore, shortScore, rr);
+  }, [alertEnabled, tradeAlert, longScore, shortScore, recommendation]);
+
+  // TTS 알림 체크 (다이버전스 감지)
+  useEffect(() => {
+    if (!alertEnabled || !tradeAlert || !derivedData) return;
+
+    // 최근 다이버전스만 알림
+    derivedData.activeDivergences.forEach(tf => {
+      if (tf.divergence) {
+        tradeAlert.checkDivergenceAlert(tf.timeframe, tf.divergence);
+      }
+    });
+  }, [alertEnabled, tradeAlert, derivedData]);
+
+  // 조건부 렌더링 (모든 Hook 호출 후)
   if (isLoading) {
     return (
       <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-4">
@@ -693,7 +846,7 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
     );
   }
 
-  if (isError || !data) {
+  if (isError || !data || !derivedData) {
     return (
       <div className="backdrop-blur-sm bg-white/[0.02] border border-red-500/20 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
@@ -709,43 +862,26 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
     );
   }
 
-  const strengthInfo = getStrengthLabel(data.alignmentScore);
-  const bullishCount = data.timeframes.filter(t => t.trend === 'bullish').length;
-  const bearishCount = data.timeframes.filter(t => t.trend === 'bearish').length;
-  const totalCount = data.timeframes.length;
-  const alignmentPercent = Math.round(data.alignmentScore * 100);
-
-  // 실제 현재가 (MTF 데이터에서 5m 기준)
-  const actualPrice = currentPrice || data.timeframes.find(t => t.timeframe === '5m')?.currentPrice || 0;
-
-  // 추세 방향 텍스트
-  const trendText = data.overallTrend === 'bullish'
-    ? `📈 상승추세 ${bullishCount}/${totalCount} (${alignmentPercent}%)`
-    : data.overallTrend === 'bearish'
-    ? `📉 하락추세 ${bearishCount}/${totalCount} (${alignmentPercent}%)`
-    : `➡️ 횡보 (${alignmentPercent}%)`;
-
-  // RSI 과매수/과매도 체크
-  const overboughtTFs = data.timeframes.filter(tf => tf.rsi && tf.rsi >= 70);
-  const oversoldTFs = data.timeframes.filter(tf => tf.rsi && tf.rsi <= 30);
-
-  // 강한 추세 타임프레임 (ADX >= 25)
-  const strongTrendTFs = data.timeframes.filter(tf => tf.isStrongTrend);
-
-  // 평균 ATR
-  const atrRatios = data.timeframes.map(tf => tf.atrRatio).filter((r): r is number => r !== null);
-  const avgATR = atrRatios.length > 0 ? atrRatios.reduce((a, b) => a + b, 0) / atrRatios.length : null;
-
-  // CVD/OI 방향 일치
-  const cvdBullish = data.timeframes.filter(tf => tf.cvdDirection === 'bullish').length;
-  const cvdBearish = data.timeframes.filter(tf => tf.cvdDirection === 'bearish').length;
-  const oiBullish = data.timeframes.filter(tf => tf.oiDirection === 'bullish').length;
-  const oiBearish = data.timeframes.filter(tf => tf.oiDirection === 'bearish').length;
-
-  // 다이버전스 정보
-  const activeDivergences = data.timeframes.filter(tf => tf.divergence && !tf.divergence.isExpired);
-  const bullishDivs = activeDivergences.filter(tf => tf.divergence?.direction === 'bullish');
-  const bearishDivs = activeDivergences.filter(tf => tf.divergence?.direction === 'bearish');
+  // derivedData에서 추출
+  const {
+    strengthInfo,
+    bullishCount,
+    bearishCount,
+    totalCount,
+    alignmentPercent,
+    actualPrice,
+    overboughtTFs,
+    oversoldTFs,
+    strongTrendTFs,
+    avgATR,
+    cvdBullish,
+    cvdBearish,
+    oiBullish,
+    oiBearish,
+    activeDivergences,
+    bullishDivs,
+    bearishDivs,
+  } = derivedData;
 
   // EMA 위치 체크 (일봉 기준)
   const tf1d = data.timeframes.find(tf => tf.timeframe === '1d');
@@ -803,53 +939,21 @@ export default function MTFOverview({ symbol, currentPrice, poc: propPoc, vah: p
       )}
 
       {/* 스코어 카드 & 추천 타점 */}
-      {(() => {
-        // 점수 계산 (fearGreedIndex 포함 - ScoreCard와 동일)
-        const marketData: MarketStructureData | undefined = actualPrice
-          ? { currentPrice: actualPrice, orderBlocks, poc, vah, val }
-          : undefined;
-        const longScore = calculateSignalScore(data, 'bullish', fundingRate, marketData, fearGreedIndex);
-        const shortScore = calculateSignalScore(data, 'bearish', fundingRate, marketData, fearGreedIndex);
-
-        // 평균 ATR 계산 (달러 단위)
-        const atrRatios = data.timeframes
-          .map((tf) => tf.atrRatio)
-          .filter((r): r is number => r !== null);
-        const avgATRRatio = atrRatios.length > 0
-          ? atrRatios.reduce((sum, r) => sum + r, 0) / atrRatios.length
-          : 0.01;
-        const avgATR = actualPrice * avgATRRatio * 0.01; // ATR ratio를 달러로 변환
-
-        // 추천 생성
-        const recommendation = generateRecommendation({
-          longScore,
-          shortScore,
-          currentPrice: actualPrice,
-          poc,
-          vah,
-          val,
-          orderBlocks,
-          avgATR,
-        });
-
-        return (
-          <div className="grid grid-cols-3 gap-4">
-            <RecommendationCard recommendation={recommendation} />
-            <div className="col-span-2 h-full">
-              <ScoreCard
-                mtfData={data}
-                fundingRate={fundingRate}
-                currentPrice={actualPrice}
-                orderBlocks={orderBlocks}
-                poc={poc}
-                vah={vah}
-                val={val}
-                fearGreedIndex={fearGreedIndex}
-              />
-            </div>
-          </div>
-        );
-      })()}
+      <div className="grid grid-cols-3 gap-4">
+        <RecommendationCard recommendation={recommendation} />
+        <div className="col-span-2 h-full">
+          <ScoreCard
+            mtfData={data}
+            fundingRate={fundingRate}
+            currentPrice={actualPrice}
+            orderBlocks={orderBlocks}
+            poc={poc}
+            vah={vah}
+            val={val}
+            fearGreedIndex={fearGreedIndex}
+          />
+        </div>
+      </div>
 
       {/* 시간대별 분석 테이블 */}
       <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-3">

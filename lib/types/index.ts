@@ -353,6 +353,15 @@ export interface MTFActionInfo {
   reason: string;
 }
 
+// 다이버전스 정보 타입
+export interface MTFDivergenceInfo {
+  type: 'rsi' | 'obv' | 'cvd' | 'oi';
+  direction: 'bullish' | 'bearish';
+  timestamp: number; // 발생 시간
+  candlesAgo: number; // 몇 캔들 전
+  isExpired: boolean; // 유효기간 만료 여부
+}
+
 export interface MTFTimeframeData {
   timeframe: string;
   trend: MTFStatus;
@@ -363,13 +372,8 @@ export interface MTFTimeframeData {
   oiDirection: MTFStatus;
   oiStrength: MTFStrength; // OI 강도
   oiChange: number; // OI 변화율 (%)
-  divergence: {
-    type: 'rsi' | 'obv' | 'cvd' | 'oi';
-    direction: 'bullish' | 'bearish';
-    timestamp: number; // 발생 시간
-    candlesAgo: number; // 몇 캔들 전
-    isExpired: boolean; // 유효기간 만료 여부
-  } | null;
+  divergence: MTFDivergenceInfo | null; // 대표 다이버전스 (우선순위 1위)
+  divergences: MTFDivergenceInfo[]; // 모든 다이버전스 (우선순위 정렬)
   currentPrice: number;
   ema20: number | null;
   ema50: number | null;
