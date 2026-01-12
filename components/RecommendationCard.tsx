@@ -1,10 +1,11 @@
 'use client';
 
 import { Recommendation, WaitCondition } from '@/lib/recommendation';
-import { TrendingUp, TrendingDown, Ban, Clock, CheckCircle, Target, ShieldAlert, Crosshair } from 'lucide-react';
+import { TrendingUp, TrendingDown, Ban, Clock, CheckCircle, Target, ShieldAlert, Crosshair, Percent } from 'lucide-react';
 
 interface RecommendationCardProps {
   recommendation: Recommendation;
+  currentPrice?: number;
 }
 
 // 상태별 스타일
@@ -71,10 +72,21 @@ function ConditionCard({ condition, index }: { condition: WaitCondition; index: 
 }
 
 // 진입 정보 카드 (컴팩트)
-function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
+function EntryInfo({ recommendation, currentPrice }: { recommendation: Recommendation; currentPrice?: number }) {
   if (!recommendation.entryPrice) return null;
 
   const isLong = recommendation.direction === 'long';
+  const entryPrice = recommendation.entryPrice;
+  const takeProfit = recommendation.takeProfit || entryPrice;
+
+  // 익절까지 필요한 % 계산
+  const tpPercent = ((takeProfit - entryPrice) / entryPrice) * 100;
+
+  // 현재 수익률 계산 (현재가 기준)
+  const price = currentPrice || entryPrice;
+  const currentProfitPercent = isLong
+    ? ((price - entryPrice) / entryPrice) * 100
+    : ((entryPrice - price) / entryPrice) * 100;
 
   return (
     <div className="space-y-2">
@@ -103,7 +115,7 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
             <Crosshair className="w-3 h-3" />진입가
           </div>
           <div className="font-mono text-white">
-            ${recommendation.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            ${entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </div>
         </div>
         <div className="bg-white/[0.02] rounded p-1.5 border border-red-500/20">
@@ -116,32 +128,39 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
         </div>
         <div className="bg-white/[0.02] rounded p-1.5 border border-green-500/20">
           <div className="flex items-center gap-1 text-[11px] text-green-400">
-            <Target className="w-3 h-3" />익절목표
+            <Target className="w-3 h-3" />익절 ({tpPercent > 0 ? '+' : ''}{tpPercent.toFixed(1)}%)
           </div>
           <div className="font-mono text-green-300">
-            ${recommendation.takeProfit?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            ${takeProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </div>
         </div>
       </div>
 
-      {/* 레버리지 & 시드 */}
-      {recommendation.leverage && recommendation.leverage !== '-' && (
-        <div className="flex gap-3 text-[11px]">
-          <div>
-            <span className="text-gray-500">레버리지: </span>
-            <span className="text-white font-mono">{recommendation.leverage}</span>
-          </div>
-          <div>
-            <span className="text-gray-500">시드: </span>
-            <span className="text-white font-mono">{recommendation.seedRatio}</span>
-          </div>
+      {/* 레버리지별 예상 수익 (실시간) */}
+      <div className="bg-white/[0.02] rounded p-2 border border-white/5">
+        <div className="flex items-center gap-1 text-[10px] text-gray-500 mb-1.5">
+          <Percent className="w-3 h-3" />레버리지별 현재 수익률
         </div>
-      )}
+        <div className="grid grid-cols-3 gap-2 text-center">
+          {[5, 10, 20].map((lev) => {
+            const profit = currentProfitPercent * lev;
+            const isProfit = profit >= 0;
+            return (
+              <div key={lev} className="text-[11px]">
+                <div className="text-gray-500 font-medium">{lev}x</div>
+                <div className={`font-mono font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                  {isProfit ? '+' : ''}{profit.toFixed(1)}%
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
 
-export default function RecommendationCard({ recommendation }: RecommendationCardProps) {
+export default function RecommendationCard({ recommendation, currentPrice }: RecommendationCardProps) {
   const style = statusStyles[recommendation.status];
   const StatusIcon = style.icon;
 
@@ -165,12 +184,12 @@ export default function RecommendationCard({ recommendation }: RecommendationCar
       </div>
 
       {/* 진입 가능한 경우 */}
-      {recommendation.status === 'entry' && <EntryInfo recommendation={recommendation} />}
+      {recommendation.status === 'entry' && <EntryInfo recommendation={recommendation} currentPrice={currentPrice} />}
 
       {/* 조건부 대기 - 진입 정보 + 조건 */}
       {recommendation.status === 'wait' && (
         <div className="space-y-2">
-          <EntryInfo recommendation={recommendation} />
+          <EntryInfo recommendation={recommendation} currentPrice={currentPrice} />
           {recommendation.conditions.length > 0 && (
             <div>
               <div className="text-[10px] text-gray-500 mb-1">추가 확신 조건:</div>
