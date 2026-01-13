@@ -100,10 +100,31 @@ const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
   { id: 'glossary', label: '용어', icon: <BookOpen className="w-4 h-4" /> },
 ];
 
+const TAB_STORAGE_KEY = 'active-tab';
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>('mtf');
   const [alertEnabled, setAlertEnabled] = useState(true);
+  const [isTabLoaded, setIsTabLoaded] = useState(false);
   const btcPrice = useBTCPrice();
+
+  // localStorage에서 탭 상태 복원
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedTab = localStorage.getItem(TAB_STORAGE_KEY) as TabType | null;
+      if (savedTab && ['chart', 'mtf', 'glossary'].includes(savedTab)) {
+        setActiveTab(savedTab);
+      }
+      setIsTabLoaded(true);
+    }
+  }, []);
+
+  // 탭 변경 시 저장
+  useEffect(() => {
+    if (isTabLoaded && typeof window !== 'undefined') {
+      localStorage.setItem(TAB_STORAGE_KEY, activeTab);
+    }
+  }, [activeTab, isTabLoaded]);
   const alertHistory = useAlertHistory({ enabled: alertEnabled });
 
   // 알림 발생 시 히스토리에 추가
@@ -175,23 +196,27 @@ export default function Home() {
       {/* 탭 네비게이션 - 상단 고정 */}
       <div className='sticky top-0 z-50 backdrop-blur-xl bg-[#0a0a0a]/80 border-b border-white/10'>
         <div className='flex items-center justify-between p-2'>
-          {/* 실시간 BTC 가격 - 좌측 */}
-          {btcPrice && (
-            <div className='flex items-center gap-2 px-3'>
-              <span className='w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center flex-shrink-0'>
-                <Bitcoin className='w-3.5 h-3.5 text-black' strokeWidth={2.5} />
-              </span>
-              <span className='text-xs text-gray-400 font-medium leading-none'>BTC/USDT</span>
-              <span className='text-lg font-bold font-mono text-white'>
-                <AnimatedPrice value={btcPrice.price} />
-              </span>
-              {btcPrice.changePercent24h !== 0 && (
-                <span className={`text-xs font-mono px-1.5 py-0.5 rounded transition-all duration-300 ${btcPrice.changePercent24h >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                  {btcPrice.changePercent24h >= 0 ? '+' : ''}{btcPrice.changePercent24h.toFixed(2)}%
+          {/* 실시간 BTC 가격 - 좌측 (로딩 시 플레이스홀더) */}
+          <div className='flex items-center gap-2 px-3 min-w-[200px]'>
+            <span className='w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center flex-shrink-0'>
+              <Bitcoin className='w-3.5 h-3.5 text-black' strokeWidth={2.5} />
+            </span>
+            <span className='text-xs text-gray-400 font-medium leading-none'>BTC/USDT</span>
+            {btcPrice ? (
+              <>
+                <span className='text-lg font-bold font-mono text-white'>
+                  <AnimatedPrice value={btcPrice.price} />
                 </span>
-              )}
-            </div>
-          )}
+                {btcPrice.changePercent24h !== 0 && (
+                  <span className={`text-xs font-mono px-1.5 py-0.5 rounded transition-all duration-300 ${btcPrice.changePercent24h >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                    {btcPrice.changePercent24h >= 0 ? '+' : ''}{btcPrice.changePercent24h.toFixed(2)}%
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className='text-lg font-mono text-gray-500 animate-pulse'>$---,---</span>
+            )}
+          </div>
           {/* 탭 메뉴 + 알림 버튼 - 우측 */}
           <div className='flex items-center gap-1'>
             {tabs.map((tab) => (
@@ -228,9 +253,13 @@ export default function Home() {
 
       {/* 메인 콘텐츠 */}
       <div className='relative z-10 p-4 md:p-8'>
-        {/* 차트 탭 */}
+        {/* 차트 탭 - 모든 타임프레임 그리드 */}
         {activeTab === 'chart' && (
-          <ChartAdapter symbol='BTC/USDT' initialTimeframe='5m' limit={1000} />
+          <div className='grid grid-cols-2 md:grid-cols-3 grid-rows-2 gap-2 h-[calc(100vh-120px)]'>
+            {['5m', '15m', '30m', '1h', '4h', '1d'].map((tf) => (
+              <ChartAdapter key={tf} symbol='BTC/USDT' initialTimeframe={tf} limit={500} mini />
+            ))}
+          </div>
         )}
 
         {/* MTF 탭 */}

@@ -16,6 +16,14 @@ import {
   ConsolidationZone,
 } from '@/lib/types/index';
 
+// 중복 타임스탬프 제거 유틸리티 (lightweight-charts 요구사항)
+function dedupeByTime<T extends { time: Time }>(data: T[]): T[] {
+  return data.filter((item, index, arr) => {
+    if (index === 0) return true;
+    return item.time !== arr[index - 1].time;
+  });
+}
+
 /**
  * RSI 지표를 차트에 추가합니다
  * @param chart - lightweight-charts 인스턴스
@@ -48,7 +56,7 @@ export function addRsiIndicator(
     paneIndex,
   );
 
-  rsiSeries.setData(rsiData);
+  rsiSeries.setData(dedupeByTime(rsiData));
 
   // RSI 패널 스케일 설정
   rsiSeries.priceScale().applyOptions({
@@ -88,7 +96,7 @@ export function addObvIndicator(
     paneIndex,
   );
 
-  obvSeries.setData(obvData);
+  obvSeries.setData(dedupeByTime(obvData));
 
   // OBV 패널 스케일 설정 (1:1:1 비율을 위해 여백 최소화)
   obvSeries.priceScale().applyOptions({
@@ -128,7 +136,7 @@ export function addCvdIndicator(
     paneIndex,
   );
 
-  cvdSeries.setData(cvdData);
+  cvdSeries.setData(dedupeByTime(cvdData));
 
   // CVD 패널 스케일 설정
   cvdSeries.priceScale().applyOptions({
@@ -169,7 +177,7 @@ export function addAtrIndicator(
     paneIndex,
   );
 
-  atrSeries.setData(atrData);
+  atrSeries.setData(dedupeByTime(atrData));
 
   // ATR 패널 스케일 설정
   atrSeries.priceScale().applyOptions({
@@ -210,7 +218,7 @@ export function addOiIndicator(
     paneIndex,
   );
 
-  oiSeries.setData(oiData);
+  oiSeries.setData(dedupeByTime(oiData));
 
   // OI 패널 스케일 설정
   oiSeries.priceScale().applyOptions({
@@ -294,7 +302,7 @@ export function addEmaIndicators(
     },
     0, // 메인 패널
   );
-  ema20Series.setData(ema20LineData);
+  ema20Series.setData(dedupeByTime(ema20LineData));
 
   // EMA 50 시리즈 추가 (파란색 - 중간 속도, 중간 두께)
   const ema50Series = chart.addSeries(
@@ -307,7 +315,7 @@ export function addEmaIndicators(
     },
     0, // 메인 패널
   );
-  ema50Series.setData(ema50LineData);
+  ema50Series.setData(dedupeByTime(ema50LineData));
 
   // EMA 200 시리즈 추가 (초록색 - 가장 느린 이평선, 가장 두꺼움)
   const ema200Series = chart.addSeries(
@@ -320,7 +328,7 @@ export function addEmaIndicators(
     },
     0, // 메인 패널
   );
-  ema200Series.setData(ema200LineData);
+  ema200Series.setData(dedupeByTime(ema200LineData));
 
   return {
     ema20: ema20Series,

@@ -31,6 +31,7 @@ interface ChartAdapterProps {
   symbol?: string;
   initialTimeframe?: string;
   limit?: number;
+  mini?: boolean; // 헤더 없이 작은 차트만 표시
 }
 
 const TIMEFRAMES = [
@@ -46,6 +47,7 @@ export default function ChartAdapter({
   symbol = 'BTC/USDT',
   initialTimeframe = '5m',
   limit = 1000,
+  mini = false,
 }: ChartAdapterProps) {
   const [selectedTimeframe, setSelectedTimeframe] = useState(initialTimeframe);
 
@@ -332,33 +334,35 @@ export default function ChartAdapter({
     (signal) => signal.phase === 'start' && signal.direction === 'bearish',
   ).length;
 
-  // 스켈레톤 로딩 UI
+  // 스켈레톤 로딩 UI (미니 모드 대응)
   const ChartSkeleton = () => (
-    <div className='backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl'>
-      {/* 헤더 스켈레톤 */}
-      <div className='flex items-center gap-3 mb-4'>
-        <div className='w-10 h-10 rounded-full bg-white/10 animate-pulse' />
-        <div className='space-y-2'>
-          <div className='w-24 h-4 bg-white/10 rounded animate-pulse' />
-          <div className='w-16 h-3 bg-white/10 rounded animate-pulse' />
+    <div className={`backdrop-blur-xl bg-white/5 border border-white/10 shadow-2xl ${mini ? 'rounded-xl p-2 h-full' : 'rounded-2xl p-6'}`}>
+      {/* 헤더 스켈레톤 (미니 모드에서는 숨김) */}
+      {!mini && (
+        <div className='flex items-center gap-3 mb-4'>
+          <div className='w-10 h-10 rounded-full bg-white/10 animate-pulse' />
+          <div className='space-y-2'>
+            <div className='w-24 h-4 bg-white/10 rounded animate-pulse' />
+            <div className='w-16 h-3 bg-white/10 rounded animate-pulse' />
+          </div>
+          <div className='ml-auto flex gap-2'>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className='w-10 h-6 bg-white/10 rounded animate-pulse'
+              />
+            ))}
+          </div>
         </div>
-        <div className='ml-auto flex gap-2'>
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div
-              key={i}
-              className='w-10 h-6 bg-white/10 rounded animate-pulse'
-            />
-          ))}
-        </div>
-      </div>
+      )}
       {/* 차트 스켈레톤 */}
-      <div className='h-[700px] bg-white/5 rounded-xl overflow-hidden relative'>
+      <div className={`bg-white/5 rounded-xl overflow-hidden relative ${mini ? 'h-full' : 'h-[700px]'}`}>
         <div className='absolute inset-0 flex items-end justify-around px-4 pb-8'>
           {/* 고정된 높이 패턴 (hydration 에러 방지) */}
-          {[45, 62, 38, 71, 55, 33, 68, 42, 58, 75, 48, 35, 65, 52, 40, 72, 56, 30, 63, 47].map((h, i) => (
+          {(mini ? [45, 62, 38, 71, 55, 33, 68, 42] : [45, 62, 38, 71, 55, 33, 68, 42, 58, 75, 48, 35, 65, 52, 40, 72, 56, 30, 63, 47]).map((h, i) => (
             <div
               key={i}
-              className='w-2 bg-white/10 rounded-sm animate-pulse'
+              className={`bg-white/10 rounded-sm animate-pulse ${mini ? 'w-1' : 'w-2'}`}
               style={{
                 height: `${h}%`,
                 animationDelay: `${i * 100}ms`,
@@ -368,8 +372,8 @@ export default function ChartAdapter({
         </div>
         <div className='absolute inset-0 flex items-center justify-center'>
           <div className='text-center'>
-            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-orange-400 mx-auto mb-3' />
-            <p className='text-gray-400 text-sm'>차트 로딩 중...</p>
+            <div className={`animate-spin rounded-full border-b-2 border-blue-400 mx-auto ${mini ? 'h-5 w-5 mb-1' : 'h-8 w-8 mb-3'}`} />
+            {!mini && <p className='text-gray-400 text-sm'>차트 로딩 중...</p>}
           </div>
         </div>
       </div>
@@ -403,10 +407,47 @@ export default function ChartAdapter({
   // 데이터 없음 상태 처리 (훅 호출 이후에 배치)
   if (!data?.success || !data?.data?.candles) {
     return (
-      <div className='backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl'>
-        <div className='h-[700px] flex items-center justify-center'>
-          <p className='text-gray-300'>데이터가 없습니다</p>
+      <div className={`backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl ${mini ? 'p-2' : 'p-6'}`}>
+        <div className={`${mini ? 'h-[200px]' : 'h-[700px]'} flex items-center justify-center`}>
+          <p className='text-gray-500 text-xs'>데이터 없음</p>
         </div>
+      </div>
+    );
+  }
+
+  // 미니 모드: 헤더 없이 차트만 표시
+  if (mini) {
+    return (
+      <div className='relative bg-white/[0.02] border border-white/10 rounded-xl overflow-hidden h-full'>
+        {/* 타임프레임 라벨 */}
+        <div className='absolute top-2 left-2 z-10 px-2 py-0.5 bg-black/50 rounded text-xs font-bold text-white'>
+          {TIMEFRAMES.find(tf => tf.value === selectedTimeframe)?.label || selectedTimeframe}
+        </div>
+        <ChartRenderer
+          data={chartData}
+          rsiData={rsiData}
+          obvData={obvData}
+          cvdData={cvdData}
+          oiData={oiData}
+          emaData={emaData}
+          divergenceSignals={divergenceSignals}
+          trendAnalysis={trendAnalysis}
+          crossoverEvents={crossoverEvents}
+          marketSignals={marketSignals}
+          timeframe={selectedTimeframe}
+          realtimeCandle={realtimeCandle}
+          longShortRatio={longShortRatio}
+          volumeProfile={volumeProfile}
+          consolidationData={consolidationData}
+          vwapAtrData={vwapAtrData}
+          orderBlockData={orderBlockData}
+          orderBookData={orderBookData}
+          liquidationData={liquidationData}
+          whaleData={whaleData}
+          marketStructureData={marketStructureData}
+          adxData={adxData}
+          mini={true}
+        />
       </div>
     );
   }

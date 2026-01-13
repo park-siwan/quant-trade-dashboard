@@ -66,24 +66,55 @@ export function useAlertHistory(options: UseAlertHistoryOptions = {}) {
     }
   }, [alerts]);
 
-  // 알림 추가
+  // 탭 간 동기화 (storage 이벤트 리스너)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        try {
+          const newAlerts: AlertItem[] = JSON.parse(e.newValue);
+          // 24시간 지난 알림 필터링
+          const now = Date.now();
+          const filtered = newAlerts.filter(a => now - a.timestamp < ALERT_EXPIRY_MS);
+          setAlerts(filtered);
+        } catch {
+          // 파싱 에러 무시
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // 알림 추가 (중복 방지)
   const addAlert = useCallback((
     type: AlertItem['type'],
     direction: AlertItem['direction'],
     message: string,
     extra?: { timeframe?: string; score?: number; riskReward?: number }
   ) => {
-    const newAlert: AlertItem = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      type,
-      direction,
-      message,
-      timestamp: Date.now(),
-      read: false,
-      ...extra,
-    };
+    const now = Date.now();
 
     setAlerts(prev => {
+      // 중복 체크: 같은 메시지가 30초 이내에 있으면 추가하지 않음
+      const isDuplicate = prev.some(a =>
+        a.message === message && now - a.timestamp < 30000
+      );
+      if (isDuplicate) {
+        console.log('[AlertHistory] 중복 알림 무시:', message);
+        return prev;
+      }
+
+      const newAlert: AlertItem = {
+        id: `${now}-${Math.random().toString(36).substr(2, 9)}`,
+        type,
+        direction,
+        message,
+        timestamp: now,
+        read: false,
+        ...extra,
+      };
+
       const updated = [newAlert, ...prev];
       // 최대 개수 제한
       return updated.slice(0, maxAlerts);

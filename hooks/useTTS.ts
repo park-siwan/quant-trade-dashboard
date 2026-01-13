@@ -79,6 +79,45 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// 탭 간 소리 중복 방지용 키
+const TTS_PLAYED_KEY = 'tts-last-played';
+
+// 소리가 최근에 재생되었는지 확인 (탭 간 동기화)
+function canPlaySound(soundKey: string): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const stored = localStorage.getItem(TTS_PLAYED_KEY);
+    if (!stored) return true;
+    const data = JSON.parse(stored);
+    const lastPlayed = data[soundKey];
+    // 3초 이내에 같은 소리가 재생되었으면 false
+    if (lastPlayed && Date.now() - lastPlayed < 3000) {
+      return false;
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+// 소리 재생 기록 저장
+function markSoundPlayed(soundKey: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const stored = localStorage.getItem(TTS_PLAYED_KEY);
+    const data = stored ? JSON.parse(stored) : {};
+    data[soundKey] = Date.now();
+    // 오래된 기록 정리 (10초 이상 지난 것)
+    const now = Date.now();
+    for (const key of Object.keys(data)) {
+      if (now - data[key] > 10000) delete data[key];
+    }
+    localStorage.setItem(TTS_PLAYED_KEY, JSON.stringify(data));
+  } catch {
+    // 에러 무시
+  }
+}
+
 export function useTTS(options: TTSOptions = {}) {
   const { enabled = true } = options;
   const [isPlaying, setIsPlaying] = useState(false);
@@ -165,9 +204,16 @@ export function useTTS(options: TTSOptions = {}) {
     isProcessingRef.current = false;
   }, [playSequence]);
 
-  // 큐에 추가
+  // 큐에 추가 (탭 간 중복 방지)
   const enqueue = useCallback((files: string[]) => {
     if (!enabled) return;
+
+    // 탭 간 중복 방지: 같은 소리가 다른 탭에서 최근에 재생되었는지 확인
+    const soundKey = files.join('_');
+    if (!canPlaySound(soundKey)) {
+      console.log('[TTS] 다른 탭에서 이미 재생됨, 스킵:', soundKey);
+      return;
+    }
 
     // 오디오가 아직 잠금 해제되지 않았으면 대기열에 추가 (최대 1개만 보관)
     if (!hasUserInteraction) {
@@ -177,6 +223,9 @@ export function useTTS(options: TTSOptions = {}) {
       pendingQueueRef.current = [files];
       return;
     }
+
+    // 재생 기록 저장 (다른 탭에서 중복 재생 방지)
+    markSoundPlayed(soundKey);
 
     queueRef.current.push(files);
     processQueue();

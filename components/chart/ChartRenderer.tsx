@@ -9,6 +9,7 @@ import {
   CandlestickData,
   LineData,
   LineSeries,
+  AreaSeries,
   IChartApi,
   ISeriesApi,
   IPriceLine,
@@ -89,6 +90,7 @@ interface ChartRendererProps {
   whaleData?: WhaleSummary | null; // 고래 거래 데이터
   marketStructureData?: MarketStructureData | null; // 시장 구조 (BOS/CHoCH)
   adxData?: AdxData | null; // ADX 추세 강도 데이터
+  mini?: boolean; // 미니 차트 모드
 }
 
 export default function ChartRenderer({
@@ -114,6 +116,7 @@ export default function ChartRenderer({
   whaleData,
   marketStructureData,
   adxData,
+  mini = false,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -140,7 +143,7 @@ export default function ChartRenderer({
     end: { time: number; price: number; x: number; y: number } | null;
   }>({ start: null, end: null });
   const measurePointsRef = useRef(measurePoints); // ref로도 관리하여 closure 문제 해결
-  const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | ISeriesApi<'Line'> | ISeriesApi<'Area'> | null>(null);
   const isFirstRenderRef = useRef(true); // 첫 렌더링인지 추적
   const savedVisibleLogicalRangeRef = useRef<{
     from: number;
@@ -225,11 +228,19 @@ export default function ChartRenderer({
     if (!chartContainerRef.current) return;
 
     // 차트 생성 (패널 개수에 따라 높이 조정)
-    const hasOi = oiData && oiData.length > 0;
-    const hasAtr = vwapAtrData?.atr && vwapAtrData.atr.length > 0;
-    const panelCount = 1 + (hasOi ? 1 : 0) + (hasAtr ? 1 : 0); // 메인 + OI + ATR
-    const panelHeight = 320; // 각 패널당 높이 (더 큰 차트)
-    const chartHeight = panelCount * panelHeight;
+    // 미니 모드에서는 OI/ATR 패널 숨김
+    const hasOi = mini ? false : (oiData && oiData.length > 0);
+    const hasAtr = mini ? false : (vwapAtrData?.atr && vwapAtrData.atr.length > 0);
+
+    // 미니 모드: 컨테이너 높이 사용, 일반 모드: 패널별 고정 높이
+    let chartHeight: number;
+    if (mini) {
+      chartHeight = chartContainerRef.current.clientHeight || 200;
+    } else {
+      const panelCount = 1 + (hasOi ? 1 : 0) + (hasAtr ? 1 : 0); // 메인 + OI + ATR
+      const panelHeight = 320; // 각 패널당 높이 (더 큰 차트)
+      chartHeight = panelCount * panelHeight;
+    }
 
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
@@ -237,6 +248,7 @@ export default function ChartRenderer({
       layout: {
         background: { type: ColorType.Solid, color: '#0c0908' }, // 따뜻한 블랙
         textColor: '#d1d5db',
+        fontSize: mini ? 9 : 12, // 미니 모드에서 작은 글자
         panes: {
           separatorColor: 'rgba(255, 255, 255, 0.3)', // 연한 회색 구분선
           separatorHoverColor: 'rgba(255, 255, 255, 0.5)', // 호버 시 더 밝게
@@ -259,9 +271,9 @@ export default function ChartRenderer({
         horzLines: { color: 'rgba(45, 38, 32, 0.25)' },
       },
       timeScale: {
-        timeVisible: true,
+        timeVisible: !mini, // 미니 모드에서 시간 숨김
         secondsVisible: false,
-        rightOffset: 20, // 우측 여백
+        rightOffset: mini ? 60 : 20, // 미니 모드에서 우측 여백 2배 (가격칩 공간 확보)
         lockVisibleTimeRangeOnResize: true, // 리사이즈 시 시간 범위 유지
       },
       kineticScroll: {
@@ -271,11 +283,12 @@ export default function ChartRenderer({
       rightPriceScale: {
         borderVisible: false,
         scaleMargins: {
-          top: 0.1,
-          bottom: 0.1,
+          top: mini ? 0.02 : 0.1,
+          bottom: mini ? 0.02 : 0.1,
         },
         autoScale: true, // 자동 스케일 활성화
         mode: 0, // Normal price scale mode
+        minimumWidth: mini ? 50 : 80, // 미니 모드에서 가격축 너비 축소
       },
       localization: {
         timeFormatter: (time: number) => {
@@ -297,44 +310,88 @@ export default function ChartRenderer({
     // 차트 참조 저장
     chartRef.current = chart;
 
-    // 캔들스틱 시리즈 추가 (메인 패널 - paneIndex: 0)
-    const candlestickSeries = chart.addSeries(
-      CandlestickSeries,
-      {
-        upColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록색 캔들 (green-500)
-        downColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨간색 캔들 (red-500)
-        borderUpColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록색 테두리
-        borderDownColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨간색 테두리
-        wickUpColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록색 꼬리
-        wickDownColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨간색 꼬리
-      },
-      0,
-    );
-
-    // 최근 60개 캔들은 투명도 없이, 나머지는 CANDLE_OPACITY로 표시
-    const recentThreshold = data.length - 60;
-    const RECENT_OPACITY = 1.0; // 최근 캔들 투명도 (완전 불투명)
-    const candleDataWithColors = data.map((candle, index) => {
-      const isRecent = index >= recentThreshold;
-      const opacity = isRecent ? RECENT_OPACITY : CANDLE_OPACITY;
-      const isUp = candle.close >= candle.open;
-
-      return {
-        ...candle,
-        color: isUp
-          ? `rgba(34, 197, 94, ${opacity})` // 초록색
-          : `rgba(239, 68, 68, ${opacity})`, // 빨간색
-        borderColor: isUp
-          ? `rgba(34, 197, 94, ${opacity})`
-          : `rgba(239, 68, 68, ${opacity})`,
-        wickColor: isUp
-          ? `rgba(34, 197, 94, ${opacity})`
-          : `rgba(239, 68, 68, ${opacity})`,
-      };
+    // 중복 타임스탬프 제거 (lightweight-charts 요구사항: 시간 오름차순, 중복 불가)
+    const uniqueData = data.filter((candle, index, arr) => {
+      if (index === 0) return true;
+      return candle.time !== arr[index - 1].time;
     });
 
-    candlestickSeries.setData(candleDataWithColors);
-    candlestickSeriesRef.current = candlestickSeries;
+    // 미니 모드: 영역 차트 (그라데이션 채우기)
+    // 일반 모드: 캔들스틱 차트
+    if (mini) {
+      // 영역 시리즈 추가 (하단 그라데이션 채우기)
+      const areaSeries = chart.addSeries(
+        AreaSeries,
+        {
+          lineColor: '#3b82f6', // blue-500 (투명도 없음)
+          lineWidth: 2,
+          topColor: 'rgba(59, 130, 246, 0.4)', // 상단 그라데이션 (진한 파랑)
+          bottomColor: 'rgba(59, 130, 246, 0.02)', // 하단 그라데이션 (거의 투명)
+          crosshairMarkerVisible: true,
+          crosshairMarkerRadius: 4,
+          crosshairMarkerBorderColor: '#ffffff',
+          crosshairMarkerBackgroundColor: '#3b82f6',
+          lastValueVisible: true,
+          priceLineVisible: false,
+        },
+        0,
+      );
+
+      // 종가 데이터로 변환
+      const lineData: LineData[] = uniqueData.map(candle => ({
+        time: candle.time,
+        value: candle.close,
+      }));
+
+      areaSeries.setData(lineData);
+      candlestickSeriesRef.current = areaSeries;
+    } else {
+      // 캔들스틱 시리즈 추가 (메인 패널 - paneIndex: 0)
+      const candlestickSeries = chart.addSeries(
+        CandlestickSeries,
+        {
+          upColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록색 캔들 (green-500)
+          downColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨간색 캔들 (red-500)
+          borderUpColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록색 테두리
+          borderDownColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨간색 테두리
+          wickUpColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록색 꼬리
+          wickDownColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨간색 꼬리
+        },
+        0,
+      );
+
+      // 최근 60개 캔들은 투명도 없이, 나머지는 CANDLE_OPACITY로 표시
+      const recentThreshold = uniqueData.length - 60;
+      const RECENT_OPACITY = 1.0; // 최근 캔들 투명도 (완전 불투명)
+      const candleDataWithColors = uniqueData.map((candle, index) => {
+        const isRecent = index >= recentThreshold;
+        const opacity = isRecent ? RECENT_OPACITY : CANDLE_OPACITY;
+        const isUp = candle.close >= candle.open;
+
+        return {
+          ...candle,
+          color: isUp
+            ? `rgba(34, 197, 94, ${opacity})` // 초록색
+            : `rgba(239, 68, 68, ${opacity})`, // 빨간색
+          borderColor: isUp
+            ? `rgba(34, 197, 94, ${opacity})`
+            : `rgba(239, 68, 68, ${opacity})`,
+          wickColor: isUp
+            ? `rgba(34, 197, 94, ${opacity})`
+            : `rgba(239, 68, 68, ${opacity})`,
+        };
+      });
+
+      candlestickSeries.setData(candleDataWithColors);
+      candlestickSeriesRef.current = candlestickSeries;
+    }
+
+    // 미니 모드: 전체 데이터가 보이도록 축소 (트레이딩뷰 'A' 버튼처럼)
+    if (mini) {
+      chart.timeScale().fitContent();
+      // 가격 스케일도 자동 맞춤
+      chart.priceScale('right').applyOptions({ autoScale: true });
+    }
 
     // 초기 가격 정보 설정 (최신 캔들)
     if (data.length > 0) {
@@ -377,27 +434,22 @@ export default function ChartRenderer({
     const cvdSeries = null;
     const cvdPaneIndex = 0;
 
-    // OI 지표 추가
+    // OI 지표 추가 (미니 모드에서는 숨김)
     let oiSeries = null;
     let oiPaneIndex = 0;
-    if (oiData && oiData.length > 0) {
+    if (hasOi) {
       oiPaneIndex = currentPaneIndex++;
-      oiSeries = addOiIndicator(chart, oiData, oiPaneIndex);
+      oiSeries = addOiIndicator(chart, oiData!, oiPaneIndex);
     }
 
-    // ATR 지표 추가
+    // ATR 지표 추가 (미니 모드에서는 숨김)
     let atrSeries = null;
     let atrPaneIndex = 0;
-    console.log('🔍 ATR 데이터 확인:', {
-      hasVwapAtrData: !!vwapAtrData,
-      atrLength: vwapAtrData?.atr?.length,
-      atrSample: vwapAtrData?.atr?.slice(-5),
-    });
-    if (vwapAtrData?.atr && vwapAtrData.atr.length > 0) {
+    if (hasAtr) {
       atrPaneIndex = currentPaneIndex++;
       // ATR 데이터를 LineData 형식으로 변환
       const atrLineData: LineData[] = [];
-      vwapAtrData.atr.forEach((atrValue, index) => {
+      vwapAtrData!.atr!.forEach((atrValue, index) => {
         if (atrValue !== null && data[index]) {
           atrLineData.push({
             time: data[index].time,
@@ -405,12 +457,14 @@ export default function ChartRenderer({
           });
         }
       });
-      console.log('✅ ATR 패널 추가:', { paneIndex: atrPaneIndex, dataCount: atrLineData.length });
       atrSeries = addAtrIndicator(chart, atrLineData, atrPaneIndex);
     }
 
+    // 메인 시리즈 참조 (candlestick 또는 line)
+    const mainSeries = candlestickSeriesRef.current;
+
     // 다이버전스 선 추가
-    if (divergenceSignals && divergenceSignals.length > 0) {
+    if (divergenceSignals && divergenceSignals.length > 0 && mainSeries) {
       // 캔들 데이터에서 시간, 고가, 저가 추출
       const candleData = data.map((candle) => ({
         time: candle.time as number,
@@ -420,7 +474,7 @@ export default function ChartRenderer({
 
       addDivergenceLines(
         chart,
-        candlestickSeries,
+        mainSeries as any,
         rsiSeries,
         obvSeries,
         cvdSeries,
@@ -440,9 +494,9 @@ export default function ChartRenderer({
       );
     }
 
-    // 크로스오버 마커 추가
-    if (crossoverEvents && crossoverEvents.length > 0) {
-      addCrossoverMarkers(candlestickSeries, crossoverEvents);
+    // 크로스오버 마커 추가 (미니 모드에서는 스킵)
+    if (crossoverEvents && crossoverEvents.length > 0 && mainSeries && !mini) {
+      addCrossoverMarkers(mainSeries as any, crossoverEvents);
     }
 
     // CVD + OI 신호 마커 - 커스텀 오버레이 방식으로 변경 (아래 JSX에서 처리)
@@ -452,9 +506,9 @@ export default function ChartRenderer({
 
     // Volume Profile 라인 (목표가, 상단저항, 하단지지) - Y축 라벨만, 가로선은 DOM으로 렌더링
     volumeProfileLinesRef.current = []; // 초기화
-    if (volumeProfile) {
+    if (volumeProfile && mainSeries) {
       // 목표가 (POC) - 가장 많이 거래된 가격
-      const pocLine = candlestickSeries.createPriceLine({
+      const pocLine = mainSeries.createPriceLine({
         price: volumeProfile.poc,
         color: 'rgba(250, 204, 21, 0.9)',
         lineWidth: 2,
@@ -469,7 +523,7 @@ export default function ChartRenderer({
       // 가로선은 DOM으로 렌더링 (createLimitedPriceLine 제거)
 
       // 상단 (VAH) - 빨간색 (숏)
-      const vahLine = candlestickSeries.createPriceLine({
+      const vahLine = mainSeries.createPriceLine({
         price: volumeProfile.vah,
         color: 'rgba(239, 68, 68, 0.7)',
         lineWidth: 1,
@@ -483,7 +537,7 @@ export default function ChartRenderer({
       volumeProfileLinesRef.current.push(vahLine);
 
       // 하단 (VAL) - 초록색 (롱)
-      const valLine = candlestickSeries.createPriceLine({
+      const valLine = mainSeries.createPriceLine({
         price: volumeProfile.val,
         color: 'rgba(34, 197, 94, 0.7)',
         lineWidth: 1,
@@ -498,8 +552,8 @@ export default function ChartRenderer({
     }
 
     // VWAP 라인 표시 (기관 트레이딩 기준선) - Y축 라벨만, 가로선은 DOM으로 렌더링
-    if (vwapAtrData && vwapAtrData.currentVwap > 0) {
-      candlestickSeries.createPriceLine({
+    if (vwapAtrData && vwapAtrData.currentVwap > 0 && mainSeries) {
+      mainSeries.createPriceLine({
         price: vwapAtrData.currentVwap,
         color: 'rgba(168, 85, 247, 0.9)',
         lineWidth: 2,
@@ -514,9 +568,9 @@ export default function ChartRenderer({
     }
 
     // ATR 기반 변동폭 라인 표시 - Y축 라벨만, 가로선은 DOM으로 렌더링
-    if (vwapAtrData?.suggestedStopLoss) {
+    if (vwapAtrData?.suggestedStopLoss && mainSeries) {
       // 하단 (현재가 - 2*ATR) = 롱 진입 유리 구간 (초록색)
-      candlestickSeries.createPriceLine({
+      mainSeries.createPriceLine({
         price: vwapAtrData.suggestedStopLoss.long,
         color: 'rgba(34, 197, 94, 0.6)',
         lineWidth: 1,
@@ -530,7 +584,7 @@ export default function ChartRenderer({
       // 가로선은 DOM으로 렌더링 (priceLines state)
 
       // 상단 (현재가 + 2*ATR) = 숏 진입 유리 구간 (빨간색)
-      candlestickSeries.createPriceLine({
+      mainSeries.createPriceLine({
         price: vwapAtrData.suggestedStopLoss.short,
         color: 'rgba(239, 68, 68, 0.6)',
         lineWidth: 1,
@@ -545,7 +599,7 @@ export default function ChartRenderer({
     }
 
     // 오더블록 표시 (현재가 근처 최대 3개만) - Y축 라벨만, 가로선은 DOM으로 렌더링
-    if (orderBlockData?.activeBlocks && orderBlockData.activeBlocks.length > 0) {
+    if (orderBlockData?.activeBlocks && orderBlockData.activeBlocks.length > 0 && mainSeries) {
       const currentPrice = data[data.length - 1]?.close || 0;
 
       orderBlockData.activeBlocks.forEach((block) => {
@@ -556,7 +610,7 @@ export default function ChartRenderer({
           ? 'rgba(34, 197, 94, 0.8)'
           : 'rgba(239, 68, 68, 0.8)';
 
-        candlestickSeries.createPriceLine({
+        mainSeries.createPriceLine({
           price: midPrice,
           color: color,
           lineWidth: 2,
@@ -598,11 +652,11 @@ export default function ChartRenderer({
           const currentY = param.point.y;
 
           const currentTime = chart.timeScale().coordinateToTime(currentX);
-          const currentPrice = candlestickSeries.coordinateToPrice(currentY);
+          const currentPrice = mainSeries?.coordinateToPrice(currentY);
 
           if (currentTime !== null && currentPrice !== null) {
             const startX = chart.timeScale().timeToCoordinate(currentMeasurePoints.start.time as any);
-            const startY = candlestickSeries.priceToCoordinate(currentMeasurePoints.start.price);
+            const startY = mainSeries?.priceToCoordinate(currentMeasurePoints.start.price);
 
             if (startX !== null && startY !== null) {
               const left = Math.min(startX, currentX);
@@ -672,8 +726,8 @@ export default function ChartRenderer({
         let marketSignalInfo: MarketSignal | null = null;
 
         // 가격 정보 가져오기 (헤더 표시용)
-        if (param.seriesData.has(candlestickSeries)) {
-          const candleData = param.seriesData.get(candlestickSeries);
+        if (mainSeries && param.seriesData.has(mainSeries)) {
+          const candleData = param.seriesData.get(mainSeries);
           if (candleData && 'open' in candleData && 'close' in candleData) {
             const open = candleData.open;
             const high = candleData.high;
@@ -839,8 +893,8 @@ export default function ChartRenderer({
         if (currentTime === null) return prev;
 
         // Y 좌표를 가격으로 변환 (허공에서도 측정 가능)
-        const currentPrice = candlestickSeries.coordinateToPrice(clickY);
-        if (currentPrice === null) return prev;
+        const currentPrice = mainSeries?.coordinateToPrice(clickY);
+        if (currentPrice === null || currentPrice === undefined) return prev;
 
         if (!prev.start) {
           // 첫 번째 클릭: 시작점 설정
@@ -912,6 +966,7 @@ export default function ChartRenderer({
     vwapAtrData?.currentVwap, // VWAP 변경 시 재렌더링
     vwapAtrData?.atr?.length, // ATR 변경 시 재렌더링
     orderBlockData?.activeBlocks?.length, // 오더블록 변경 시 재렌더링
+    mini, // 미니 모드 변경 시 재렌더링
   ]);
 
   // Volume Profile 라인 토글 (차트 재생성 없이 Y축 라벨만 숨김/표시)
@@ -970,6 +1025,9 @@ export default function ChartRenderer({
     label: string;
     color: string;
   }>>([]);
+
+  // 마지막 점 좌표 (미니 모드 글로우 점용)
+  const [lastPointCoord, setLastPointCoord] = useState<{ x: number; y: number } | null>(null);
 
   // 측정 박스를 위한 상태 (화면 좌표)
   const [measureBox, setMeasureBox] = useState<{
@@ -1336,10 +1394,35 @@ export default function ChartRenderer({
     return () => cancelAnimationFrame(rafId);
   }, [scaleUpdateTrigger, volumeProfile, vwapAtrData, showVolumeProfile, data, orderBlockData]);
 
-  return (
-    <div className='w-full'>
+  // 마지막 점 좌표 계산 (미니 모드 글로우 점용)
+  useEffect(() => {
+    if (!mini || !chartRef.current || !candlestickSeriesRef.current || data.length === 0) {
+      setLastPointCoord(null);
+      return;
+    }
 
-      {/* 추세 지표 Row - EMA, 크로스, 펀비, 목표가 */}
+    const updateLastPoint = () => {
+      if (!chartRef.current || !candlestickSeriesRef.current) return;
+
+      const lastCandle = data[data.length - 1];
+      const x = chartRef.current!.timeScale().timeToCoordinate(lastCandle.time);
+      const y = candlestickSeriesRef.current!.priceToCoordinate(lastCandle.close);
+
+      if (x !== null && y !== null) {
+        setLastPointCoord({ x, y });
+      }
+    };
+
+    const rafId = requestAnimationFrame(updateLastPoint);
+    return () => cancelAnimationFrame(rafId);
+  }, [mini, scaleUpdateTrigger, data]);
+
+  return (
+    <div className='w-full' style={mini ? { height: '100%' } : undefined}>
+
+      {/* 추세/역추세 지표 Rows (미니 모드에서 숨김) */}
+      {!mini && (
+      <>
       <div className='flex items-center justify-between mb-2 backdrop-blur-md bg-black/40 px-3 py-2 rounded-lg border border-cyan-500/20'>
         <div className='flex items-center gap-3'>
           <span className='text-cyan-400 text-xs font-bold border border-cyan-400/50 px-1.5 py-0.5 rounded'>추세</span>
@@ -1582,15 +1665,18 @@ export default function ChartRenderer({
           );
         })()}
       </div>
+      </>
+      )}
 
       {/* 차트 컨테이너 */}
-      <div className='relative'>
+      <div className='relative' style={mini ? { height: '100%' } : undefined}>
       <div
         ref={chartContainerRef}
         className='rounded-xl overflow-hidden shadow-inner'
-        style={{ position: 'relative' }}
+        style={mini ? { position: 'relative', height: '100%' } : { position: 'relative' }}
       >
-        {/* 차트 정보 오버레이 (왼쪽 상단) - 시간 범위, 가격, 변화율 */}
+        {/* 차트 정보 오버레이 (왼쪽 상단) - 시간 범위, 가격, 변화율 (미니 모드에서 숨김) */}
+        {!mini && (
         <div className='absolute top-2 left-2 z-10 backdrop-blur-md bg-black/40 px-2 py-1 rounded-lg text-xs font-mono border border-white/10 flex items-center gap-3'>
           {/* 시간 범위 (visible range 기반) */}
           <span className='text-gray-300'>
@@ -1609,6 +1695,7 @@ export default function ChartRenderer({
             </>
           )}
         </div>
+        )}
 
         {/* 측정 박스 오버레이 (트레이딩뷰 스타일) */}
         {measureBox && (() => {
@@ -1762,105 +1849,42 @@ export default function ChartRenderer({
           </div>
         ))}
 
-        {/* CVD+OI 신호 마커 (세련된 칩 스타일) */}
-        {signalMarkers.map((marker, index) => (
-          <div
-            key={`signal-${index}`}
-            style={{
-              position: 'absolute',
-              left: `${marker.x}px`,
-              top: `${marker.y}px`,
-              transform: 'translate(-50%, -50%)',
-              pointerEvents: 'none',
-              zIndex: 20,
-              backgroundColor: marker.color,
-              color: '#000',
-              fontSize: '10px',
-              fontWeight: 'bold',
-              padding: '2px 6px',
-              borderRadius: '4px',
-              whiteSpace: 'nowrap',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-            }}
-          >
-            {marker.label}
-          </div>
-        ))}
+        {/* CVD+OI 신호 마커 - 숨김 (매매에 큰 도움 안됨) */}
+        {/* signalMarkers (매수세/매도세) 숨김 */}
 
-        {/* BOS/CHoCH 마커 */}
-        {structureMarkers.map((marker, index) => {
-          // CHoCH 과열 여부에 따른 스타일 결정
-          const isValidChoch = marker.type === 'CHoCH' && marker.isOverheated;
-          const isInvalidChoch = marker.type === 'CHoCH' && !marker.isOverheated;
+        {/* CHoCH 마커만 작게 표시 (BOS 숨김) */}
+        {structureMarkers
+          .filter(marker => marker.type === 'CHoCH')
+          .map((marker, index) => {
+            const isOverheated = marker.isOverheated;
+            const bgColor = marker.direction === 'bullish'
+              ? (isOverheated ? 'rgba(34, 197, 94, 0.8)' : 'rgba(34, 197, 94, 0.4)')
+              : (isOverheated ? 'rgba(239, 68, 68, 0.8)' : 'rgba(239, 68, 68, 0.4)');
 
-          // 과열 CHoCH = 밝고 강조, 비과열 CHoCH = 흐리게
-          const getBackgroundColor = () => {
-            if (marker.type === 'BOS') {
-              return marker.direction === 'bullish'
-                ? 'rgba(34, 197, 94, 0.6)'
-                : 'rgba(239, 68, 68, 0.6)';
-            }
-            if (isValidChoch) {
-              // 과열 CHoCH - 밝고 강조
-              return marker.direction === 'bullish'
-                ? 'rgba(34, 197, 94, 0.95)'
-                : 'rgba(239, 68, 68, 0.95)';
-            }
-            // 비과열 CHoCH - 흐리게 (참고용)
-            return marker.direction === 'bullish'
-              ? 'rgba(34, 197, 94, 0.3)'
-              : 'rgba(239, 68, 68, 0.3)';
-          };
+            return (
+              <div
+                key={`choch-${index}`}
+                style={{
+                  position: 'absolute',
+                  left: `${marker.x}px`,
+                  top: `${marker.y}px`,
+                  transform: 'translate(-50%, -50%)',
+                  pointerEvents: 'none',
+                  zIndex: 18,
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  color: marker.direction === 'bullish' ? '#22c55e' : '#ef4444',
+                  opacity: isOverheated ? 1 : 0.5,
+                  textShadow: isOverheated ? '0 0 6px currentColor' : 'none',
+                }}
+                title={marker.rsiAtBreak ? `RSI: ${marker.rsiAtBreak.toFixed(1)}` : undefined}
+              >
+                {marker.direction === 'bullish' ? '▲' : '▼'}
+              </div>
+            );
+          })}
 
-          return (
-            <div
-              key={`structure-${index}`}
-              style={{
-                position: 'absolute',
-                left: `${marker.x}px`,
-                top: `${marker.y}px`,
-                transform: 'translate(-50%, -50%)',
-                pointerEvents: 'none',
-                zIndex: 18,
-                fontSize: isValidChoch ? '10px' : '8px',
-                fontWeight: 'bold',
-                padding: isValidChoch ? '2px 6px' : '1px 4px',
-                borderRadius: '3px',
-                whiteSpace: 'nowrap',
-                backgroundColor: getBackgroundColor(),
-                color: isInvalidChoch ? 'rgba(0,0,0,0.5)' : '#000',
-                border: isValidChoch ? '2px solid rgba(255,255,255,0.6)' : 'none',
-                boxShadow: isValidChoch ? '0 2px 8px rgba(0,0,0,0.5)' : 'none',
-                opacity: isInvalidChoch ? 0.5 : 1,
-              }}
-              title={marker.rsiAtBreak ? `RSI: ${marker.rsiAtBreak.toFixed(1)}` : undefined}
-            >
-              {marker.type}{marker.direction === 'bullish' ? '↑' : '↓'}
-              {isValidChoch && (
-                <span style={{ fontSize: '8px', marginLeft: '2px' }}>
-                  ★
-                </span>
-              )}
-            </div>
-          );
-        })}
-
-        {/* 가로선 DOM (실시간 업데이트) */}
-        {priceLines.map((line, index) => (
-          <div
-            key={`price-line-${index}`}
-            style={{
-              position: 'absolute',
-              left: `${line.startX}px`,
-              top: `${line.y}px`,
-              right: '80px', // Y축 라벨 영역까지
-              height: '1px',
-              backgroundColor: line.color,
-              pointerEvents: 'none',
-              zIndex: 15,
-            }}
-          />
-        ))}
+{/* 가로선은 overflow-hidden 밖에서 렌더링 (아래에서 처리) */}
 
         {/* 오더북 DOM 스타일 (최신 캔들 우측, 세로 스택) - 임시 비활성화 */}
         {false && orderBookData && chartRef.current && candlestickSeriesRef.current && data.length > 0 && (() => {
@@ -1952,6 +1976,43 @@ export default function ChartRenderer({
         })()}
 
       </div>
+
+      {/* 가로선 DOM (overflow-hidden 밖에서 렌더링) - 우측 끝까지 */}
+      {priceLines.map((line, index) => (
+        <div
+          key={`price-line-${index}`}
+          style={{
+            position: 'absolute',
+            left: `${line.startX}px`,
+            right: mini ? '55px' : '80px', // 가격 레이블 공간 확보
+            top: `${line.y}px`,
+            height: '1px',
+            background: `linear-gradient(to right, ${line.color}, ${line.color.replace(')', ', 0.3)')})`,
+            pointerEvents: 'none',
+            zIndex: 5,
+          }}
+        />
+      ))}
+
+      {/* 미니 모드 글로우 점 (마지막 가격 위치) */}
+      {mini && lastPointCoord && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${lastPointCoord.x}px`,
+            top: `${lastPointCoord.y}px`,
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: 'rgba(59, 130, 246, 1)',
+            boxShadow: '0 0 8px rgba(59, 130, 246, 0.8), 0 0 16px rgba(59, 130, 246, 0.5), 0 0 24px rgba(59, 130, 246, 0.3)',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none',
+            zIndex: 10,
+            animation: 'pulse 2s ease-in-out infinite',
+          }}
+        />
+      )}
 
       {/* 통합 툴팁 (RSI + 필터링 정보 + 크로스오버 + 다이버전스 + CVD+OI) */}
       {tooltip && (

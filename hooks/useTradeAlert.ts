@@ -31,6 +31,7 @@ interface TradeAlertOptions {
 interface ScoreState {
   longScore: number;
   shortScore: number;
+  dominantDirection: 'long' | 'short' | 'neutral';  // 우세 방향
   timestamp: number;
 }
 
@@ -74,9 +75,9 @@ const saveCooldowns = (cooldowns: Record<string, number>) => {
 export function useTradeAlert(options: TradeAlertOptions = {}) {
   const {
     enabled = true,
-    strongSignalThreshold = 60,
-    entryThreshold = 50,
-    cooldownMs = 60000, // 60초
+    strongSignalThreshold = 70,  // 강한 신호 70점으로 상향
+    entryThreshold = 60,         // 진입 타점 60점으로 상향 (기존 50점)
+    cooldownMs = 300000,         // 5분 쿨다운 (기존 1분)
     onAlert,
   } = options;
 
@@ -87,6 +88,7 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
   const prevDivergenceRef = useRef<DivergenceState | null>(null);
   const lastAlertTimeRef = useRef<Record<string, number>>({});
   const isInitializedRef = useRef(false);
+  const lastAlertMessageRef = useRef<string>('');  // 마지막 알림 메시지 (중복 방지)
 
   // 초기 로드
   useEffect(() => {
@@ -107,7 +109,7 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
     return true;
   }, [cooldownMs]);
 
-  // 점수 변화 감지 및 알림
+  // 점수 변화 감지 및 알림 (신호 변화 기반)
   const checkScoreAlert = useCallback((
     longScore: SignalScore,
     shortScore: SignalScore,
@@ -117,58 +119,100 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
 
     const currentLong = longScore.total;
     const currentShort = shortScore.total;
-    const prevLong = prevScoreRef.current?.longScore ?? 0;
-    const prevShort = prevScoreRef.current?.shortScore ?? 0;
+    const prevState = prevScoreRef.current;
+    const prevLong = prevState?.longScore ?? 0;
+    const prevShort = prevState?.shortScore ?? 0;
+    const prevDirection = prevState?.dominantDirection ?? 'neutral';
 
-    // 강한 롱 신호 (60점 이상 돌파)
-    if (currentLong >= strongSignalThreshold && prevLong < strongSignalThreshold) {
-      if (canAlert('strong_long')) {
-        tts.playStrongSignal('long');
+    // 현재 우세 방향 결정 (10점 이상 차이나야 방향 확정)
+    const scoreDiff = currentLong - currentShort;
+    let currentDirection: 'long' | 'short' | 'neutral' = 'neutral';
+    if (scoreDiff >= 10) currentDirection = 'long';
+    else if (scoreDiff <= -10) currentDirection = 'short';
+
+    // 점수 변화량
+    const longChange = currentLong - prevLong;
+    const shortChange = currentShort - prevShort;
+    const SIGNIFICANT_CHANGE = 10; // 10점 이상 변화시 의미있는 변화
+
+    // 중복 알림 방지 헬퍼
+    const triggerAlert = (alertKey: string, message: string, alertFn: () => void) => {
+      // 같은 메시지가 1초 이내 반복되면 무시
+      if (lastAlertMessageRef.current === message) return;
+      if (!canAlert(alertKey)) return;
+
+      lastAlertMessageRef.current = message;
+      setTimeout(() => { lastAlertMessageRef.current = ''; }, 1000); // 1초 후 초기화
+      alertFn();
+    };
+
+    // 1. 방향 전환 감지 (가장 중요한 신호)
+    if (prevDirection !== 'neutral' && currentDirection !== 'neutral' && prevDirection !== currentDirection) {
+      const newDir = currentDirection;
+      const score = newDir === 'long' ? currentLong : currentShort;
+      const rr = newDir === 'long' ? (riskReward?.long ?? 2) : (riskReward?.short ?? 2);
+      const message = `⚡ ${newDir === 'long' ? '롱' : '숏'} 전환! (${Math.round(score)}점)`;
+
+      triggerAlert(`direction_change_${newDir}`, message, () => {
+        tts.playStrongSignal(newDir);
         onAlert?.({
           type: 'strong_signal',
-          direction: 'long',
-          message: `강한 롱 신호 (${Math.round(currentLong)}점)`,
-          score: Math.round(currentLong),
+          direction: newDir,
+          message,
+          score: Math.round(score),
+          riskReward: rr,
         });
-      }
+      });
     }
-    // 강한 숏 신호
-    else if (currentShort >= strongSignalThreshold && prevShort < strongSignalThreshold) {
-      if (canAlert('strong_short')) {
-        tts.playStrongSignal('short');
-        onAlert?.({
-          type: 'strong_signal',
-          direction: 'short',
-          message: `강한 숏 신호 (${Math.round(currentShort)}점)`,
-          score: Math.round(currentShort),
-        });
-      }
-    }
-    // 롱 진입 타점 (50점 이상 돌파)
-    else if (currentLong >= entryThreshold && prevLong < entryThreshold) {
-      if (canAlert('entry_long')) {
-        const rr = riskReward?.long ?? 2;
+    // 2. 강한 신호 강화 (이미 우세한 방향이 더 강해짐)
+    else if (currentDirection === 'long' && longChange >= SIGNIFICANT_CHANGE && currentLong >= strongSignalThreshold) {
+      const rr = riskReward?.long ?? 2;
+      const message = `📈 롱 강화 ${Math.round(currentLong)}점 (+${Math.round(longChange)})`;
+
+      triggerAlert('strengthen_long', message, () => {
         tts.playEntryAlert('long', Math.round(currentLong), rr);
         onAlert?.({
           type: 'entry',
           direction: 'long',
-          message: `롱 타점 ${Math.round(currentLong)}점, 손익비 1:${Math.round(rr)}`,
+          message,
           score: Math.round(currentLong),
           riskReward: rr,
         });
-      }
+      });
     }
-    // 숏 진입 타점
-    else if (currentShort >= entryThreshold && prevShort < entryThreshold) {
-      if (canAlert('entry_short')) {
-        const rr = riskReward?.short ?? 2;
+    else if (currentDirection === 'short' && shortChange >= SIGNIFICANT_CHANGE && currentShort >= strongSignalThreshold) {
+      const rr = riskReward?.short ?? 2;
+      const message = `📉 숏 강화 ${Math.round(currentShort)}점 (+${Math.round(shortChange)})`;
+
+      triggerAlert('strengthen_short', message, () => {
         tts.playEntryAlert('short', Math.round(currentShort), rr);
         onAlert?.({
           type: 'entry',
           direction: 'short',
-          message: `숏 타점 ${Math.round(currentShort)}점, 손익비 1:${Math.round(rr)}`,
+          message,
           score: Math.round(currentShort),
           riskReward: rr,
+        });
+      });
+    }
+    // 3. 새로운 진입 신호 (중립 → 방향 확정, 임계값 이상)
+    else if (prevDirection === 'neutral' && currentDirection !== 'neutral') {
+      const newDir = currentDirection;
+      const score = newDir === 'long' ? currentLong : currentShort;
+
+      if (score >= entryThreshold) {
+        const rr = newDir === 'long' ? (riskReward?.long ?? 2) : (riskReward?.short ?? 2);
+        const message = `🎯 ${newDir === 'long' ? '롱' : '숏'} 타점 ${Math.round(score)}점`;
+
+        triggerAlert(`new_signal_${newDir}`, message, () => {
+          tts.playEntryAlert(newDir, Math.round(score), rr);
+          onAlert?.({
+            type: 'entry',
+            direction: newDir,
+            message,
+            score: Math.round(score),
+            riskReward: rr,
+          });
         });
       }
     }
@@ -177,6 +221,7 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
     prevScoreRef.current = {
       longScore: currentLong,
       shortScore: currentShort,
+      dominantDirection: currentDirection,
       timestamp: Date.now(),
     };
   }, [enabled, strongSignalThreshold, entryThreshold, canAlert, tts, onAlert]);
