@@ -332,18 +332,28 @@ export default function ChartRenderer({
     // 미니 모드: 영역 차트 (그라데이션 채우기)
     // 일반 모드: 캔들스틱 차트
     if (mini) {
+      // 추세 방향 판단 (첫 가격 vs 마지막 가격)
+      const firstPrice = uniqueData[0]?.close || 0;
+      const lastPrice = uniqueData[uniqueData.length - 1]?.close || 0;
+      const isUptrend = lastPrice >= firstPrice;
+
+      // 상승: 초록색, 하락: 빨간색
+      const trendColor = isUptrend ? '#22c55e' : '#ef4444'; // green-500 / red-500
+      const trendColorLight = isUptrend ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+      const trendColorFade = isUptrend ? 'rgba(34, 197, 94, 0.02)' : 'rgba(239, 68, 68, 0.02)';
+
       // 영역 시리즈 추가 (하단 그라데이션 채우기)
       const areaSeries = chart.addSeries(
         AreaSeries,
         {
-          lineColor: '#3b82f6', // blue-500 (투명도 없음)
+          lineColor: trendColor,
           lineWidth: 2,
-          topColor: 'rgba(59, 130, 246, 0.4)', // 상단 그라데이션 (진한 파랑)
-          bottomColor: 'rgba(59, 130, 246, 0.02)', // 하단 그라데이션 (거의 투명)
+          topColor: trendColorLight, // 상단 그라데이션
+          bottomColor: trendColorFade, // 하단 그라데이션 (거의 투명)
           crosshairMarkerVisible: true,
           crosshairMarkerRadius: 4,
           crosshairMarkerBorderColor: '#ffffff',
-          crosshairMarkerBackgroundColor: '#3b82f6',
+          crosshairMarkerBackgroundColor: trendColor,
           lastValueVisible: true,
           priceLineVisible: false,
         },

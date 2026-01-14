@@ -582,7 +582,7 @@ export function addDivergenceLines(
 
       divergenceMarkers.push({
         time: (pair.end.timestamp / 1000) as Time,
-        position: pair.direction === 'bullish' ? 'belowBar' : 'aboveBar',
+        position: 'inBar', // 캔들/라인 정중앙에 표시
         color: markerColor,
         shape: 'circle',
         text: `${label}${arrow}`,
