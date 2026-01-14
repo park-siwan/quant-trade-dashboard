@@ -339,6 +339,7 @@ export function addEmaIndicators(
 
 /**
  * 다이버전스를 선으로 그립니다 (가격 패널 + RSI/OBV/CVD/OI 패널)
+ * @param useClosePrice - true면 종가 기준으로 선 그림 (라인 차트용)
  */
 export function addDivergenceLines(
   chart: IChartApi,
@@ -348,12 +349,13 @@ export function addDivergenceLines(
   cvdSeries: ISeriesApi<'Line'> | null,
   oiSeries: ISeriesApi<'Line'> | null,
   signals: DivergenceSignal[],
-  candleData: Array<{ time: number; high: number; low: number }>,
+  candleData: Array<{ time: number; high: number; low: number; close?: number }>,
   rsiData: LineData[],
   obvData: LineData[],
   cvdData: LineData[],
   oiData: LineData[],
   paneIndices?: { rsi?: number; obv?: number; cvd?: number; oi?: number },
+  useClosePrice: boolean = false,
 ): void {
   // start와 end를 쌍으로 그룹화
   const divergencePairs: Array<{
@@ -485,52 +487,56 @@ export function addDivergenceLines(
       : 'rgba(248, 113, 113, 0.9)'; // red-400 (숏 타점 - 투명도 90%)
 
     // 1. 가격 패널에 선 그리기
+    // useClosePrice=true면 종가 기준 (라인 차트용)
     // priceValue가 있으면 직접 사용 (백엔드에서 계산된 정확한 가격)
     // 없으면 캔들 데이터에서 찾기 (폴백)
     let startPrice: number | undefined;
     let endPrice: number | undefined;
 
-    if (pair.start.priceValue !== undefined && pair.end.priceValue !== undefined) {
-      // 백엔드에서 전달된 정확한 가격 사용
+    // 캔들 데이터에서 찾기 (±300초 허용 - 5분봉 기준)
+    const startTimeSec = pair.start.timestamp / 1000;
+    const endTimeSec = pair.end.timestamp / 1000;
+
+    // 퍼지 매칭: ±300초 범위 내에서 가장 가까운 캔들 찾기
+    const findClosestCandle = (targetTime: number) => {
+      let closest: { time: number; high: number; low: number; close?: number } | null = null;
+      let minDiff = Infinity;
+      for (const c of candleData) {
+        const diff = Math.abs(c.time - targetTime);
+        if (diff < minDiff && diff <= 300) {
+          minDiff = diff;
+          closest = c;
+        }
+      }
+      return closest;
+    };
+
+    const startCandle = findClosestCandle(startTimeSec);
+    const endCandle = findClosestCandle(endTimeSec);
+
+    if (useClosePrice && startCandle?.close !== undefined && endCandle?.close !== undefined) {
+      // 라인 차트: 종가 기준
+      startPrice = startCandle.close;
+      endPrice = endCandle.close;
+    } else if (pair.start.priceValue !== undefined && pair.end.priceValue !== undefined && !useClosePrice) {
+      // 캔들 차트: 백엔드에서 전달된 정확한 가격 사용 (고점/저점)
       startPrice = pair.start.priceValue;
       endPrice = pair.end.priceValue;
+    } else if (startCandle && endCandle) {
+      // 폴백: 캔들 데이터에서 고점/저점 찾기
+      // bearish: 고점 연결, bullish: 저점 연결
+      startPrice =
+        pair.direction === 'bearish' ? startCandle.high : startCandle.low;
+      endPrice =
+        pair.direction === 'bearish' ? endCandle.high : endCandle.low;
     } else {
-      // 폴백: 캔들 데이터에서 찾기 (±300초 허용 - 5분봉 기준)
-      const startTimeSec = pair.start.timestamp / 1000;
-      const endTimeSec = pair.end.timestamp / 1000;
-
-      // 퍼지 매칭: ±300초 범위 내에서 가장 가까운 캔들 찾기
-      const findClosestCandle = (targetTime: number) => {
-        let closest: { time: number; high: number; low: number } | null = null;
-        let minDiff = Infinity;
-        for (const c of candleData) {
-          const diff = Math.abs(c.time - targetTime);
-          if (diff < minDiff && diff <= 300) {
-            minDiff = diff;
-            closest = c;
-          }
-        }
-        return closest;
-      };
-
-      const startCandle = findClosestCandle(startTimeSec);
-      const endCandle = findClosestCandle(endTimeSec);
-
-      if (startCandle && endCandle) {
-        // bearish: 고점 연결, bullish: 저점 연결
-        startPrice =
-          pair.direction === 'bearish' ? startCandle.high : startCandle.low;
-        endPrice =
-          pair.direction === 'bearish' ? endCandle.high : endCandle.low;
-      } else {
-        console.warn(`⚠️ ${pair.start.type} 다이버전스 캔들 매칭 실패:`, {
-          startTimeSec,
-          endTimeSec,
-          candleDataRange: candleData.length > 0
-            ? `${candleData[0].time} ~ ${candleData[candleData.length - 1].time}`
-            : 'empty',
-        });
-      }
+      console.warn(`⚠️ ${pair.start.type} 다이버전스 캔들 매칭 실패:`, {
+        startTimeSec,
+        endTimeSec,
+        candleDataRange: candleData.length > 0
+          ? `${candleData[0].time} ~ ${candleData[candleData.length - 1].time}`
+          : 'empty',
+      });
     }
 
     if (startPrice !== undefined && endPrice !== undefined) {

@@ -500,11 +500,12 @@ export default function ChartRenderer({
 
     // 다이버전스 선 추가
     if (divergenceSignals && divergenceSignals.length > 0 && mainSeries) {
-      // 캔들 데이터에서 시간, 고가, 저가 추출
+      // 캔들 데이터에서 시간, 고가, 저가, 종가 추출
       const candleData = data.map((candle) => ({
         time: candle.time as number,
         high: candle.high,
         low: candle.low,
+        close: candle.close, // 라인 차트용 종가
       }));
 
       addDivergenceLines(
@@ -526,6 +527,7 @@ export default function ChartRenderer({
           cvd: cvdPaneIndex || undefined,
           oi: oiPaneIndex || undefined,
         },
+        mini, // 미니 모드(라인 차트)면 종가 기준으로 선 그림
       );
     }
 
