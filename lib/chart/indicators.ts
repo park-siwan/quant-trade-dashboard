@@ -363,11 +363,15 @@ export function addDivergenceLines(
     isFiltered: boolean;
   }> = [];
 
+  // 매칭된 end 신호 추적
+  const matchedEndIndices = new Set<number>();
+
+  // 1단계: start → end 매칭
   for (let i = 0; i < signals.length; i++) {
     const signal = signals[i];
     if (signal.phase === 'start') {
       // 다음 end 찾기
-      const endSignal = signals.find(
+      const endIdx = signals.findIndex(
         (s, idx) =>
           idx > i &&
           s.phase === 'end' &&
@@ -375,7 +379,10 @@ export function addDivergenceLines(
           s.direction === signal.direction,
       );
 
-      if (endSignal) {
+      if (endIdx !== -1) {
+        const endSignal = signals[endIdx];
+        matchedEndIndices.add(endIdx);
+
         // start나 end 중 하나라도 필터링되었으면 전체 쌍을 필터링으로 처리
         const isFiltered = !!(signal.isFiltered || endSignal.isFiltered);
 
@@ -389,8 +396,43 @@ export function addDivergenceLines(
     }
   }
 
+  // 2단계: 매칭되지 않은 end 신호에 대해 가상의 start 생성
+  // (index를 기준으로 10캔들 전을 start로 설정)
+  for (let i = 0; i < signals.length; i++) {
+    const signal = signals[i];
+    if (signal.phase === 'end' && !matchedEndIndices.has(i)) {
+      // 10캔들 전의 타임스탬프 계산 (5분봉 기준 = 300초 * 10 = 3000초)
+      const estimatedStartTimestamp = signal.timestamp - (300 * 10 * 1000); // 10캔들 전
+      const estimatedStartIndex = Math.max(0, signal.index - 10);
+
+      const syntheticStart: DivergenceSignal = {
+        ...signal,
+        phase: 'start',
+        timestamp: estimatedStartTimestamp,
+        index: estimatedStartIndex,
+      };
+
+      divergencePairs.push({
+        start: syntheticStart,
+        end: signal,
+        direction: signal.direction,
+        isFiltered: signal.isFiltered || false,
+      });
+
+      console.log(`🔧 ${signal.type} ${signal.direction} 다이버전스: end만 있어서 start 자동 생성`, {
+        type: signal.type,
+        direction: signal.direction,
+        endTimestamp: new Date(signal.timestamp).toLocaleString(),
+        syntheticStartTimestamp: new Date(estimatedStartTimestamp).toLocaleString(),
+      });
+    }
+  }
+
   // 디버깅: 원본 시그널 및 매칭된 쌍 출력
   console.log('📊 다이버전스 시그널 원본:', signals);
+  console.log('📊 CVD 시그널만:', signals.filter(s => s.type === 'cvd'));
+  console.log('📊 CVD start 시그널:', signals.filter(s => s.type === 'cvd' && s.phase === 'start'));
+  console.log('📊 CVD end 시그널:', signals.filter(s => s.type === 'cvd' && s.phase === 'end'));
   console.log('🔗 매칭된 다이버전스 쌍:', divergencePairs);
   console.log('📈 타입별 다이버전스:', {
     rsi: divergencePairs.filter(p => p.start.type === 'rsi').length,
@@ -398,6 +440,18 @@ export function addDivergenceLines(
     cvd: divergencePairs.filter(p => p.start.type === 'cvd').length,
     oi: divergencePairs.filter(p => p.start.type === 'oi').length,
   });
+
+  // CVD 쌍 상세 디버깅
+  const cvdPairs = divergencePairs.filter(p => p.start.type === 'cvd');
+  if (cvdPairs.length > 0) {
+    console.log('🔍 CVD 다이버전스 쌍 상세:', cvdPairs.map(p => ({
+      direction: p.direction,
+      startTimestamp: p.start.timestamp,
+      endTimestamp: p.end.timestamp,
+      startPriceValue: p.start.priceValue,
+      endPriceValue: p.end.priceValue,
+    })));
+  }
 
   // 각 다이버전스 쌍에 대해 선 그리기
   divergencePairs.forEach((pair) => {
@@ -419,16 +473,26 @@ export function addDivergenceLines(
       startPrice = pair.start.priceValue;
       endPrice = pair.end.priceValue;
     } else {
-      // 폴백: 캔들 데이터에서 찾기 (±1초 허용)
+      // 폴백: 캔들 데이터에서 찾기 (±300초 허용 - 5분봉 기준)
       const startTimeSec = pair.start.timestamp / 1000;
       const endTimeSec = pair.end.timestamp / 1000;
 
-      const startCandle = candleData.find(
-        (c) => Math.abs(c.time - startTimeSec) <= 1,
-      );
-      const endCandle = candleData.find(
-        (c) => Math.abs(c.time - endTimeSec) <= 1,
-      );
+      // 퍼지 매칭: ±300초 범위 내에서 가장 가까운 캔들 찾기
+      const findClosestCandle = (targetTime: number) => {
+        let closest: { time: number; high: number; low: number } | null = null;
+        let minDiff = Infinity;
+        for (const c of candleData) {
+          const diff = Math.abs(c.time - targetTime);
+          if (diff < minDiff && diff <= 300) {
+            minDiff = diff;
+            closest = c;
+          }
+        }
+        return closest;
+      };
+
+      const startCandle = findClosestCandle(startTimeSec);
+      const endCandle = findClosestCandle(endTimeSec);
 
       if (startCandle && endCandle) {
         // bearish: 고점 연결, bullish: 저점 연결
@@ -482,15 +546,29 @@ export function addDivergenceLines(
 
     // 2. RSI 패널에 선 그리기
     if (rsiSeries && pair.start.type === 'rsi') {
-      const startTime = (pair.start.timestamp / 1000) as Time;
-      const endTime = (pair.end.timestamp / 1000) as Time;
+      const startTimeSec = pair.start.timestamp / 1000;
+      const endTimeSec = pair.end.timestamp / 1000;
 
-      const startRsi = rsiData.find((r) => r.time === startTime);
-      const endRsi = rsiData.find((r) => r.time === endTime);
+      // 퍼지 매칭: ±300초 범위 내에서 가장 가까운 데이터 찾기
+      const findClosestRsi = (targetTime: number) => {
+        let closest: LineData | null = null;
+        let minDiff = Infinity;
+        for (const r of rsiData) {
+          const diff = Math.abs((r.time as number) - targetTime);
+          if (diff < minDiff && diff <= 300) {
+            minDiff = diff;
+            closest = r;
+          }
+        }
+        return closest;
+      };
+
+      const startRsi = findClosestRsi(startTimeSec);
+      const endRsi = findClosestRsi(endTimeSec);
 
       console.log('🔍 RSI 선 그리기:', {
-        startTime,
-        endTime,
+        startTimeSec,
+        endTimeSec,
         startRsi,
         endRsi,
       });
@@ -515,8 +593,8 @@ export function addDivergenceLines(
         ]);
       } else {
         console.warn('⚠️ RSI 데이터를 찾을 수 없음:', {
-          startTime,
-          endTime,
+          startTimeSec,
+          endTimeSec,
           rsiDataLength: rsiData.length,
         });
       }
@@ -524,15 +602,29 @@ export function addDivergenceLines(
 
     // 3. OBV 패널에 선 그리기
     if (obvSeries && pair.start.type === 'obv') {
-      const startTime = (pair.start.timestamp / 1000) as Time;
-      const endTime = (pair.end.timestamp / 1000) as Time;
+      const startTimeSec = pair.start.timestamp / 1000;
+      const endTimeSec = pair.end.timestamp / 1000;
 
-      const startObv = obvData.find((o) => o.time === startTime);
-      const endObv = obvData.find((o) => o.time === endTime);
+      // 퍼지 매칭: ±300초 범위 내에서 가장 가까운 데이터 찾기
+      const findClosestObv = (targetTime: number) => {
+        let closest: LineData | null = null;
+        let minDiff = Infinity;
+        for (const o of obvData) {
+          const diff = Math.abs((o.time as number) - targetTime);
+          if (diff < minDiff && diff <= 300) {
+            minDiff = diff;
+            closest = o;
+          }
+        }
+        return closest;
+      };
+
+      const startObv = findClosestObv(startTimeSec);
+      const endObv = findClosestObv(endTimeSec);
 
       console.log('🔍 OBV 선 그리기:', {
-        startTime,
-        endTime,
+        startTimeSec,
+        endTimeSec,
         startObv,
         endObv,
       });
@@ -557,8 +649,8 @@ export function addDivergenceLines(
         ]);
       } else {
         console.warn('⚠️ OBV 데이터를 찾을 수 없음:', {
-          startTime,
-          endTime,
+          startTimeSec,
+          endTimeSec,
           obvDataLength: obvData.length,
         });
       }
@@ -566,17 +658,34 @@ export function addDivergenceLines(
 
     // 4. CVD 패널에 선 그리기
     if (cvdSeries && pair.start.type === 'cvd') {
-      const startTime = (pair.start.timestamp / 1000) as Time;
-      const endTime = (pair.end.timestamp / 1000) as Time;
+      const startTimeSec = pair.start.timestamp / 1000;
+      const endTimeSec = pair.end.timestamp / 1000;
 
-      const startCvd = cvdData.find((c) => c.time === startTime);
-      const endCvd = cvdData.find((c) => c.time === endTime);
+      // 퍼지 매칭: ±300초 (5분) 범위 내에서 가장 가까운 데이터 찾기
+      const findClosestCvd = (targetTime: number) => {
+        let closest: LineData | null = null;
+        let minDiff = Infinity;
+        for (const c of cvdData) {
+          const diff = Math.abs((c.time as number) - targetTime);
+          if (diff < minDiff && diff <= 300) {
+            minDiff = diff;
+            closest = c;
+          }
+        }
+        return closest;
+      };
+
+      const startCvd = findClosestCvd(startTimeSec);
+      const endCvd = findClosestCvd(endTimeSec);
 
       console.log('🔍 CVD 선 그리기:', {
-        startTime,
-        endTime,
+        startTimeSec,
+        endTimeSec,
         startCvd,
         endCvd,
+        cvdDataRange: cvdData.length > 0
+          ? `${cvdData[0].time} ~ ${cvdData[cvdData.length - 1].time}`
+          : 'empty',
       });
 
       if (startCvd && endCvd) {
@@ -599,8 +708,8 @@ export function addDivergenceLines(
         ]);
       } else {
         console.warn('⚠️ CVD 데이터를 찾을 수 없음:', {
-          startTime,
-          endTime,
+          startTimeSec,
+          endTimeSec,
           cvdDataLength: cvdData.length,
         });
       }
@@ -608,15 +717,29 @@ export function addDivergenceLines(
 
     // 5. OI 패널에 선 그리기
     if (oiSeries && pair.start.type === 'oi') {
-      const startTime = (pair.start.timestamp / 1000) as Time;
-      const endTime = (pair.end.timestamp / 1000) as Time;
+      const startTimeSec = pair.start.timestamp / 1000;
+      const endTimeSec = pair.end.timestamp / 1000;
 
-      const startOi = oiData.find((o) => o.time === startTime);
-      const endOi = oiData.find((o) => o.time === endTime);
+      // 퍼지 매칭: ±300초 범위 내에서 가장 가까운 데이터 찾기
+      const findClosestOi = (targetTime: number) => {
+        let closest: LineData | null = null;
+        let minDiff = Infinity;
+        for (const o of oiData) {
+          const diff = Math.abs((o.time as number) - targetTime);
+          if (diff < minDiff && diff <= 300) {
+            minDiff = diff;
+            closest = o;
+          }
+        }
+        return closest;
+      };
+
+      const startOi = findClosestOi(startTimeSec);
+      const endOi = findClosestOi(endTimeSec);
 
       console.log('🔍 OI 선 그리기:', {
-        startTime,
-        endTime,
+        startTimeSec,
+        endTimeSec,
         startOi,
         endOi,
       });
@@ -641,8 +764,8 @@ export function addDivergenceLines(
         ]);
       } else {
         console.warn('⚠️ OI 데이터를 찾을 수 없음:', {
-          startTime,
-          endTime,
+          startTimeSec,
+          endTimeSec,
           oiDataLength: oiData.length,
         });
       }

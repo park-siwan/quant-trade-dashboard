@@ -19,6 +19,7 @@ export interface DivergenceSignal {
   isFiltered?: boolean; // 필터링 여부
   reason?: string; // 필터링 사유
   emaFilter?: SignalClassification; // EMA 필터 결과
+  confirmed?: boolean; // 피봇 확정 여부 (rightBars만큼 확인되면 true)
 }
 
 export interface DivergenceSummaryItem {
@@ -360,6 +361,7 @@ export interface MTFDivergenceInfo {
   timestamp: number; // 발생 시간
   candlesAgo: number; // 몇 캔들 전
   isExpired: boolean; // 유효기간 만료 여부
+  confirmed?: boolean; // 피봇 확정 여부 (캔들 종가 확정 후 true)
 }
 
 export interface MTFTimeframeData {

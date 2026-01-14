@@ -233,6 +233,25 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
   ) => {
     if (!enabled || !divergence || divergence.isExpired) return;
 
+    // 확정되지 않은 다이버전스는 알림 안함 (종가 미확정 시 리페인팅 방지)
+    if (divergence.confirmed === false) {
+      console.log(`⏳ [${timeframe}] 다이버전스 미확정 - 알림 대기:`, {
+        type: divergence.type,
+        direction: divergence.direction,
+      });
+      return;
+    }
+
+    // 디버그: 다이버전스 알림 체크
+    console.log(`🔔 [${timeframe}] 다이버전스 알림 체크:`, {
+      type: divergence.type,
+      direction: divergence.direction,
+      candlesAgo: divergence.candlesAgo,
+      isExpired: divergence.isExpired,
+      confirmed: divergence.confirmed,
+      timestamp: new Date(divergence.timestamp).toLocaleString(),
+    });
+
     // 새로운 다이버전스인지 확인
     const prev = prevDivergenceRef.current;
     const isNew = !prev ||
@@ -244,6 +263,10 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
     if (isNew && divergence.candlesAgo <= 3) { // 최근 3캔들 이내만
       const alertKey = `div_${timeframe}_${divergence.direction}`;
       if (canAlert(alertKey)) {
+        console.log(`🚨 [${timeframe}] 다이버전스 알림 발생!`, {
+          type: divergence.type,
+          direction: divergence.direction,
+        });
         const tfMap: Record<string, '5m' | '15m' | '1h' | '4h'> = {
           '5m': '5m',
           '15m': '15m',

@@ -284,12 +284,19 @@ export default function ChartAdapter({
   const divergenceSignals: DivergenceSignal[] = useMemo(() => {
     const wsSignals = getRawDivergences(selectedTimeframe);
 
+    // 디버그: 받은 다이버전스 시그널 출력
+    console.log(`📡 [${selectedTimeframe}] WebSocket 다이버전스 시그널:`, wsSignals);
+    console.log(`📡 [${selectedTimeframe}] CVD 시그널:`, wsSignals.filter((s: { type: string }) => s.type === 'cvd'));
+
     return wsSignals.map((s: {
       type: string;
       direction: string;
       phase: string;
       timestamp?: number;
       index?: number;
+      priceValue?: number;
+      indicatorValue?: number;
+      isFiltered?: boolean;
     }) => ({
       index: s.index ?? 0,
       type: s.type as 'rsi' | 'obv' | 'cvd' | 'oi',
@@ -297,6 +304,9 @@ export default function ChartAdapter({
       phase: s.phase as 'start' | 'end' | 'entry',
       timestamp: s.timestamp ?? Date.now(),
       datetime: new Date(s.timestamp ?? Date.now()).toISOString(),
+      priceValue: s.priceValue, // 가격 값 (차트 라인용)
+      indicatorValue: s.indicatorValue, // 지표 값
+      isFiltered: s.isFiltered, // 필터링 여부
     }));
   }, [getRawDivergences, selectedTimeframe]);
 
@@ -356,7 +366,7 @@ export default function ChartAdapter({
         </div>
       )}
       {/* 차트 스켈레톤 */}
-      <div className={`bg-white/5 rounded-xl overflow-hidden relative ${mini ? 'h-full' : 'h-[700px]'}`}>
+      <div className={`bg-white/5 rounded-xl overflow-hidden relative ${mini ? 'h-full' : 'h-[560px]'}`}>
         <div className='absolute inset-0 flex items-end justify-around px-4 pb-8'>
           {/* 고정된 높이 패턴 (hydration 에러 방지) */}
           {(mini ? [45, 62, 38, 71, 55, 33, 68, 42] : [45, 62, 38, 71, 55, 33, 68, 42, 58, 75, 48, 35, 65, 52, 40, 72, 56, 30, 63, 47]).map((h, i) => (
@@ -384,7 +394,7 @@ export default function ChartAdapter({
   if (error) {
     return (
       <div className='backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-2xl p-6 shadow-2xl'>
-        <div className='h-[700px] flex items-center justify-center'>
+        <div className='h-[560px] flex items-center justify-center'>
           <div className='text-center'>
             <p className='text-red-400 mb-4'>데이터 로딩 실패</p>
             <button
@@ -408,7 +418,7 @@ export default function ChartAdapter({
   if (!data?.success || !data?.data?.candles) {
     return (
       <div className={`backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl ${mini ? 'p-2' : 'p-6'}`}>
-        <div className={`${mini ? 'h-[200px]' : 'h-[700px]'} flex items-center justify-center`}>
+        <div className={`${mini ? 'h-[200px]' : 'h-[560px]'} flex items-center justify-center`}>
           <p className='text-gray-500 text-xs'>데이터 없음</p>
         </div>
       </div>

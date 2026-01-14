@@ -176,24 +176,34 @@ export default function ChartRenderer({
       return;
     }
 
-    const isUp = realtimeCandle.close >= realtimeCandle.open;
-    const candleColor = isUp ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'; // 최신 캔들은 투명도 100%
-
-    const candleUpdate: CandlestickData = {
-      time: (realtimeCandle.timestamp / 1000) as CandlestickData['time'],
-      open: realtimeCandle.open,
-      high: realtimeCandle.high,
-      low: realtimeCandle.low,
-      close: realtimeCandle.close,
-      color: candleColor,
-      borderColor: candleColor,
-      wickColor: candleColor,
-    };
-
     try {
       // 차트가 dispose되지 않았는지 확인
       if (candlestickSeriesRef.current) {
-        candlestickSeriesRef.current.update(candleUpdate);
+        // 미니 모드 (AreaSeries)와 일반 모드 (CandlestickSeries) 구분
+        if (mini) {
+          // AreaSeries는 { time, value } 형식 사용
+          const areaUpdate = {
+            time: (realtimeCandle.timestamp / 1000) as LineData['time'],
+            value: realtimeCandle.close,
+          };
+          (candlestickSeriesRef.current as ISeriesApi<'Area'>).update(areaUpdate);
+        } else {
+          // CandlestickSeries는 전체 OHLC 데이터 사용
+          const isUp = realtimeCandle.close >= realtimeCandle.open;
+          const candleColor = isUp ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)';
+
+          const candleUpdate: CandlestickData = {
+            time: (realtimeCandle.timestamp / 1000) as CandlestickData['time'],
+            open: realtimeCandle.open,
+            high: realtimeCandle.high,
+            low: realtimeCandle.low,
+            close: realtimeCandle.close,
+            color: candleColor,
+            borderColor: candleColor,
+            wickColor: candleColor,
+          };
+          (candlestickSeriesRef.current as ISeriesApi<'Candlestick'>).update(candleUpdate);
+        }
 
         // 가격 정보 업데이트
         const change = realtimeCandle.close - realtimeCandle.open;
@@ -216,7 +226,7 @@ export default function ChartRenderer({
         console.error('❌ 캔들 업데이트 에러:', err);
       }
     }
-  }, [realtimeCandle]);
+  }, [realtimeCandle, mini]);
 
   // 차트 스케일 변경 감지를 위한 state (줌/스크롤 시 박스 위치 업데이트용)
   const [scaleUpdateTrigger, setScaleUpdateTrigger] = useState(0);
@@ -228,7 +238,10 @@ export default function ChartRenderer({
     if (!chartContainerRef.current) return;
 
     // 차트 생성 (패널 개수에 따라 높이 조정)
-    // 미니 모드에서는 OI/ATR 패널 숨김
+    // 미니 모드에서는 지표 패널 숨김
+    const hasRsi = mini ? false : (rsiData && rsiData.length > 0);
+    const hasObv = mini ? false : (obvData && obvData.length > 0);
+    const hasCvd = mini ? false : (cvdData && cvdData.length > 0);
     const hasOi = mini ? false : (oiData && oiData.length > 0);
     const hasAtr = mini ? false : (vwapAtrData?.atr && vwapAtrData.atr.length > 0);
 
@@ -237,8 +250,8 @@ export default function ChartRenderer({
     if (mini) {
       chartHeight = chartContainerRef.current.clientHeight || 200;
     } else {
-      const panelCount = 1 + (hasOi ? 1 : 0) + (hasAtr ? 1 : 0); // 메인 + OI + ATR
-      const panelHeight = 320; // 각 패널당 높이 (더 큰 차트)
+      const panelCount = 1 + (hasRsi ? 1 : 0) + (hasObv ? 1 : 0) + (hasCvd ? 1 : 0) + (hasOi ? 1 : 0) + (hasAtr ? 1 : 0); // 메인 + 지표들
+      const panelHeight = 280; // 각 패널당 높이
       chartHeight = panelCount * panelHeight;
     }
 
@@ -273,7 +286,7 @@ export default function ChartRenderer({
       timeScale: {
         timeVisible: !mini, // 미니 모드에서 시간 숨김
         secondsVisible: false,
-        rightOffset: mini ? 60 : 20, // 미니 모드에서 우측 여백 2배 (가격칩 공간 확보)
+        rightOffset: mini ? 15 : 20, // 우측 여백
         lockVisibleTimeRangeOnResize: true, // 리사이즈 시 시간 범위 유지
       },
       kineticScroll: {
@@ -283,8 +296,8 @@ export default function ChartRenderer({
       rightPriceScale: {
         borderVisible: false,
         scaleMargins: {
-          top: mini ? 0.02 : 0.1,
-          bottom: mini ? 0.02 : 0.1,
+          top: mini ? 0.15 : 0.1,
+          bottom: mini ? 0.15 : 0.1,
         },
         autoScale: true, // 자동 스케일 활성화
         mode: 0, // Normal price scale mode
@@ -386,10 +399,16 @@ export default function ChartRenderer({
       candlestickSeriesRef.current = candlestickSeries;
     }
 
-    // 미니 모드: 전체 데이터가 보이도록 축소 (트레이딩뷰 'A' 버튼처럼)
+    // 미니 모드: 뷰 상태 복원 또는 초기 설정
     if (mini) {
-      chart.timeScale().fitContent();
-      // 가격 스케일도 자동 맞춤
+      // 저장된 뷰 범위가 있으면 복원
+      if (savedVisibleLogicalRangeRef.current) {
+        chart.timeScale().setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
+      } else {
+        // 첫 렌더링: 전체 데이터가 보이도록 축소
+        chart.timeScale().fitContent();
+      }
+      // 가격 스케일 자동 맞춤
       chart.priceScale('right').applyOptions({ autoScale: true });
     }
 
@@ -426,13 +445,29 @@ export default function ChartRenderer({
     // 동적 paneIndex 계산 (데이터가 있는 지표만 순차적으로 패널 배치)
     let currentPaneIndex = 1; // 메인 패널은 0, 지표는 1부터 시작
 
-    // RSI, OBV, CVD 지표 숨김 (패널 비활성화)
-    const rsiSeries = null;
-    const rsiPaneIndex = 0;
-    const obvSeries = null;
-    const obvPaneIndex = 0;
-    const cvdSeries = null;
-    const cvdPaneIndex = 0;
+    // RSI 지표 추가
+    let rsiSeries = null;
+    let rsiPaneIndex = 0;
+    if (hasRsi) {
+      rsiPaneIndex = currentPaneIndex++;
+      rsiSeries = addRsiIndicator(chart, rsiData!, rsiPaneIndex);
+    }
+
+    // OBV 지표 추가
+    let obvSeries = null;
+    let obvPaneIndex = 0;
+    if (hasObv) {
+      obvPaneIndex = currentPaneIndex++;
+      obvSeries = addObvIndicator(chart, obvData!, obvPaneIndex);
+    }
+
+    // CVD 지표 추가
+    let cvdSeries = null;
+    let cvdPaneIndex = 0;
+    if (hasCvd) {
+      cvdPaneIndex = currentPaneIndex++;
+      cvdSeries = addCvdIndicator(chart, cvdData!, cvdPaneIndex);
+    }
 
     // OI 지표 추가 (미니 모드에서는 숨김)
     let oiSeries = null;
@@ -950,6 +985,14 @@ export default function ChartRenderer({
 
     // 클린업
     return () => {
+      // 뷰 상태 저장 (재생성 시 복원용)
+      const currentRange = chart.timeScale().getVisibleLogicalRange();
+      if (currentRange) {
+        savedVisibleLogicalRangeRef.current = {
+          from: currentRange.from,
+          to: currentRange.to,
+        };
+      }
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleScaleChange);
       window.removeEventListener('resize', handleResize);
       chart.remove();

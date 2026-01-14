@@ -48,6 +48,7 @@ interface BackendTimeframeData {
       phase: string;
       timestamp?: number;
       index?: number;
+      confirmed?: boolean; // 피봇 확정 여부
     }>;
   };
   cvdOi?: {
@@ -101,6 +102,7 @@ interface DivergenceInfo {
   timestamp: number;
   candlesAgo: number;
   isExpired: boolean;
+  confirmed?: boolean; // 피봇 확정 여부 (캔들 종가 확정 후 true)
 }
 
 interface RawTimeframeData {
@@ -226,7 +228,7 @@ const DIVERGENCE_TYPE_PRIORITY: Record<string, number> = {
 
 // 모든 다이버전스 추출 (우선순위 정렬)
 const getAllDivergences = (
-  signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number }> | undefined,
+  signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number; confirmed?: boolean }> | undefined,
   totalCandles: number,
   timeframe: string
 ): DivergenceInfo[] => {
@@ -246,6 +248,7 @@ const getAllDivergences = (
       timestamp: signal.timestamp || Date.now(),
       candlesAgo,
       isExpired,
+      confirmed: signal.confirmed, // 피봇 확정 여부 전달
     };
   });
 

@@ -37,7 +37,18 @@ export function usePolling<T>({
       const queryString = new URLSearchParams(params).toString();
       const url = `${API_CONFIG.BASE_URL}${endpoint}${queryString ? `?${queryString}` : ''}`;
 
-      const response = await fetch(url);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
       const result = await response.json();
 
       if (!mountedRef.current) return;
@@ -49,7 +60,10 @@ export function usePolling<T>({
       }
     } catch (err) {
       if (!mountedRef.current) return;
-      console.error(`Failed to fetch ${endpoint}:`, err);
+      // 서버 연결 실패 시 조용히 처리 (콘솔에 한 번만 출력)
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.warn(`[usePolling] ${endpoint}: ${err.message}`);
+      }
       setError(err instanceof Error ? err : new Error('Unknown error'));
     } finally {
       if (mountedRef.current) {
