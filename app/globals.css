@@ -311,3 +311,14 @@ body {
   }
 }
 
+/* TradingView 워터마크 숨기기 */
+.tv-lightweight-charts a[href*="tradingview"],
+.tv-lightweight-charts a[target="_blank"],
+div[data-ref="tv-lightweight-charts"] a,
+[class*="apply-overflow-tooltip"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
