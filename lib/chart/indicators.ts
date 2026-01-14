@@ -458,6 +458,17 @@ export function addDivergenceLines(
     })));
   }
 
+  // 다이버전스 라벨 마커 수집
+  const divergenceMarkers: SeriesMarker<Time>[] = [];
+
+  // 타입별 라벨 매핑
+  const typeLabels: Record<string, string> = {
+    rsi: 'RSI',
+    obv: 'OBV',
+    cvd: 'CVD',
+    oi: 'OI',
+  };
+
   // 각 다이버전스 쌍에 대해 선 그리기
   divergencePairs.forEach((pair) => {
     // 미확정(confirmed=false) 다이버전스는 표시하지 않음 (리페인팅 방지)
@@ -553,6 +564,23 @@ export function addDivergenceLines(
         { time: (pair.start.timestamp / 1000) as Time, value: startPrice },
         { time: (pair.end.timestamp / 1000) as Time, value: endPrice },
       ]);
+
+      // 다이버전스 끝점에 라벨 마커 추가
+      const label = typeLabels[pair.start.type] || pair.start.type.toUpperCase();
+      const arrow = pair.direction === 'bullish' ? '↑' : '↓';
+      const markerColor = pair.isFiltered
+        ? '#9ca3af' // gray-400
+        : pair.direction === 'bullish'
+        ? '#a3e635' // lime-400
+        : '#f87171'; // red-400
+
+      divergenceMarkers.push({
+        time: (pair.end.timestamp / 1000) as Time,
+        position: pair.direction === 'bullish' ? 'belowBar' : 'aboveBar',
+        color: markerColor,
+        shape: 'circle',
+        text: `${label}${arrow}`,
+      });
     }
 
     // 2. RSI 패널에 선 그리기
@@ -782,6 +810,14 @@ export function addDivergenceLines(
       }
     }
   });
+
+  // 수집된 다이버전스 마커를 캔들스틱 시리즈에 추가
+  if (divergenceMarkers.length > 0) {
+    // 시간순 정렬 (lightweight-charts 요구사항)
+    divergenceMarkers.sort((a, b) => (a.time as number) - (b.time as number));
+    createSeriesMarkers(candlestickSeries, divergenceMarkers);
+    console.log(`✅ ${divergenceMarkers.length}개의 다이버전스 라벨 마커 추가됨`);
+  }
 }
 
 /**
