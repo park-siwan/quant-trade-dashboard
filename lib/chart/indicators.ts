@@ -361,6 +361,7 @@ export function addDivergenceLines(
     end: DivergenceSignal;
     direction: 'bullish' | 'bearish';
     isFiltered: boolean;
+    confirmed: boolean; // 피봇 확정 여부
   }> = [];
 
   // 매칭된 end 신호 추적
@@ -385,12 +386,15 @@ export function addDivergenceLines(
 
         // start나 end 중 하나라도 필터링되었으면 전체 쌍을 필터링으로 처리
         const isFiltered = !!(signal.isFiltered || endSignal.isFiltered);
+        // 둘 다 confirmed여야 confirmed (하나라도 false면 미확정)
+        const confirmed = signal.confirmed !== false && endSignal.confirmed !== false;
 
         divergencePairs.push({
           start: signal,
           end: endSignal,
           direction: signal.direction,
           isFiltered,
+          confirmed,
         });
       }
     }
@@ -417,6 +421,7 @@ export function addDivergenceLines(
         end: signal,
         direction: signal.direction,
         isFiltered: signal.isFiltered || false,
+        confirmed: signal.confirmed !== false,
       });
 
       console.log(`🔧 ${signal.type} ${signal.direction} 다이버전스: end만 있어서 start 자동 생성`, {
@@ -455,6 +460,12 @@ export function addDivergenceLines(
 
   // 각 다이버전스 쌍에 대해 선 그리기
   divergencePairs.forEach((pair) => {
+    // 미확정(confirmed=false) 다이버전스는 표시하지 않음 (리페인팅 방지)
+    if (!pair.confirmed) {
+      console.log(`⏳ ${pair.start.type} ${pair.direction} 다이버전스 미확정 - 차트 표시 대기`);
+      return;
+    }
+
     // 필터링된 신호는 회색, 정상 신호는 오더북 색상 기준
     const color = pair.isFiltered
       ? 'rgba(156, 163, 175, 0.7)' // gray-400 (투명도 70%)
