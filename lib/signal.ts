@@ -26,7 +26,7 @@ export const SIGNAL_STYLES: Record<SignalType, SignalStyle> = {
     text: 'text-green-400',
     border: 'border-green-500/30',
     rgbColor: '#22c55e',
-    rgbLight: 'rgba(34, 197, 94, 0.4)',
+    rgbLight: 'rgba(34, 197, 94, 0.15)',
     rgbFade: 'rgba(34, 197, 94, 0.02)',
   },
   short_ok: {
@@ -36,7 +36,7 @@ export const SIGNAL_STYLES: Record<SignalType, SignalStyle> = {
     text: 'text-red-400',
     border: 'border-red-500/30',
     rgbColor: '#ef4444',
-    rgbLight: 'rgba(239, 68, 68, 0.4)',
+    rgbLight: 'rgba(239, 68, 68, 0.15)',
     rgbFade: 'rgba(239, 68, 68, 0.02)',
   },
   bullish: {
@@ -46,7 +46,7 @@ export const SIGNAL_STYLES: Record<SignalType, SignalStyle> = {
     text: 'text-green-400',
     border: 'border-green-500/30',
     rgbColor: '#22c55e',
-    rgbLight: 'rgba(34, 197, 94, 0.4)',
+    rgbLight: 'rgba(34, 197, 94, 0.15)',
     rgbFade: 'rgba(34, 197, 94, 0.02)',
   },
   bearish: {
@@ -56,7 +56,7 @@ export const SIGNAL_STYLES: Record<SignalType, SignalStyle> = {
     text: 'text-red-400',
     border: 'border-red-500/30',
     rgbColor: '#ef4444',
-    rgbLight: 'rgba(239, 68, 68, 0.4)',
+    rgbLight: 'rgba(239, 68, 68, 0.15)',
     rgbFade: 'rgba(239, 68, 68, 0.02)',
   },
   wait: {
@@ -66,7 +66,7 @@ export const SIGNAL_STYLES: Record<SignalType, SignalStyle> = {
     text: 'text-gray-400',
     border: 'border-gray-500/30',
     rgbColor: '#6b7280',
-    rgbLight: 'rgba(107, 114, 128, 0.4)',
+    rgbLight: 'rgba(107, 114, 128, 0.15)',
     rgbFade: 'rgba(107, 114, 128, 0.02)',
   },
 };

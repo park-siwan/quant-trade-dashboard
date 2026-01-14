@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Recommendation, WaitCondition, DirectionRecommendation } from '@/lib/recommendation';
-import { TrendingUp, TrendingDown, Ban, Clock, CheckCircle, Target, ShieldAlert, Crosshair, Scale } from 'lucide-react';
+import { TrendingUp, TrendingDown, Ban, Clock, CheckCircle, Target, ShieldAlert, Crosshair, Scale, ChevronUp } from 'lucide-react';
 
 interface RecommendationCardProps {
   recommendation: Recommendation;
@@ -259,24 +259,33 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
             {(() => {
               const rrRounded = Math.round(riskReward * 10) / 10;
               const rrStyle = rrRounded >= 2
-                ? { bg: 'bg-green-500', glow: 'shadow-[0_0_8px_rgba(34,197,94,0.6)]', text: 'text-green-400', label: '좋음' }
+                ? { bg: 'bg-green-500', text: 'text-green-400', label: '좋음', chevrons: 3 }
                 : rrRounded >= 1.5
-                ? { bg: 'bg-yellow-500', glow: 'shadow-[0_0_8px_rgba(234,179,8,0.6)]', text: 'text-yellow-400', label: '보통' }
-                : { bg: 'bg-red-500', glow: 'shadow-[0_0_8px_rgba(239,68,68,0.6)]', text: 'text-red-400', label: '위험' };
+                ? { bg: 'bg-yellow-500', text: 'text-yellow-400', label: '보통', chevrons: 2 }
+                : { bg: 'bg-red-500', text: 'text-red-400', label: '위험', chevrons: 1 };
 
               // 근거별 스타일 (신호등)
               const getReasonStyle = (reason: string) => {
                 if (reason.includes('VAH') || reason.includes('VAL')) {
-                  return { bg: 'bg-purple-500', glow: 'shadow-[0_0_6px_rgba(168,85,247,0.5)]', text: 'text-purple-300' };
+                  return { bg: 'bg-purple-500', text: 'text-purple-300', chevrons: 3 };
                 }
                 if (reason.includes('POC')) {
-                  return { bg: 'bg-yellow-500', glow: 'shadow-[0_0_6px_rgba(234,179,8,0.5)]', text: 'text-yellow-300' };
+                  return { bg: 'bg-yellow-500', text: 'text-yellow-300', chevrons: 2 };
                 }
                 if (reason.includes('보수적')) {
-                  return { bg: 'bg-orange-500', glow: 'shadow-[0_0_6px_rgba(249,115,22,0.5)]', text: 'text-orange-300' };
+                  return { bg: 'bg-orange-500', text: 'text-orange-300', chevrons: 1 };
                 }
-                return { bg: 'bg-blue-500', glow: 'shadow-[0_0_6px_rgba(59,130,246,0.5)]', text: 'text-blue-300' };
+                return { bg: 'bg-blue-500', text: 'text-blue-300', chevrons: 2 };
               };
+
+              // 쉐브론 렌더링 함수
+              const renderChevrons = (count: number, colorClass: string) => (
+                <span className="inline-flex -space-x-1">
+                  {Array.from({ length: count }).map((_, i) => (
+                    <ChevronUp key={i} className={`w-3 h-3 ${colorClass}`} />
+                  ))}
+                </span>
+              );
 
               const tpReason = recommendation.takeProfitReason || '4ATR';
               const slReason = recommendation.stopLossReason || '2ATR';
@@ -312,8 +321,8 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
                           </td>
                         ))}
                         <td className="py-1.5 px-2 text-right">
-                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${tpStyle.text} ${tpStyle.glow}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${tpStyle.bg}`} />
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${tpStyle.text}`}>
+                            {renderChevrons(tpStyle.chevrons, tpStyle.text)}
                             {tpReason}
                           </span>
                         </td>
@@ -333,8 +342,8 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
                           </td>
                         ))}
                         <td className="py-1.5 px-2 text-right">
-                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${slStyle.text} ${slStyle.glow}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${slStyle.bg}`} />
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${slStyle.text}`}>
+                            {renderChevrons(slStyle.chevrons, slStyle.text)}
                             {slReason}
                           </span>
                         </td>
@@ -351,8 +360,8 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
                           </span>
                         </td>
                         <td className="py-1.5 px-2 text-right">
-                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${rrStyle.text} ${rrStyle.glow}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${rrStyle.bg} animate-pulse`} />
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${rrStyle.text}`}>
+                            {renderChevrons(rrStyle.chevrons, rrStyle.text)}
                             {rrStyle.label}
                           </span>
                         </td>

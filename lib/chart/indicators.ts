@@ -479,12 +479,12 @@ export function addDivergenceLines(
       return;
     }
 
-    // 필터링된 신호는 회색, 정상 신호는 오더북 색상 기준
+    // 필터링된 신호는 회색, 정상 신호는 선명한 색상
     const color = pair.isFiltered
       ? 'rgba(156, 163, 175, 0.7)' // gray-400 (투명도 70%)
       : pair.direction === 'bullish'
-      ? 'rgba(163, 230, 53, 0.9)' // lime-400 (롱 타점 - 투명도 90%)
-      : 'rgba(248, 113, 113, 0.9)'; // red-400 (숏 타점 - 투명도 90%)
+      ? 'rgba(163, 230, 53, 0.95)' // lime-400 (롱 타점)
+      : 'rgba(248, 113, 113, 0.95)'; // red-400 (숏 타점)
 
     // 1. 가격 패널에 선 그리기
     // useClosePrice=true면 종가 기준 (라인 차트용)
@@ -558,7 +558,7 @@ export function addDivergenceLines(
         LineSeries,
         {
           color: color,
-          lineWidth: pair.isFiltered ? 1 : 2, // 필터링된 신호는 얇은 선
+          lineWidth: pair.isFiltered ? 1 : 3, // 필터링된 신호는 얇은 선
           lastValueVisible: false,
           priceLineVisible: false,
           lineStyle: pair.isFiltered ? 2 : 0, // 필터링된 신호는 점선 (2 = dashed)
@@ -571,14 +571,14 @@ export function addDivergenceLines(
         { time: (pair.end.timestamp / 1000) as Time, value: endPrice },
       ]);
 
-      // 다이버전스 끝점에 라벨 마커 추가
+      // 다이버전스 끝점에 라벨 마커 추가 (라인과 동일 색상)
       const label = typeLabels[pair.start.type] || pair.start.type.toUpperCase();
       const arrow = pair.direction === 'bullish' ? '↑' : '↓';
       const markerColor = pair.isFiltered
         ? '#9ca3af' // gray-400
         : pair.direction === 'bullish'
-        ? '#a3e635' // lime-400
-        : '#f87171'; // red-400
+        ? '#a3e635' // lime-400 (라인과 동일)
+        : '#f87171'; // red-400 (라인과 동일)
 
       divergenceMarkers.push({
         time: (pair.end.timestamp / 1000) as Time,
@@ -623,7 +623,7 @@ export function addDivergenceLines(
           LineSeries,
           {
             color: color,
-            lineWidth: pair.isFiltered ? 1 : 2, // 필터링된 신호는 얇은 선
+            lineWidth: pair.isFiltered ? 1 : 3, // 필터링된 신호는 얇은 선
             lastValueVisible: false,
             priceLineVisible: false,
             priceScaleId: 'rsi', // RSI 스케일 사용 (중요!)
@@ -679,7 +679,7 @@ export function addDivergenceLines(
           LineSeries,
           {
             color: color,
-            lineWidth: pair.isFiltered ? 1 : 2, // 필터링된 신호는 얇은 선
+            lineWidth: pair.isFiltered ? 1 : 3, // 필터링된 신호는 얇은 선
             lastValueVisible: false,
             priceLineVisible: false,
             priceScaleId: 'obv', // OBV 스케일 사용 (중요!)

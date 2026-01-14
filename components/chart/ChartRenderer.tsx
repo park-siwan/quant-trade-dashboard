@@ -41,6 +41,7 @@ import {
   AdxData,
 } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
+import { ChevronUp } from 'lucide-react';
 import { LongShortRatio } from '@/hooks/useLongShortRatio';
 import {
   timeframeToMinutes,
@@ -130,6 +131,12 @@ export default function ChartRenderer({
     crossover: { type: 'golden_cross' | 'dead_cross'; analysis: string } | null;
     divergences: Array<{ type: string; direction: string; analysis: string; isFiltered: boolean; startTime: number; endTime: number }>;
     marketSignal?: MarketSignal | null;
+    choch?: {
+      direction: 'bullish' | 'bearish';
+      strength: 'strong' | 'medium' | 'weak';
+      isOverheated: boolean;
+      rsiAtBreak?: number;
+    } | null;
   } | null>(null);
   const [trendTooltip, setTrendTooltip] = useState<string | null>(null); // 추세 툴팁
   const [currentPriceInfo, setCurrentPriceInfo] = useState<{
@@ -345,13 +352,17 @@ export default function ChartRenderer({
             return lastPrice >= firstPrice ? 'green' : 'red';
           })();
 
+      // 글로우 점 색상 업데이트
+      setChartColor(colorType);
+
       const colorMap = {
-        green: { line: SIGNAL_STYLES.long_ok.rgbColor, light: SIGNAL_STYLES.long_ok.rgbLight, fade: SIGNAL_STYLES.long_ok.rgbFade },
-        red: { line: SIGNAL_STYLES.short_ok.rgbColor, light: SIGNAL_STYLES.short_ok.rgbLight, fade: SIGNAL_STYLES.short_ok.rgbFade },
-        gray: { line: SIGNAL_STYLES.wait.rgbColor, light: SIGNAL_STYLES.wait.rgbLight, fade: SIGNAL_STYLES.wait.rgbFade },
+        green: { line: 'rgba(34, 197, 94, 0.5)', solid: '#22c55e', light: SIGNAL_STYLES.long_ok.rgbLight, fade: SIGNAL_STYLES.long_ok.rgbFade },
+        red: { line: 'rgba(239, 68, 68, 0.5)', solid: '#ef4444', light: SIGNAL_STYLES.short_ok.rgbLight, fade: SIGNAL_STYLES.short_ok.rgbFade },
+        gray: { line: 'rgba(107, 114, 128, 0.5)', solid: '#6b7280', light: SIGNAL_STYLES.wait.rgbLight, fade: SIGNAL_STYLES.wait.rgbFade },
       };
       const colors = colorMap[colorType];
       const trendColor = colors.line;
+      const trendColorSolid = colors.solid; // 마커용 불투명 색상
       const trendColorLight = colors.light;
       const trendColorFade = colors.fade;
 
@@ -360,13 +371,13 @@ export default function ChartRenderer({
         AreaSeries,
         {
           lineColor: trendColor,
-          lineWidth: 2,
+          lineWidth: 1,
           topColor: trendColorLight, // 상단 그라데이션
           bottomColor: trendColorFade, // 하단 그라데이션 (거의 투명)
           crosshairMarkerVisible: true,
           crosshairMarkerRadius: 4,
           crosshairMarkerBorderColor: '#ffffff',
-          crosshairMarkerBackgroundColor: trendColor,
+          crosshairMarkerBackgroundColor: trendColorSolid, // 불투명 마커
           lastValueVisible: true,
           priceLineVisible: false,
         },
@@ -909,6 +920,40 @@ export default function ChartRenderer({
           }
         }
 
+        // CHoCH 신호 확인 (±2캔들 범위 내) - 다이버전스 배열에 추가
+        if (marketStructureData && marketStructureData.structureBreaks.length > 0) {
+          // 타임프레임에 따른 감지 범위 (2캔들 = 타임프레임 * 2)
+          const tfMinutes = timeframeToMinutes(timeframe);
+          const detectionRangeSeconds = tfMinutes * 60 * 2; // 2캔들 범위
+
+          marketStructureData.structureBreaks.forEach((brk) => {
+            if (brk.type !== 'CHoCH') return;
+            // breakTime은 밀리초 단위, currentTime은 초 단위이므로 변환 필요
+            const breakTimeSeconds = brk.breakTime / 1000;
+            const timeDiff = Math.abs(breakTimeSeconds - currentTime);
+            if (timeDiff < detectionRangeSeconds) {
+              // 중복 체크: 같은 방향의 CHoCH가 이미 있으면 추가하지 않음
+              const alreadyExists = divergenceInfos.some(
+                (d) => d.type === 'choch' && d.direction === brk.direction
+              );
+              if (alreadyExists) return;
+
+              const strengthText = brk.strength === 'strong' ? '강함' : brk.strength === 'medium' ? '중간' : '약함';
+              const confidenceText = brk.isOverheated ? '높음 (RSI 확인)' : '낮음';
+              const rsiText = brk.rsiAtBreak ? ` RSI: ${brk.rsiAtBreak.toFixed(1)}` : '';
+
+              divergenceInfos.push({
+                type: 'choch',
+                direction: brk.direction,
+                analysis: `CHoCH (Change of Character) - ${brk.direction === 'bullish' ? '상승' : '하락'} 전환 감지\n강도: ${strengthText} | 신뢰도: ${confidenceText}${rsiText}\n${brk.isOverheated ? '쉐브론 글로우: RSI 극단값으로 신뢰도 높음' : '쉐브론 투명: RSI 조건 미충족'}`,
+                isFiltered: !brk.isOverheated,
+                startTime: breakTimeSeconds,
+                endTime: breakTimeSeconds,
+              });
+            }
+          });
+        }
+
         // 툴팁 표시 조건: RSI, 필터링, 크로스오버, 다이버전스, CVD+OI 중 하나라도 있으면 표시
         if (
           rsiValue !== null ||
@@ -1034,6 +1079,8 @@ export default function ChartRenderer({
     vwapAtrData?.currentVwap, // VWAP 변경 시 재렌더링
     vwapAtrData?.atr?.length, // ATR 변경 시 재렌더링
     orderBlockData?.activeBlocks?.length, // 오더블록 변경 시 재렌더링
+    marketStructureData?.structureBreaks?.length, // CHoCH 변경 시 재렌더링
+    timeframe, // 타임프레임 변경 시 재렌더링
     mini, // 미니 모드 변경 시 재렌더링
   ]);
 
@@ -1094,8 +1141,9 @@ export default function ChartRenderer({
     color: string;
   }>>([]);
 
-  // 마지막 점 좌표 (미니 모드 글로우 점용)
+  // 마지막 점 좌표 및 색상 (미니 모드 글로우 점용)
   const [lastPointCoord, setLastPointCoord] = useState<{ x: number; y: number } | null>(null);
+  const [chartColor, setChartColor] = useState<'green' | 'red' | 'gray'>('gray');
 
   // 측정 박스를 위한 상태 (화면 좌표)
   const [measureBox, setMeasureBox] = useState<{
@@ -1562,13 +1610,13 @@ export default function ChartRenderer({
               extreme: 'text-purple-400',
             }[trendStrength];
 
-            // 추세 강도별 텍스트
-            const strengthText = {
-              none: '횡보',
-              forming: '형성중',
-              strong: '강함',
-              very_strong: '매우강함',
-              extreme: '극단',
+            // 추세 강도별 쉐브론 개수
+            const strengthChevrons = {
+              none: 0,
+              forming: 1,
+              strong: 2,
+              very_strong: 3,
+              extreme: 4,
             }[trendStrength];
 
             // 매매 추천별 배지 색상
@@ -1588,8 +1636,10 @@ export default function ChartRenderer({
                 <span className={`font-mono font-bold text-sm ${strengthColor}`}>
                   {currentAdx?.toFixed(0) ?? '-'}
                 </span>
-                <span className={`text-xs font-medium ${strengthColor}`}>
-                  {strengthText}
+                <span className='inline-flex -space-x-1.5'>
+                  {Array.from({ length: strengthChevrons }).map((_, i) => (
+                    <ChevronUp key={i} className={`w-4 h-4 ${strengthColor}`} />
+                  ))}
                 </span>
                 <span className={`text-sm font-bold ${dirColor}`}>{dirIcon}</span>
                 <span className={`text-xs px-1.5 py-0.5 rounded border ${recBadge.color}`}>
@@ -1920,14 +1970,14 @@ export default function ChartRenderer({
         {/* CVD+OI 신호 마커 - 숨김 (매매에 큰 도움 안됨) */}
         {/* signalMarkers (매수세/매도세) 숨김 */}
 
-        {/* CHoCH 마커만 작게 표시 (BOS 숨김) */}
+        {/* CHoCH 마커만 쉐브론으로 표시 (BOS 숨김) */}
         {structureMarkers
           .filter(marker => marker.type === 'CHoCH')
           .map((marker, index) => {
             const isOverheated = marker.isOverheated;
-            const bgColor = marker.direction === 'bullish'
-              ? (isOverheated ? 'rgba(34, 197, 94, 0.8)' : 'rgba(34, 197, 94, 0.4)')
-              : (isOverheated ? 'rgba(239, 68, 68, 0.8)' : 'rgba(239, 68, 68, 0.4)');
+            // 강도에 따라 쉐브론 개수 결정 (1-3개)
+            const chevronCount = marker.strength === 'strong' ? 3 : marker.strength === 'medium' ? 2 : 1;
+            const color = marker.direction === 'bullish' ? '#22c55e' : '#ef4444';
 
             return (
               <div
@@ -1939,15 +1989,26 @@ export default function ChartRenderer({
                   transform: 'translate(-50%, -50%)',
                   pointerEvents: 'none',
                   zIndex: 18,
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  color: marker.direction === 'bullish' ? '#22c55e' : '#ef4444',
-                  opacity: isOverheated ? 1 : 0.5,
-                  textShadow: isOverheated ? '0 0 6px currentColor' : 'none',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '-4px',
                 }}
-                title={marker.rsiAtBreak ? `RSI: ${marker.rsiAtBreak.toFixed(1)}` : undefined}
               >
-                {marker.direction === 'bullish' ? '▲' : '▼'}
+                {Array.from({ length: chevronCount }).map((_, i) => (
+                  <ChevronUp
+                    key={i}
+                    style={{
+                      width: '16px',
+                      height: '16px',
+                      marginTop: i > 0 ? '-10px' : '0',
+                      color: color,
+                      opacity: isOverheated ? 1 : 0.5,
+                      filter: isOverheated ? `drop-shadow(0 0 4px ${color})` : 'none',
+                      transform: marker.direction === 'bearish' ? 'rotate(180deg)' : 'none',
+                    }}
+                  />
+                ))}
               </div>
             );
           })}
@@ -2063,26 +2124,34 @@ export default function ChartRenderer({
       ))}
 
       {/* 미니 모드 글로우 점 (마지막 가격 위치) */}
-      {mini && lastPointCoord && (
-        <div
-          style={{
-            position: 'absolute',
-            left: `${lastPointCoord.x}px`,
-            top: `${lastPointCoord.y}px`,
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            backgroundColor: 'rgba(59, 130, 246, 1)',
-            boxShadow: '0 0 8px rgba(59, 130, 246, 0.8), 0 0 16px rgba(59, 130, 246, 0.5), 0 0 24px rgba(59, 130, 246, 0.3)',
-            transform: 'translate(-50%, -50%)',
-            pointerEvents: 'none',
-            zIndex: 10,
-            animation: 'pulse 2s ease-in-out infinite',
-          }}
-        />
-      )}
+      {mini && lastPointCoord && (() => {
+        const dotColors = {
+          green: { bg: 'rgba(34, 197, 94, 1)', shadow: 'rgba(34, 197, 94, 0.8), 0 0 16px rgba(34, 197, 94, 0.5), 0 0 24px rgba(34, 197, 94, 0.3)' },
+          red: { bg: 'rgba(239, 68, 68, 1)', shadow: 'rgba(239, 68, 68, 0.8), 0 0 16px rgba(239, 68, 68, 0.5), 0 0 24px rgba(239, 68, 68, 0.3)' },
+          gray: { bg: 'rgba(107, 114, 128, 1)', shadow: 'rgba(107, 114, 128, 0.8), 0 0 16px rgba(107, 114, 128, 0.5), 0 0 24px rgba(107, 114, 128, 0.3)' },
+        };
+        const dotColor = dotColors[chartColor];
+        return (
+          <div
+            style={{
+              position: 'absolute',
+              left: `${lastPointCoord.x}px`,
+              top: `${lastPointCoord.y}px`,
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: dotColor.bg,
+              boxShadow: `0 0 8px ${dotColor.shadow}`,
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              zIndex: 10,
+              animation: 'pulse 2s ease-in-out infinite',
+            }}
+          />
+        );
+      })()}
 
-      {/* 통합 툴팁 (RSI + 필터링 정보 + 크로스오버 + 다이버전스 + CVD+OI) */}
+      {/* 통합 툴팁 (RSI + 필터링 정보 + 크로스오버 + 다이버전스 + CVD+OI + CHoCH) */}
       {tooltip && (
         <ChartTooltip
           x={tooltip.x}
@@ -2092,6 +2161,7 @@ export default function ChartRenderer({
           crossover={tooltip.crossover}
           divergences={tooltip.divergences}
           marketSignal={tooltip.marketSignal}
+          choch={tooltip.choch}
         />
       )}
       </div>

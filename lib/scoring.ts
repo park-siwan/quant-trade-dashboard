@@ -80,7 +80,8 @@ const checkNearOrderBlock = (
   return { isNear: false, type: null };
 };
 
-// 1. 추세 정렬 점수 (20점 만점) - 기본 6점
+// 1. 추세 정렬 점수 (20점 만점) - 고TF 중심
+// 핵심: 4h, 1d 추세가 방향과 일치하는지 확인 (저TF는 타이밍용)
 export const calculateTrendAlignmentScore = (
   mtfData: MTFOverviewData,
   direction: 'bullish' | 'bearish'
@@ -89,37 +90,39 @@ export const calculateTrendAlignmentScore = (
   let score = 6; // 기본 점수
 
   const timeframes = mtfData.timeframes;
-  const alignedCount = timeframes.filter(tf => tf.trend === direction).length;
-  const oppositeCount = timeframes.filter(tf => tf.trend !== direction && tf.trend !== null).length;
-  const totalCount = timeframes.length;
-
-  // 점진적 점수 (0~14점 추가)
-  score += Math.round((alignedCount / totalCount) * 14);
-
-  if (alignedCount >= 5) {
-    details.push(`${alignedCount}/${totalCount} TF 강한 일치`);
-  } else if (alignedCount >= 3) {
-    details.push(`${alignedCount}/${totalCount} TF 일치`);
-  } else if (alignedCount >= 1) {
-    details.push(`${alignedCount}/${totalCount} TF 약한 일치`);
-  } else {
-    details.push(`추세 미확인`);
-  }
-
-  // 4h, 1d 보너스/페널티 (약하게)
   const h4 = timeframes.find(tf => tf.timeframe === '4h');
   const d1 = timeframes.find(tf => tf.timeframe === '1d');
+  const h1 = timeframes.find(tf => tf.timeframe === '1h');
   const oppositeDirection = direction === 'bullish' ? 'bearish' : 'bullish';
 
-  if (h4?.trend === direction && d1?.trend === direction) {
+  // 고TF(4h, 1d) 추세가 핵심 - 여기서 방향 결정
+  if (d1?.trend === direction) {
+    score += 6;
+    details.push('1D 추세 일치');
+  } else if (d1?.trend === oppositeDirection) {
+    score -= 4;
+    details.push('1D 역추세');
+  }
+
+  if (h4?.trend === direction) {
+    score += 5;
+    details.push('4H 추세 일치');
+  } else if (h4?.trend === oppositeDirection) {
+    score -= 3;
+    details.push('4H 역추세');
+  }
+
+  // 1h는 중간 확인용
+  if (h1?.trend === direction) {
     score += 2;
-    details.push('고TF 일치');
-  }
-  if (h4?.trend === oppositeDirection) {
+  } else if (h1?.trend === oppositeDirection) {
     score -= 1;
   }
-  if (d1?.trend === oppositeDirection) {
-    score -= 1;
+
+  // 저TF(5m, 15m)는 추세 점수에서 제외 (타이밍 점수에서 사용)
+
+  if (details.length === 0) {
+    details.push('추세 중립');
   }
 
   return {
@@ -188,7 +191,8 @@ export const calculateDivergenceScore = (
   };
 };
 
-// 3. 모멘텀/RSI 점수 (15점 만점) - 기본 5점
+// 3. 모멘텀/RSI 점수 (15점 만점) - 과열 페널티 강화
+// 핵심: 이미 급등/급락한 상태에서 추격 진입 방지
 export const calculateMomentumScore = (
   mtfData: MTFOverviewData,
   direction: 'bullish' | 'bearish'
@@ -196,61 +200,81 @@ export const calculateMomentumScore = (
   const details: string[] = [];
   let score = 5; // 기본 점수
 
-  // RSI 레벨 체크 (더 점진적으로)
   const tf5m = mtfData.timeframes.find(tf => tf.timeframe === '5m');
+  const tf15m = mtfData.timeframes.find(tf => tf.timeframe === '15m');
   const tf1h = mtfData.timeframes.find(tf => tf.timeframe === '1h');
 
-  if (tf5m?.rsi) {
-    if (direction === 'bullish') {
-      if (tf5m.rsi <= 30) {
-        score += 4;
-        details.push(`RSI 과매도 (${tf5m.rsi.toFixed(0)})`);
-      } else if (tf5m.rsi <= 45) {
-        score += 2;
-        details.push(`RSI 저점대 (${tf5m.rsi.toFixed(0)})`);
-      } else if (tf5m.rsi >= 70) {
-        score -= 2;
-      }
-    } else {
-      if (tf5m.rsi >= 70) {
-        score += 4;
-        details.push(`RSI 과매수 (${tf5m.rsi.toFixed(0)})`);
-      } else if (tf5m.rsi >= 55) {
-        score += 2;
+  // 고TF 추세 확인 (눌림목/반등 판단용)
+  const h4 = mtfData.timeframes.find(tf => tf.timeframe === '4h');
+  const d1 = mtfData.timeframes.find(tf => tf.timeframe === '1d');
+  const higherTrend = d1?.trend || h4?.trend || 'neutral';
+
+  if (direction === 'bullish') {
+    // 롱 진입 시
+    // 좋은 진입: 상승추세 + 단기 RSI 눌림 (35-50)
+    // 나쁜 진입: RSI 70+ 과열 상태에서 추격 매수
+
+    if (tf5m?.rsi) {
+      if (tf5m.rsi >= 75) {
+        score -= 5;
+        details.push(`RSI 과열 (${tf5m.rsi.toFixed(0)}) 추격금지`);
+      } else if (tf5m.rsi >= 65) {
+        score -= 3;
         details.push(`RSI 고점대 (${tf5m.rsi.toFixed(0)})`);
+      } else if (tf5m.rsi <= 35 && higherTrend === 'bullish') {
+        // 상승추세 중 눌림목 = 좋은 진입
+        score += 5;
+        details.push(`눌림목 진입 (RSI ${tf5m.rsi.toFixed(0)})`);
+      } else if (tf5m.rsi <= 45 && tf5m.rsi > 35 && higherTrend === 'bullish') {
+        score += 3;
+        details.push(`조정 구간 (RSI ${tf5m.rsi.toFixed(0)})`);
       } else if (tf5m.rsi <= 30) {
-        score -= 2;
+        // 추세 없이 과매도 = 반등 기대
+        score += 2;
+        details.push(`과매도 반등 (${tf5m.rsi.toFixed(0)})`);
+      }
+    }
+  } else {
+    // 숏 진입 시
+    // 좋은 진입: 하락추세 + 단기 RSI 반등 (50-65)
+    // 나쁜 진입: RSI 30- 침체 상태에서 추격 매도
+
+    if (tf5m?.rsi) {
+      if (tf5m.rsi <= 25) {
+        score -= 5;
+        details.push(`RSI 침체 (${tf5m.rsi.toFixed(0)}) 추격금지`);
+      } else if (tf5m.rsi <= 35) {
+        score -= 3;
+        details.push(`RSI 저점대 (${tf5m.rsi.toFixed(0)})`);
+      } else if (tf5m.rsi >= 65 && higherTrend === 'bearish') {
+        // 하락추세 중 반등 = 좋은 진입
+        score += 5;
+        details.push(`반등 진입 (RSI ${tf5m.rsi.toFixed(0)})`);
+      } else if (tf5m.rsi >= 55 && tf5m.rsi < 65 && higherTrend === 'bearish') {
+        score += 3;
+        details.push(`되돌림 구간 (RSI ${tf5m.rsi.toFixed(0)})`);
+      } else if (tf5m.rsi >= 70) {
+        // 추세 없이 과매수 = 하락 기대
+        score += 2;
+        details.push(`과매수 하락 (${tf5m.rsi.toFixed(0)})`);
       }
     }
   }
 
-  // ADX 추세 강도 (더 완만하게)
-  const strongTrendTFs = mtfData.timeframes.filter(tf => tf.isStrongTrend);
+  // ADX: 추세 강도 (너무 강하면 추격 위험)
   const avgAdx = mtfData.timeframes
     .map(tf => tf.adx)
     .filter((a): a is number => a !== null)
     .reduce((sum, a, _, arr) => sum + a / arr.length, 0);
 
-  if (avgAdx > 25) {
-    score += 3;
-    details.push(`ADX 강세 (${avgAdx.toFixed(0)})`);
-  } else if (avgAdx > 20) {
-    score += 1;
-    details.push(`ADX 보통`);
-  }
-
-  // ATR 변동성
-  const atrRatios = mtfData.timeframes
-    .map(tf => tf.atrRatio)
-    .filter((r): r is number => r !== null);
-
-  if (atrRatios.length > 0) {
-    const avgATR = atrRatios.reduce((sum, r) => sum + r, 0) / atrRatios.length;
-    if (avgATR < 0.8) {
-      score += 1;
-    } else if (avgATR > 1.5) {
-      score -= 1;
-    }
+  if (avgAdx > 40) {
+    // 추세 과열
+    score -= 1;
+    details.push(`ADX 과열 (${avgAdx.toFixed(0)})`);
+  } else if (avgAdx >= 20 && avgAdx <= 30) {
+    // 적당한 추세 강도 = 좋음
+    score += 2;
+    details.push(`ADX 적정 (${avgAdx.toFixed(0)})`);
   }
 
   return {
@@ -260,7 +284,8 @@ export const calculateMomentumScore = (
   };
 };
 
-// 4. 거래량 점수 (15점 만점) - CVD만 - 기본 5점
+// 4. 거래량 점수 (15점 만점) - CVD + 변동성 축소 감지
+// 핵심: 거래량 축소 후 확대 시작점이 좋은 진입
 export const calculateVolumeScore = (
   mtfData: MTFOverviewData,
   direction: 'bullish' | 'bearish'
@@ -268,50 +293,52 @@ export const calculateVolumeScore = (
   const details: string[] = [];
   let score = 5; // 기본 점수
 
-  // CVD 방향 확인
+  // CVD 방향 확인 (고TF 중심)
   const h4 = mtfData.timeframes.find(tf => tf.timeframe === '4h');
   const h1 = mtfData.timeframes.find(tf => tf.timeframe === '1h');
   const m15 = mtfData.timeframes.find(tf => tf.timeframe === '15m');
+  const m5 = mtfData.timeframes.find(tf => tf.timeframe === '5m');
 
-  let alignedCount = 0;
-  let oppositeCount = 0;
-
-  // 4h CVD
+  // 고TF CVD가 핵심 (4h)
   if (h4?.cvdDirection === direction) {
-    alignedCount++;
-    score += 3;
-  } else if (h4?.cvdDirection && h4.cvdDirection !== direction) {
-    oppositeCount++;
-    score -= 1;
+    score += 4;
+    details.push('4H CVD 일치');
+  } else if (h4?.cvdDirection && h4.cvdDirection !== direction && h4.cvdDirection !== 'neutral') {
+    score -= 2;
+    details.push('4H CVD 역행');
   }
 
   // 1h CVD
   if (h1?.cvdDirection === direction) {
-    alignedCount++;
-    score += 3;
-  } else if (h1?.cvdDirection && h1.cvdDirection !== direction) {
-    oppositeCount++;
+    score += 2;
+  } else if (h1?.cvdDirection && h1.cvdDirection !== direction && h1.cvdDirection !== 'neutral') {
     score -= 1;
   }
 
-  // 15m CVD
-  if (m15?.cvdDirection === direction) {
-    alignedCount++;
-    score += 2;
-  } else if (m15?.cvdDirection && m15.cvdDirection !== direction) {
-    oppositeCount++;
+  // ATR 축소 감지 (변동성 축소 = 폭발 전 신호)
+  const atrRatios = mtfData.timeframes
+    .map(tf => tf.atrRatio)
+    .filter((r): r is number => r !== null);
+
+  if (atrRatios.length > 0) {
+    const avgATR = atrRatios.reduce((sum, r) => sum + r, 0) / atrRatios.length;
+
+    if (avgATR < 0.7) {
+      // 변동성 축소 = 조정 구간 = 좋은 진입 준비
+      score += 3;
+      details.push(`변동성 축소 (${avgATR.toFixed(1)}x)`);
+    } else if (avgATR < 0.9) {
+      score += 1;
+      details.push(`변동성 낮음`);
+    } else if (avgATR > 1.8) {
+      // 변동성 과다 = 급등/급락 후 = 추격 위험
+      score -= 2;
+      details.push(`변동성 과다 (${avgATR.toFixed(1)}x)`);
+    }
   }
 
-  if (alignedCount >= 3) {
-    details.push(`CVD 강한 일치`);
-  } else if (alignedCount >= 2) {
-    details.push(`CVD 일치`);
-  } else if (alignedCount >= 1) {
-    details.push(`CVD 약한 일치`);
-  } else if (oppositeCount >= 2) {
-    details.push(`CVD 역행`);
-  } else {
-    details.push(`CVD 중립`);
+  if (details.length === 0) {
+    details.push('거래량 중립');
   }
 
   return {

@@ -16,6 +16,12 @@ interface ChartTooltipProps {
     change: number;
     changePercent: number;
   } | null;
+  choch?: {
+    direction: 'bullish' | 'bearish';
+    strength: 'strong' | 'medium' | 'weak';
+    isOverheated: boolean;
+    rsiAtBreak?: number;
+  } | null;
 }
 
 export default function ChartTooltip({
@@ -27,6 +33,7 @@ export default function ChartTooltip({
   divergences,
   marketSignal,
   priceInfo,
+  choch,
 }: ChartTooltipProps) {
   return (
     <div
@@ -95,38 +102,95 @@ export default function ChartTooltip({
         </>
       )}
 
-      {/* 다이버전스 정보 (여러 개 가능) */}
+      {/* CHoCH (Change of Character) 정보 */}
+      {choch && (
+        <>
+          <div
+            style={{
+              color: choch.direction === 'bullish' ? '#22c55e' : '#ef4444',
+              fontWeight: 'bold',
+              marginBottom: '8px',
+              fontSize: '14px',
+            }}
+          >
+            {choch.direction === 'bullish' ? '↑ CHoCH 상승 전환' : '↓ CHoCH 하락 전환'}
+            {' '}
+            <span style={{ color: '#fbbf24', fontSize: '12px' }}>
+              ({choch.strength === 'strong' ? '강함' : choch.strength === 'medium' ? '중간' : '약함'})
+            </span>
+          </div>
+          <div style={{ lineHeight: '1.6', color: '#d1d5db', marginBottom: '8px', fontSize: '12px' }}>
+            {choch.direction === 'bullish'
+              ? '하락 추세에서 상승 추세로 전환되는 시장 구조 변화가 감지되었습니다. 매수 진입을 고려할 수 있습니다.'
+              : '상승 추세에서 하락 추세로 전환되는 시장 구조 변화가 감지되었습니다. 매도 또는 익절을 고려하세요.'}
+          </div>
+          <div style={{ display: 'flex', gap: '12px', fontSize: '11px', marginBottom: '8px' }}>
+            {choch.rsiAtBreak && (
+              <span style={{ color: '#60a5fa' }}>RSI: {choch.rsiAtBreak.toFixed(1)}</span>
+            )}
+            <span style={{ color: choch.isOverheated ? '#22c55e' : '#9ca3af' }}>
+              신뢰도: {choch.isOverheated ? '✓ 높음' : '○ 낮음'}
+            </span>
+          </div>
+          <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '12px' }}>
+            {choch.isOverheated
+              ? '쉐브론 글로우: RSI 극단값으로 전환 신뢰도 높음'
+              : '쉐브론 투명: RSI 조건 미충족으로 약한 신호'}
+          </div>
+          <div
+            style={{
+              borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+              marginBottom: '8px',
+            }}
+          />
+        </>
+      )}
+
+      {/* 다이버전스 및 CHoCH 정보 (여러 개 가능) */}
       {divergences && divergences.length > 0 && (
         <>
-          {divergences.map((divergence, index) => (
-            <div key={index}>
-              <div
-                style={{
-                  color: divergence.direction === 'bullish' ? '#a3e635' : '#fb923c',
-                  fontWeight: 'bold',
-                  marginBottom: '8px',
-                  fontSize: '14px',
-                }}
-              >
-                {divergence.direction === 'bullish' ? '📈 강세 다이버전스' : '📉 약세 다이버전스'}
-                {' '}
-                <span style={{ color: '#fbbf24', fontSize: '12px' }}>
-                  ({divergence.type.toUpperCase()})
-                </span>
-              </div>
-              <div style={{ lineHeight: '1.6', color: '#d1d5db', marginBottom: '12px' }}>
-                {divergence.analysis}
-              </div>
-              {index < divergences.length - 1 && (
+          {divergences.map((divergence, index) => {
+            // CHoCH인 경우 다른 스타일 적용
+            const isChoch = divergence.type === 'choch';
+            const titleColor = divergence.direction === 'bullish' ? '#22c55e' : '#ef4444';
+            const title = isChoch
+              ? (divergence.direction === 'bullish' ? '↑ CHoCH 상승 전환' : '↓ CHoCH 하락 전환')
+              : (divergence.direction === 'bullish' ? '📈 강세 다이버전스' : '📉 약세 다이버전스');
+
+            return (
+              <div key={index}>
                 <div
                   style={{
-                    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                    color: isChoch ? titleColor : (divergence.direction === 'bullish' ? '#a3e635' : '#fb923c'),
+                    fontWeight: 'bold',
                     marginBottom: '8px',
+                    fontSize: '14px',
                   }}
-                />
-              )}
-            </div>
-          ))}
+                >
+                  {title}
+                  {!isChoch && (
+                    <>
+                      {' '}
+                      <span style={{ color: '#fbbf24', fontSize: '12px' }}>
+                        ({divergence.type.toUpperCase()})
+                      </span>
+                    </>
+                  )}
+                </div>
+                <div style={{ lineHeight: '1.6', color: '#d1d5db', marginBottom: '12px', whiteSpace: 'pre-line' }}>
+                  {divergence.analysis}
+                </div>
+                {index < divergences.length - 1 && (
+                  <div
+                    style={{
+                      borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                      marginBottom: '8px',
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
           {/* 복수 지표 다이버전스 신뢰도 안내 (실제 범위 겹침 체크) */}
           {(() => {
             // 필터링되지 않은 다이버전스만 추출
