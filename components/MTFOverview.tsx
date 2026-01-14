@@ -9,6 +9,7 @@ import RecommendationCard from './RecommendationCard';
 import { calculateSignalScore, MarketStructureData } from '@/lib/scoring';
 import { generateRecommendation } from '@/lib/recommendation';
 import { useCoinglass } from '@/hooks/useCoinglass';
+import SignalChip from './SignalChip';
 
 // 공항 전광판/슬롯 스타일 애니메이션 숫자 (소수점 지원)
 const AnimatedValue = memo(({
@@ -314,97 +315,10 @@ const DivergenceDisplay = ({ divergence, timeframe }: {
   );
 };
 
-// 액션 표시 컴포넌트
-const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => {
-  const { action, reason } = actionInfo;
-
-  const getActionStyle = (action: MTFAction, reason: string): {
-    bg: string; text: string; icon: React.ElementType; label: string; hideReason?: boolean
-  } => {
-    switch (action) {
-      case 'long_ok':
-        return {
-          bg: 'bg-green-500/20 border-green-500/30',
-          text: 'text-green-400',
-          icon: TrendingUp,
-          label: '롱 OK',
-        };
-      case 'short_ok':
-        return {
-          bg: 'bg-red-500/20 border-red-500/30',
-          text: 'text-red-400',
-          icon: TrendingDown,
-          label: '숏 OK',
-        };
-      case 'reversal_warn':
-        // 반등주의는 초록, 반락주의는 빨강
-        const isExpired = reason.includes('만료');
-        if (reason.includes('반등')) {
-          return {
-            bg: isExpired ? 'bg-green-500/10 border-green-500/20' : 'bg-green-500/20 border-green-500/30',
-            text: isExpired ? 'text-green-400/60' : 'text-green-400',
-            icon: TrendingUp,
-            label: isExpired ? '반등(만료)' : '반등주의',
-            hideReason: true,
-          };
-        } else if (reason.includes('반락')) {
-          return {
-            bg: isExpired ? 'bg-red-500/10 border-red-500/20' : 'bg-red-500/20 border-red-500/30',
-            text: isExpired ? 'text-red-400/60' : 'text-red-400',
-            icon: TrendingDown,
-            label: isExpired ? '반락(만료)' : '반락주의',
-            hideReason: true,
-          };
-        }
-        return {
-          bg: 'bg-amber-500/20 border-amber-500/30',
-          text: 'text-amber-400',
-          icon: AlertTriangle,
-          label: '반전주의',
-        };
-      case 'trend_hold':
-        // 상승추세면 초록, 하락추세면 빨강
-        if (reason.includes('상승')) {
-          return {
-            bg: 'bg-green-500/20 border-green-500/30',
-            text: 'text-green-400',
-            icon: TrendingUp,
-            label: '상승유지',
-            hideReason: true,
-          };
-        } else {
-          return {
-            bg: 'bg-red-500/20 border-red-500/30',
-            text: 'text-red-400',
-            icon: TrendingDown,
-            label: '하락유지',
-            hideReason: true,
-          };
-        }
-      case 'wait':
-      default:
-        return {
-          bg: 'bg-gray-500/20 border-gray-500/30',
-          text: 'text-gray-400',
-          icon: Clock,
-          label: '대기',
-        };
-    }
-  };
-
-  const style = getActionStyle(action, reason);
-  const IconComponent = style.icon;
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border ${style.bg}`}>
-        <IconComponent className={`w-3 h-3 ${style.text}`} />
-        <span className={`text-xs font-semibold ${style.text}`}>{style.label}</span>
-      </div>
-      {!style.hideReason && <span className="text-[10px] text-gray-500">{reason}</span>}
-    </div>
-  );
-};
+// 액션 표시 컴포넌트 (공통 SignalChip 사용)
+const ActionDisplay = ({ actionInfo }: { actionInfo: MTFActionInfo }) => (
+  <SignalChip action={actionInfo.action} reason={actionInfo.reason} size="md" />
+);
 
 // ADX 표시 컴포넌트 (게이지 바 포함) - 토스 스타일
 const AdxDisplay = memo(({ adx, isStrongTrend }: { adx: number | null; isStrongTrend: boolean }) => {
@@ -651,12 +565,14 @@ const TimeframeRow = ({
       <td className="px-2 py-1.5">
         <ActionDisplay actionInfo={data.actionInfo} />
       </td>
+      {/* 시계 컬럼 주석처리
       <td className="px-2 py-1.5">
         <CandleCountdown
           timeframe={data.timeframe}
           onRefresh={onRefresh}
         />
       </td>
+      */}
     </tr>
   );
 };
@@ -1029,9 +945,11 @@ export default function MTFOverview({
                 <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">가격↔지표 다이버전스</span>
               </th>
               <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">신호</th>
+              {/* 시계 컬럼 주석처리
               <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">
                 <Clock className="w-2.5 h-2.5 inline" />
               </th>
+              */}
             </tr>
           </thead>
           <tbody>

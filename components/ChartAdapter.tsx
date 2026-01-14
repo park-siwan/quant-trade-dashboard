@@ -26,6 +26,7 @@ import {
   AdxData,
 } from '@/lib/types/index';
 import { Bitcoin } from 'lucide-react';
+import SignalChip from './SignalChip';
 
 interface ChartAdapterProps {
   symbol?: string;
@@ -90,10 +91,17 @@ export default function ChartAdapter({
   });
 
   // MTF WebSocket에서 추가 다이버전스 가져오기 (REST API에서 누락된 것들)
-  const { getRawDivergences } = useMTFSocket({
+  const { data: mtfData, getRawDivergences } = useMTFSocket({
     symbol: symbol.replace('/', ''),
     enabled: true,
   });
+
+  // 현재 타임프레임의 actionInfo 가져오기
+  const actionInfo = useMemo(() => {
+    if (!mtfData?.timeframes) return null;
+    const tf = mtfData.timeframes.find(t => t.timeframe === selectedTimeframe);
+    return tf?.actionInfo || null;
+  }, [mtfData, selectedTimeframe]);
 
   // API 응답을 CandlestickData 형식으로 변환 (데이터가 없으면 빈 배열)
   // 모든 useMemo 훅은 early return 전에 호출되어야 함
@@ -429,9 +437,14 @@ export default function ChartAdapter({
   if (mini) {
     return (
       <div className='relative bg-white/[0.02] border border-white/10 rounded-xl overflow-hidden h-full'>
-        {/* 타임프레임 라벨 */}
-        <div className='absolute top-2 left-2 z-10 px-2 py-0.5 bg-black/50 rounded text-xs font-bold text-white'>
-          {TIMEFRAMES.find(tf => tf.value === selectedTimeframe)?.label || selectedTimeframe}
+        {/* 타임프레임 + 신호 라벨 */}
+        <div className='absolute top-2 left-2 z-10 flex items-center gap-1'>
+          <span className='px-2 py-0.5 bg-black/50 rounded text-xs font-bold text-white'>
+            {TIMEFRAMES.find(tf => tf.value === selectedTimeframe)?.label || selectedTimeframe}
+          </span>
+          {actionInfo && (
+            <SignalChip action={actionInfo.action} reason={actionInfo.reason} size="md" />
+          )}
         </div>
         <ChartRenderer
           data={chartData}
@@ -457,6 +470,7 @@ export default function ChartAdapter({
           marketStructureData={marketStructureData}
           adxData={adxData}
           mini={true}
+          actionInfo={actionInfo}
         />
       </div>
     );

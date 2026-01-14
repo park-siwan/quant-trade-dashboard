@@ -47,6 +47,7 @@ import {
   formatMinutesToDuration as formatTimeRange,
   calculateTimeRange,
 } from '@/lib/timeframe';
+import { getChartColor, SIGNAL_STYLES } from '@/lib/signal';
 
 // Volume Profile 타입
 export interface VolumeProfileData {
@@ -91,6 +92,7 @@ interface ChartRendererProps {
   marketStructureData?: MarketStructureData | null; // 시장 구조 (BOS/CHoCH)
   adxData?: AdxData | null; // ADX 추세 강도 데이터
   mini?: boolean; // 미니 차트 모드
+  actionInfo?: { action: string; reason: string } | null; // MTF 신호 정보 (미니 차트용)
 }
 
 export default function ChartRenderer({
@@ -117,6 +119,7 @@ export default function ChartRenderer({
   marketStructureData,
   adxData,
   mini = false,
+  actionInfo,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{
@@ -332,15 +335,25 @@ export default function ChartRenderer({
     // 미니 모드: 영역 차트 (그라데이션 채우기)
     // 일반 모드: 캔들스틱 차트
     if (mini) {
-      // 추세 방향 판단 (첫 가격 vs 마지막 가격)
-      const firstPrice = uniqueData[0]?.close || 0;
-      const lastPrice = uniqueData[uniqueData.length - 1]?.close || 0;
-      const isUptrend = lastPrice >= firstPrice;
+      // actionInfo 기반 색상 결정 (공통 유틸리티 사용)
+      const colorType = actionInfo
+        ? getChartColor(actionInfo.action, actionInfo.reason)
+        : (() => {
+            // 폴백: 추세 방향 판단
+            const firstPrice = uniqueData[0]?.close || 0;
+            const lastPrice = uniqueData[uniqueData.length - 1]?.close || 0;
+            return lastPrice >= firstPrice ? 'green' : 'red';
+          })();
 
-      // 상승: 초록색, 하락: 빨간색
-      const trendColor = isUptrend ? '#22c55e' : '#ef4444'; // green-500 / red-500
-      const trendColorLight = isUptrend ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
-      const trendColorFade = isUptrend ? 'rgba(34, 197, 94, 0.02)' : 'rgba(239, 68, 68, 0.02)';
+      const colorMap = {
+        green: { line: SIGNAL_STYLES.long_ok.rgbColor, light: SIGNAL_STYLES.long_ok.rgbLight, fade: SIGNAL_STYLES.long_ok.rgbFade },
+        red: { line: SIGNAL_STYLES.short_ok.rgbColor, light: SIGNAL_STYLES.short_ok.rgbLight, fade: SIGNAL_STYLES.short_ok.rgbFade },
+        gray: { line: SIGNAL_STYLES.wait.rgbColor, light: SIGNAL_STYLES.wait.rgbLight, fade: SIGNAL_STYLES.wait.rgbFade },
+      };
+      const colors = colorMap[colorType];
+      const trendColor = colors.line;
+      const trendColorLight = colors.light;
+      const trendColorFade = colors.fade;
 
       // 영역 시리즈 추가 (하단 그라데이션 채우기)
       const areaSeries = chart.addSeries(
