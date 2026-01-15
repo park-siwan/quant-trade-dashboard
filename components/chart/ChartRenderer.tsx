@@ -34,6 +34,7 @@ import {
   PANEL_CONFIG,
 } from '@/lib/chart/chartConfig';
 import { debug } from '@/lib/debug';
+import { COLORS, CHART_COLORS, rgba } from '@/lib/colors';
 import {
   DivergenceSignal,
   EmaData,
@@ -212,7 +213,7 @@ export default function ChartRenderer({
         } else {
           // CandlestickSeries는 전체 OHLC 데이터 사용
           const isUp = realtimeCandle.close >= realtimeCandle.open;
-          const candleColor = isUp ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)';
+          const candleColor = isUp ? COLORS.LONG : COLORS.SHORT;
 
           const candleUpdate: CandlestickData = {
             time: (realtimeCandle.timestamp / 1000) as CandlestickData['time'],
@@ -281,13 +282,13 @@ export default function ChartRenderer({
       width: chartContainerRef.current.clientWidth,
       height: chartHeight,
       layout: {
-        background: { type: ColorType.Solid, color: '#0c0908' }, // 따뜻한 블랙
-        textColor: '#d1d5db',
-        fontSize: mini ? 9 : 12, // 미니 모드에서 작은 글자
+        background: { type: ColorType.Solid, color: COLORS.CHART_BG },
+        textColor: COLORS.TEXT_SECONDARY,
+        fontSize: mini ? 9 : 12,
         panes: {
-          separatorColor: 'rgba(255, 255, 255, 0.3)', // 연한 회색 구분선
-          separatorHoverColor: 'rgba(255, 255, 255, 0.5)', // 호버 시 더 밝게
-          enableResize: false, // 패널 크기 조절 비활성화
+          separatorColor: CHART_COLORS.SEPARATOR,
+          separatorHoverColor: CHART_COLORS.SEPARATOR_HOVER,
+          enableResize: false,
         },
       },
       handleScale: {
@@ -302,8 +303,8 @@ export default function ChartRenderer({
         vertTouchDrag: true,
       },
       grid: {
-        vertLines: { color: 'rgba(45, 38, 32, 0.25)' }, // 어두운 배경에 맞춘 미세한 그리드
-        horzLines: { color: 'rgba(45, 38, 32, 0.25)' },
+        vertLines: { color: CHART_COLORS.GRID },
+        horzLines: { color: CHART_COLORS.GRID },
       },
       timeScale: {
         timeVisible: !mini, // 미니 모드에서 시간 숨김
@@ -368,9 +369,9 @@ export default function ChartRenderer({
       setChartColor(colorType);
 
       const colorMap = {
-        green: { line: 'rgba(34, 197, 94, 0.5)', solid: '#22c55e', light: SIGNAL_STYLES.long_ok.rgbLight, fade: SIGNAL_STYLES.long_ok.rgbFade },
-        red: { line: 'rgba(239, 68, 68, 0.5)', solid: '#ef4444', light: SIGNAL_STYLES.short_ok.rgbLight, fade: SIGNAL_STYLES.short_ok.rgbFade },
-        gray: { line: 'rgba(107, 114, 128, 0.5)', solid: '#6b7280', light: SIGNAL_STYLES.wait.rgbLight, fade: SIGNAL_STYLES.wait.rgbFade },
+        green: { line: CHART_COLORS.LINE_LONG, solid: COLORS.LONG, light: SIGNAL_STYLES.long_ok.rgbLight, fade: SIGNAL_STYLES.long_ok.rgbFade },
+        red: { line: CHART_COLORS.LINE_SHORT, solid: COLORS.SHORT, light: SIGNAL_STYLES.short_ok.rgbLight, fade: SIGNAL_STYLES.short_ok.rgbFade },
+        gray: { line: CHART_COLORS.LINE_NEUTRAL, solid: COLORS.NEUTRAL, light: SIGNAL_STYLES.wait.rgbLight, fade: SIGNAL_STYLES.wait.rgbFade },
       };
       const colors = colorMap[colorType];
       const trendColor = colors.line;
@@ -388,7 +389,7 @@ export default function ChartRenderer({
           bottomColor: trendColorFade, // 하단 그라데이션 (거의 투명)
           crosshairMarkerVisible: true,
           crosshairMarkerRadius: 4,
-          crosshairMarkerBorderColor: '#ffffff',
+          crosshairMarkerBorderColor: COLORS.WHITE,
           crosshairMarkerBackgroundColor: trendColorSolid, // 불투명 마커
           lastValueVisible: true,
           priceLineVisible: false,
@@ -409,12 +410,12 @@ export default function ChartRenderer({
       const candlestickSeries = chart.addSeries(
         CandlestickSeries,
         {
-          upColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록색 캔들 (green-500)
-          downColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨간색 캔들 (red-500)
-          borderUpColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록색 테두리
-          borderDownColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨간색 테두리
-          wickUpColor: `rgba(34, 197, 94, ${CANDLE_OPACITY})`, // 초록색 꼬리
-          wickDownColor: `rgba(239, 68, 68, ${CANDLE_OPACITY})`, // 빨간색 꼬리
+          upColor: rgba(COLORS.LONG, CANDLE_OPACITY),
+          downColor: rgba(COLORS.SHORT, CANDLE_OPACITY),
+          borderUpColor: rgba(COLORS.LONG, CANDLE_OPACITY),
+          borderDownColor: rgba(COLORS.SHORT, CANDLE_OPACITY),
+          wickUpColor: rgba(COLORS.LONG, CANDLE_OPACITY),
+          wickDownColor: rgba(COLORS.SHORT, CANDLE_OPACITY),
         },
         0,
       );
@@ -429,15 +430,9 @@ export default function ChartRenderer({
 
         return {
           ...candle,
-          color: isUp
-            ? `rgba(34, 197, 94, ${opacity})` // 초록색
-            : `rgba(239, 68, 68, ${opacity})`, // 빨간색
-          borderColor: isUp
-            ? `rgba(34, 197, 94, ${opacity})`
-            : `rgba(239, 68, 68, ${opacity})`,
-          wickColor: isUp
-            ? `rgba(34, 197, 94, ${opacity})`
-            : `rgba(239, 68, 68, ${opacity})`,
+          color: rgba(isUp ? COLORS.LONG : COLORS.SHORT, opacity),
+          borderColor: rgba(isUp ? COLORS.LONG : COLORS.SHORT, opacity),
+          wickColor: rgba(isUp ? COLORS.LONG : COLORS.SHORT, opacity),
         };
       });
 
