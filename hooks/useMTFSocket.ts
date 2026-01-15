@@ -14,11 +14,15 @@ import {
 import { API_CONFIG } from '@/lib/config';
 import {
   TIMEFRAMES,
-  DIVERGENCE_EXPIRY_CANDLES,
   timeframeToSeconds,
   getNextCandleClose,
   getSecondsUntilClose,
 } from '@/lib/timeframe';
+import {
+  shouldFilterDivergence,
+  DIVERGENCE_EXPIRY_CANDLES,
+  DIVERGENCE_TYPE_PRIORITY,
+} from '@/lib/divergence';
 
 // Re-export for backward compatibility
 export { getNextCandleClose, getSecondsUntilClose };
@@ -219,15 +223,7 @@ const analyzeOi = (oi: (number | null)[] | undefined): {
   return { direction, strength, change };
 };
 
-// 타입별 우선순위 (RSI가 가장 중요)
-const DIVERGENCE_TYPE_PRIORITY: Record<string, number> = {
-  'rsi': 4,
-  'cvd': 3,
-  'obv': 2,
-  'oi': 1,
-};
-
-// 모든 다이버전스 추출 (우선순위 정렬)
+// 모든 다이버전스 추출 (우선순위 정렬, 공통 정책 사용)
 const getAllDivergences = (
   signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number; confirmed?: boolean }> | undefined,
   totalCandles: number,
@@ -244,27 +240,19 @@ const getAllDivergences = (
   const divergences = endSignals.map(signal => {
     const candlesAgo = signal.index !== undefined ? totalCandles - 1 - signal.index : 0;
     const isExpired = candlesAgo > expiryCandles;
+    const rsiAtSignal = rsiData && signal.index !== undefined ? rsiData[signal.index] : null;
+    const direction = signal.direction as 'bullish' | 'bearish';
 
-    // RSI 기반 필터링 계산
-    // bullish 다이버전스: RSI < 40 이어야 유효 (과매도 구간)
-    // bearish 다이버전스: RSI > 60 이어야 유효 (과매수 구간)
-    let isFiltered = false;
-    if (rsiData && signal.index !== undefined && rsiData[signal.index] !== undefined) {
-      const rsiAtSignal = rsiData[signal.index];
-      if (signal.direction === 'bullish' && rsiAtSignal >= 40) {
-        isFiltered = true; // RSI가 과매도 구간이 아니면 필터링
-      } else if (signal.direction === 'bearish' && rsiAtSignal <= 60) {
-        isFiltered = true; // RSI가 과매수 구간이 아니면 필터링
-      }
-    }
+    // 공통 정책으로 RSI 필터링 계산
+    const isFiltered = shouldFilterDivergence(direction, rsiAtSignal);
 
     return {
       type: signal.type as 'rsi' | 'obv' | 'cvd' | 'oi',
-      direction: signal.direction as 'bullish' | 'bearish',
+      direction,
       timestamp: signal.timestamp || Date.now(),
       candlesAgo,
       isExpired,
-      confirmed: signal.confirmed, // 피봇 확정 여부 전달
+      confirmed: signal.confirmed,
       isFiltered,
     };
   });
