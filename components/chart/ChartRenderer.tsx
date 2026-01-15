@@ -26,6 +26,13 @@ import {
   addCvdOiMarkers,
 } from '@/lib/chart/indicators';
 import {
+  createChartOptions,
+  calculateChartHeight,
+  getCandlestickOptions,
+  getAreaSeriesOptions,
+  PANEL_CONFIG,
+} from '@/lib/chart/chartConfig';
+import {
   DivergenceSignal,
   EmaData,
   TrendAnalysis,
@@ -39,8 +46,11 @@ import {
   WhaleSummary,
   MarketStructureData,
   AdxData,
+  MTFAction,
 } from '@/lib/types/index';
 import ChartTooltip from './ChartTooltip';
+import MeasurementBox, { MeasureBoxData } from './MeasurementBox';
+import { CrossoverMarkers, SignalMarkers, CrossoverMarkerData, SignalMarkerData, SIGNAL_CONFIG } from './ChartMarkers';
 import { ChevronUp } from 'lucide-react';
 import { LongShortRatio } from '@/hooks/useLongShortRatio';
 import {
@@ -344,7 +354,7 @@ export default function ChartRenderer({
     if (mini) {
       // actionInfo 기반 색상 결정 (공통 유틸리티 사용)
       const colorType = actionInfo
-        ? getChartColor(actionInfo.action, actionInfo.reason)
+        ? getChartColor(actionInfo.action as MTFAction, actionInfo.reason)
         : (() => {
             // 폴백: 추세 방향 판단
             const firstPrice = uniqueData[0]?.close || 0;
@@ -1093,22 +1103,10 @@ export default function ChartRenderer({
   }, [showVolumeProfile]);
 
   // 크로스오버 X 마커 좌표 상태
-  const [crossoverMarkers, setCrossoverMarkers] = useState<Array<{
-    x: number;
-    y: number;
-    type: 'golden_cross' | 'dead_cross';
-    isFiltered?: boolean; // 볼륨 낮으면 true
-  }>>([]);
+  const [crossoverMarkers, setCrossoverMarkers] = useState<CrossoverMarkerData[]>([]);
 
   // CVD+OI 신호 마커 좌표 상태
-  const [signalMarkers, setSignalMarkers] = useState<Array<{
-    x: number;
-    y: number;
-    type: string;
-    label: string;
-    color: string;
-    position: 'above' | 'below';
-  }>>([]);
+  const [signalMarkers, setSignalMarkers] = useState<SignalMarkerData[]>([]);
 
   // BOS/CHoCH 마커 좌표 상태
   const [structureMarkers, setStructureMarkers] = useState<Array<{
@@ -1144,17 +1142,7 @@ export default function ChartRenderer({
   const [chartColor, setChartColor] = useState<'green' | 'red' | 'gray'>('gray');
 
   // 측정 박스를 위한 상태 (화면 좌표)
-  const [measureBox, setMeasureBox] = useState<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-    priceDiff: number;
-    pricePercent: number;
-    bars: number;
-    timeRange: string; // "X일 X시간 X분" 형식
-    isPreview?: boolean; // 미리보기인지 확정인지 구분
-  } | null>(null);
+  const [measureBox, setMeasureBox] = useState<MeasureBoxData | null>(null);
 
   // 측정 박스 업데이트 (확정된 박스)
   useEffect(() => {
@@ -1814,75 +1802,7 @@ export default function ChartRenderer({
         )}
 
         {/* 측정 박스 오버레이 (트레이딩뷰 스타일) */}
-        {measureBox && (() => {
-          const isPositive = measureBox.pricePercent >= 0;
-          // 더 잘 보이는 색상: 상승=시안, 하락=빨강
-          const boxColor = isPositive ? '34, 211, 238' : '239, 68, 68'; // cyan-400 : red-500
-
-          // 툴팁이 차트 밖으로 나가는지 확인
-          const TOOLTIP_HEIGHT = 40; // 대략적인 툴팁 높이
-          const hasSpaceAbove = measureBox.top > TOOLTIP_HEIGHT + 10;
-          const hasSpaceBelow = chartContainerRef.current
-            ? (chartContainerRef.current.clientHeight - (measureBox.top + measureBox.height)) > TOOLTIP_HEIGHT + 10
-            : true;
-
-          // 툴팁 위치 결정
-          let tooltipPosition;
-          if (isPositive) {
-            // 플러스: 위에 공간있으면 위에, 없으면 박스 안쪽 상단
-            tooltipPosition = hasSpaceAbove
-              ? { bottom: '100%', marginBottom: '4px' }
-              : { top: '4px' };
-          } else {
-            // 마이너스: 아래 공간있으면 아래, 없으면 박스 안쪽 하단
-            tooltipPosition = hasSpaceBelow
-              ? { top: '100%', marginTop: '4px' }
-              : { bottom: '4px' };
-          }
-
-          return (
-            <div
-              style={{
-                position: 'absolute',
-                left: `${measureBox.left}px`,
-                top: `${measureBox.top}px`,
-                width: `${measureBox.width}px`,
-                height: `${measureBox.height}px`,
-                backgroundColor: measureBox.isPreview ? `rgba(${boxColor}, 0.08)` : `rgba(${boxColor}, 0.15)`,
-                border: measureBox.isPreview ? `1px dashed rgba(${boxColor}, 0.5)` : `2px solid rgba(${boxColor}, 0.7)`,
-                pointerEvents: 'none',
-                zIndex: 15,
-              }}
-            >
-              {/* 측정 정보 텍스트 (공간에 따라 동적 위치) */}
-              <div
-                style={{
-                  position: 'absolute',
-                  left: '50%',
-                  ...tooltipPosition,
-                  transform: 'translateX(-50%)',
-                  backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                  color: `rgb(${boxColor})`,
-                  padding: '6px 10px',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  fontWeight: 'bold',
-                  whiteSpace: 'nowrap',
-                  zIndex: 12,
-                  border: `1px solid rgba(${boxColor}, 0.5)`,
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.5)',
-                }}
-              >
-                <div>
-                  {isPositive ? '+' : ''}{measureBox.pricePercent.toFixed(2)}% (${Math.abs(measureBox.priceDiff).toFixed(2)})
-                </div>
-                <div style={{ fontSize: '10px', opacity: 0.7, color: '#9ca3af' }}>
-                  {measureBox.bars} 봉 · {measureBox.timeRange}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+        <MeasurementBox measureBox={measureBox} containerRef={chartContainerRef} />
 
         {/* 측정 시작점 마커 */}
         {measurePoints.start && chartRef.current && candlestickSeriesRef.current && (() => {
@@ -1939,31 +1859,7 @@ export default function ChartRenderer({
         })()}
 
         {/* 크로스오버 X 마커 (커스텀 오버레이) */}
-        {crossoverMarkers.map((marker, index) => (
-          <div
-            key={`crossover-${index}`}
-            style={{
-              position: 'absolute',
-              left: `${marker.x}px`,
-              top: `${marker.y}px`,
-              transform: 'translate(-50%, -50%)',
-              pointerEvents: 'none',
-              zIndex: 20,
-              fontSize: '16px',
-              fontWeight: 'bold',
-              // 필터링된 신호는 회색, 아니면 골든=초록/데드=빨강
-              color: marker.isFiltered
-                ? '#9ca3af' // gray-400
-                : marker.type === 'golden_cross'
-                ? '#a3e635' // lime-400
-                : '#f87171', // red-400
-              textShadow: '0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.5)',
-              opacity: marker.isFiltered ? 0.6 : 1, // 필터링된 신호는 투명도
-            }}
-          >
-            ✕
-          </div>
-        ))}
+        <CrossoverMarkers markers={crossoverMarkers} />
 
         {/* CVD+OI 신호 마커 - 숨김 (매매에 큰 도움 안됨) */}
         {/* signalMarkers (매수세/매도세) 숨김 */}
