@@ -23,6 +23,7 @@ import {
   DIVERGENCE_EXPIRY_CANDLES,
   DIVERGENCE_TYPE_PRIORITY,
 } from '@/lib/divergence';
+import { ADX } from '@/lib/thresholds';
 
 // Re-export for backward compatibility
 export { getNextCandleClose, getSecondsUntilClose };
@@ -325,7 +326,7 @@ const processBackendData = (tf: BackendTimeframeData): RawTimeframeData | null =
   const divergence = divergences.length > 0 ? divergences[0] : null;
 
   const adx = tf.adx?.currentAdx ?? null;
-  const isStrongTrend = adx !== null && adx >= 25;
+  const isStrongTrend = adx !== null && adx >= ADX.STRONG_TREND;
   const atrRatio = tf.vwapAtr?.atrRatio ?? null;
 
   return {

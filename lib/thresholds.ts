@@ -5,16 +5,34 @@
 
 // RSI 임계값
 export const RSI = {
+  // 기본 레벨
   OVERBOUGHT: 70,       // 과매수 (매도 신호)
   OVERSOLD: 30,         // 과매도 (매수 신호)
-  FILTER_HIGH: 60,      // 다이버전스 필터링 상한 (bearish)
-  FILTER_LOW: 40,       // 다이버전스 필터링 하한 (bullish)
+  // 다이버전스 필터링
+  FILTER_HIGH: 60,      // bearish 다이버전스 유효 기준
+  FILTER_LOW: 40,       // bullish 다이버전스 유효 기준
+  // 스코어링용 (롱 진입)
+  LONG: {
+    OVERHEATED: 75,     // 과열 - 추격금지
+    HIGH: 65,           // 고점대
+    PULLBACK: 35,       // 눌림목 (상승추세 중)
+    CORRECTION: 45,     // 조정 구간
+  },
+  // 스코어링용 (숏 진입)
+  SHORT: {
+    EXHAUSTED: 25,      // 침체 - 추격금지
+    LOW: 35,            // 저점대
+    BOUNCE: 65,         // 반등 (하락추세 중)
+    RETRACEMENT: 55,    // 되돌림 구간
+  },
 } as const;
 
 // ADX 임계값
 export const ADX = {
   STRONG_TREND: 25,     // 강한 추세 기준
-  VERY_STRONG: 40,      // 매우 강한 추세
+  VERY_STRONG: 40,      // 매우 강한 추세/과열
+  OPTIMAL_MIN: 20,      // 적정 추세 하한
+  OPTIMAL_MAX: 30,      // 적정 추세 상한
 } as const;
 
 // ATR 임계값

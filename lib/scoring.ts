@@ -1,4 +1,5 @@
 import { MTFOverviewData, MTFTimeframeData, MTFStatus, OrderBlock } from './types';
+import { RSI, ADX } from './thresholds';
 
 // 추가 시장 데이터 (오더블록, 볼륨프로파일 등)
 export interface MarketStructureData {
@@ -211,50 +212,40 @@ export const calculateMomentumScore = (
 
   if (direction === 'bullish') {
     // 롱 진입 시
-    // 좋은 진입: 상승추세 + 단기 RSI 눌림 (35-50)
-    // 나쁜 진입: RSI 70+ 과열 상태에서 추격 매수
-
     if (tf5m?.rsi) {
-      if (tf5m.rsi >= 75) {
+      if (tf5m.rsi >= RSI.LONG.OVERHEATED) {
         score -= 5;
         details.push(`RSI 과열 (${tf5m.rsi.toFixed(0)}) 추격금지`);
-      } else if (tf5m.rsi >= 65) {
+      } else if (tf5m.rsi >= RSI.LONG.HIGH) {
         score -= 3;
         details.push(`RSI 고점대 (${tf5m.rsi.toFixed(0)})`);
-      } else if (tf5m.rsi <= 35 && higherTrend === 'bullish') {
-        // 상승추세 중 눌림목 = 좋은 진입
+      } else if (tf5m.rsi <= RSI.LONG.PULLBACK && higherTrend === 'bullish') {
         score += 5;
         details.push(`눌림목 진입 (RSI ${tf5m.rsi.toFixed(0)})`);
-      } else if (tf5m.rsi <= 45 && tf5m.rsi > 35 && higherTrend === 'bullish') {
+      } else if (tf5m.rsi <= RSI.LONG.CORRECTION && tf5m.rsi > RSI.LONG.PULLBACK && higherTrend === 'bullish') {
         score += 3;
         details.push(`조정 구간 (RSI ${tf5m.rsi.toFixed(0)})`);
-      } else if (tf5m.rsi <= 30) {
-        // 추세 없이 과매도 = 반등 기대
+      } else if (tf5m.rsi <= RSI.OVERSOLD) {
         score += 2;
         details.push(`과매도 반등 (${tf5m.rsi.toFixed(0)})`);
       }
     }
   } else {
     // 숏 진입 시
-    // 좋은 진입: 하락추세 + 단기 RSI 반등 (50-65)
-    // 나쁜 진입: RSI 30- 침체 상태에서 추격 매도
-
     if (tf5m?.rsi) {
-      if (tf5m.rsi <= 25) {
+      if (tf5m.rsi <= RSI.SHORT.EXHAUSTED) {
         score -= 5;
         details.push(`RSI 침체 (${tf5m.rsi.toFixed(0)}) 추격금지`);
-      } else if (tf5m.rsi <= 35) {
+      } else if (tf5m.rsi <= RSI.SHORT.LOW) {
         score -= 3;
         details.push(`RSI 저점대 (${tf5m.rsi.toFixed(0)})`);
-      } else if (tf5m.rsi >= 65 && higherTrend === 'bearish') {
-        // 하락추세 중 반등 = 좋은 진입
+      } else if (tf5m.rsi >= RSI.SHORT.BOUNCE && higherTrend === 'bearish') {
         score += 5;
         details.push(`반등 진입 (RSI ${tf5m.rsi.toFixed(0)})`);
-      } else if (tf5m.rsi >= 55 && tf5m.rsi < 65 && higherTrend === 'bearish') {
+      } else if (tf5m.rsi >= RSI.SHORT.RETRACEMENT && tf5m.rsi < RSI.SHORT.BOUNCE && higherTrend === 'bearish') {
         score += 3;
         details.push(`되돌림 구간 (RSI ${tf5m.rsi.toFixed(0)})`);
-      } else if (tf5m.rsi >= 70) {
-        // 추세 없이 과매수 = 하락 기대
+      } else if (tf5m.rsi >= RSI.OVERBOUGHT) {
         score += 2;
         details.push(`과매수 하락 (${tf5m.rsi.toFixed(0)})`);
       }
@@ -267,12 +258,10 @@ export const calculateMomentumScore = (
     .filter((a): a is number => a !== null)
     .reduce((sum, a, _, arr) => sum + a / arr.length, 0);
 
-  if (avgAdx > 40) {
-    // 추세 과열
+  if (avgAdx > ADX.VERY_STRONG) {
     score -= 1;
     details.push(`ADX 과열 (${avgAdx.toFixed(0)})`);
-  } else if (avgAdx >= 20 && avgAdx <= 30) {
-    // 적당한 추세 강도 = 좋음
+  } else if (avgAdx >= ADX.OPTIMAL_MIN && avgAdx <= ADX.OPTIMAL_MAX) {
     score += 2;
     details.push(`ADX 적정 (${avgAdx.toFixed(0)})`);
   }
