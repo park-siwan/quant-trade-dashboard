@@ -34,7 +34,7 @@ import {
   PANEL_CONFIG,
 } from '@/lib/chart/chartConfig';
 import { debug } from '@/lib/debug';
-import { COLORS, CHART_COLORS, rgba } from '@/lib/colors';
+import { COLORS, CHART_COLORS, INDICATOR_COLORS, MARKER_COLORS, MEASURE_COLORS, WALL_COLORS, GLOW_DOT_COLORS, rgba } from '@/lib/colors';
 import {
   DivergenceSignal,
   EmaData,
@@ -588,28 +588,27 @@ export default function ChartRenderer({
       // 목표가 (POC) - 가장 많이 거래된 가격
       const pocLine = mainSeries.createPriceLine({
         price: volumeProfile.poc,
-        color: 'rgba(250, 204, 21, 0.9)',
+        color: INDICATOR_COLORS.POC,
         lineWidth: 2,
         lineStyle: 0,
         axisLabelVisible: showVolumeProfile,
         title: 'POC',
-        axisLabelColor: 'rgba(250, 204, 21, 1)',
-        axisLabelTextColor: '#000',
+        axisLabelColor: INDICATOR_COLORS.POC_LABEL,
+        axisLabelTextColor: COLORS.BLACK,
         lineVisible: false,
       });
       volumeProfileLinesRef.current.push(pocLine);
-      // 가로선은 DOM으로 렌더링 (createLimitedPriceLine 제거)
 
       // 상단 (VAH) - 빨간색 (숏)
       const vahLine = mainSeries.createPriceLine({
         price: volumeProfile.vah,
-        color: 'rgba(239, 68, 68, 0.7)',
+        color: INDICATOR_COLORS.VAH,
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: showVolumeProfile,
         title: 'VAH',
-        axisLabelColor: 'rgba(239, 68, 68, 0.9)',
-        axisLabelTextColor: '#000',
+        axisLabelColor: INDICATOR_COLORS.VAH_LABEL,
+        axisLabelTextColor: COLORS.BLACK,
         lineVisible: false,
       });
       volumeProfileLinesRef.current.push(vahLine);
@@ -617,13 +616,13 @@ export default function ChartRenderer({
       // 하단 (VAL) - 초록색 (롱)
       const valLine = mainSeries.createPriceLine({
         price: volumeProfile.val,
-        color: 'rgba(34, 197, 94, 0.7)',
+        color: INDICATOR_COLORS.VAL,
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: showVolumeProfile,
         title: 'VAL',
-        axisLabelColor: 'rgba(34, 197, 94, 0.9)',
-        axisLabelTextColor: '#000',
+        axisLabelColor: INDICATOR_COLORS.VAL_LABEL,
+        axisLabelTextColor: COLORS.BLACK,
         lineVisible: false,
       });
       volumeProfileLinesRef.current.push(valLine);
@@ -633,16 +632,15 @@ export default function ChartRenderer({
     if (vwapAtrData && vwapAtrData.currentVwap > 0 && mainSeries) {
       mainSeries.createPriceLine({
         price: vwapAtrData.currentVwap,
-        color: 'rgba(168, 85, 247, 0.9)',
+        color: INDICATOR_COLORS.VWAP,
         lineWidth: 2,
         lineStyle: 0,
         axisLabelVisible: true,
         title: '기관(VWAP)',
-        axisLabelColor: 'rgba(168, 85, 247, 1)',
-        axisLabelTextColor: '#fff',
+        axisLabelColor: INDICATOR_COLORS.VWAP_LABEL,
+        axisLabelTextColor: COLORS.WHITE,
         lineVisible: false,
       });
-      // 가로선은 DOM으로 렌더링 (priceLines state)
     }
 
     // ATR 기반 변동폭 라인 표시 - Y축 라벨만, 가로선은 DOM으로 렌더링
@@ -650,30 +648,28 @@ export default function ChartRenderer({
       // 하단 (현재가 - 2*ATR) = 롱 진입 유리 구간 (초록색)
       mainSeries.createPriceLine({
         price: vwapAtrData.suggestedStopLoss.long,
-        color: 'rgba(34, 197, 94, 0.6)',
+        color: INDICATOR_COLORS.ATR_LONG,
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: true,
         title: '롱(ATR)↓',
-        axisLabelColor: 'rgba(34, 197, 94, 0.9)',
-        axisLabelTextColor: '#000',
+        axisLabelColor: INDICATOR_COLORS.ATR_LONG_LABEL,
+        axisLabelTextColor: COLORS.BLACK,
         lineVisible: false,
       });
-      // 가로선은 DOM으로 렌더링 (priceLines state)
 
       // 상단 (현재가 + 2*ATR) = 숏 진입 유리 구간 (빨간색)
       mainSeries.createPriceLine({
         price: vwapAtrData.suggestedStopLoss.short,
-        color: 'rgba(239, 68, 68, 0.6)',
+        color: INDICATOR_COLORS.ATR_SHORT,
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: true,
         title: '숏(ATR)↑',
-        axisLabelColor: 'rgba(239, 68, 68, 0.9)',
-        axisLabelTextColor: '#000',
+        axisLabelColor: INDICATOR_COLORS.ATR_SHORT_LABEL,
+        axisLabelTextColor: COLORS.BLACK,
         lineVisible: false,
       });
-      // 가로선은 DOM으로 렌더링 (priceLines state)
     }
 
     // 오더블록 표시 (현재가 근처 최대 3개만) - Y축 라벨만, 가로선은 DOM으로 렌더링
@@ -685,8 +681,8 @@ export default function ChartRenderer({
         const isSupport = midPrice < currentPrice;
 
         const color = isSupport
-          ? 'rgba(34, 197, 94, 0.8)'
-          : 'rgba(239, 68, 68, 0.8)';
+          ? INDICATOR_COLORS.SUPPORT
+          : INDICATOR_COLORS.RESISTANCE;
 
         mainSeries.createPriceLine({
           price: midPrice,
@@ -696,7 +692,7 @@ export default function ChartRenderer({
           axisLabelVisible: true,
           title: isSupport ? 'OB지지' : 'OB저항',
           axisLabelColor: color,
-          axisLabelTextColor: '#000',
+          axisLabelTextColor: COLORS.BLACK,
           lineVisible: false,
         });
         // 가로선은 DOM으로 렌더링 (priceLines state)
@@ -1250,11 +1246,11 @@ export default function ChartRenderer({
     }
 
     const signalConfig: Record<string, { label: string; color: string; position: 'above' | 'below' }> = {
-      REAL_BULL: { label: '↑매수세', color: 'rgba(163, 230, 53, 0.9)', position: 'below' },
-      SHORT_TRAP: { label: '⚠숏탈출', color: 'rgba(163, 230, 53, 0.9)', position: 'above' },
-      PUMP_DUMP: { label: '⚠고점', color: 'rgba(251, 146, 60, 0.9)', position: 'above' },
-      MORE_DROP: { label: '↓매도세', color: 'rgba(239, 68, 68, 0.9)', position: 'above' },
-      LONG_ENTRY: { label: '★롱타점', color: 'rgba(34, 211, 238, 0.9)', position: 'below' },
+      REAL_BULL: { label: '↑매수세', color: MARKER_COLORS.REAL_BULL, position: 'below' },
+      SHORT_TRAP: { label: '⚠숏탈출', color: MARKER_COLORS.SHORT_TRAP, position: 'above' },
+      PUMP_DUMP: { label: '⚠고점', color: MARKER_COLORS.PUMP_DUMP, position: 'above' },
+      MORE_DROP: { label: '↓매도세', color: MARKER_COLORS.MORE_DROP, position: 'above' },
+      LONG_ENTRY: { label: '★롱타점', color: MARKER_COLORS.LONG_ENTRY, position: 'below' },
     };
 
     const updateSignalMarkers = () => {
@@ -1435,19 +1431,19 @@ export default function ChartRenderer({
       if (volumeProfile && showVolumeProfile) {
         const pocY = candlestickSeriesRef.current!.priceToCoordinate(volumeProfile.poc);
         if (pocY !== null) {
-          lines.push({ y: pocY, startX, label: 'POC', color: 'rgba(250, 204, 21, 0.9)' });
+          lines.push({ y: pocY, startX, label: 'POC', color: INDICATOR_COLORS.POC });
         }
 
         // VAH 라인
         const vahY = candlestickSeriesRef.current!.priceToCoordinate(volumeProfile.vah);
         if (vahY !== null) {
-          lines.push({ y: vahY, startX, label: 'VAH', color: 'rgba(239, 68, 68, 0.7)' });
+          lines.push({ y: vahY, startX, label: 'VAH', color: INDICATOR_COLORS.VAH });
         }
 
         // VAL 라인
         const valY = candlestickSeriesRef.current!.priceToCoordinate(volumeProfile.val);
         if (valY !== null) {
-          lines.push({ y: valY, startX, label: 'VAL', color: 'rgba(34, 197, 94, 0.7)' });
+          lines.push({ y: valY, startX, label: 'VAL', color: INDICATOR_COLORS.VAL });
         }
       }
 
@@ -1455,7 +1451,7 @@ export default function ChartRenderer({
       if (vwapAtrData && vwapAtrData.currentVwap > 0) {
         const vwapY = candlestickSeriesRef.current!.priceToCoordinate(vwapAtrData.currentVwap);
         if (vwapY !== null) {
-          lines.push({ y: vwapY, startX, label: 'VWAP', color: 'rgba(168, 85, 247, 0.9)' });
+          lines.push({ y: vwapY, startX, label: 'VWAP', color: INDICATOR_COLORS.VWAP });
         }
       }
 
@@ -1463,12 +1459,12 @@ export default function ChartRenderer({
       if (vwapAtrData?.suggestedStopLoss) {
         const atrLongY = candlestickSeriesRef.current!.priceToCoordinate(vwapAtrData.suggestedStopLoss.long);
         if (atrLongY !== null) {
-          lines.push({ y: atrLongY, startX, label: '롱ATR', color: 'rgba(34, 197, 94, 0.6)' });
+          lines.push({ y: atrLongY, startX, label: '롱ATR', color: INDICATOR_COLORS.ATR_LONG });
         }
 
         const atrShortY = candlestickSeriesRef.current!.priceToCoordinate(vwapAtrData.suggestedStopLoss.short);
         if (atrShortY !== null) {
-          lines.push({ y: atrShortY, startX, label: '숏ATR', color: 'rgba(239, 68, 68, 0.6)' });
+          lines.push({ y: atrShortY, startX, label: '숏ATR', color: INDICATOR_COLORS.ATR_SHORT });
         }
       }
 
@@ -1478,7 +1474,7 @@ export default function ChartRenderer({
         orderBlockData.activeBlocks.forEach((block) => {
           const midPrice = (block.high + block.low) / 2;
           const isSupport = midPrice < currentPrice;
-          const color = isSupport ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)';
+          const color = isSupport ? INDICATOR_COLORS.SUPPORT : INDICATOR_COLORS.RESISTANCE;
           const y = candlestickSeriesRef.current!.priceToCoordinate(midPrice);
           if (y !== null) {
             lines.push({ y, startX, label: isSupport ? 'OB지지' : 'OB저항', color });
@@ -1787,10 +1783,10 @@ export default function ChartRenderer({
           {currentPriceInfo && (
             <>
               <span className='text-gray-500'>|</span>
-              <span style={{ color: currentPriceInfo.changePercent >= 0 ? '#a3e635' : '#f87171' }}>
+              <span style={{ color: currentPriceInfo.changePercent >= 0 ? COLORS.BULLISH : COLORS.BEARISH }}>
                 ${currentPriceInfo.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
-              <span style={{ color: currentPriceInfo.changePercent >= 0 ? '#a3e635' : '#f87171' }}>
+              <span style={{ color: currentPriceInfo.changePercent >= 0 ? COLORS.BULLISH : COLORS.BEARISH }}>
                 {currentPriceInfo.changePercent >= 0 ? '▲' : '▼'} {Math.abs(currentPriceInfo.changePercent).toFixed(2)}%
               </span>
             </>
@@ -1814,13 +1810,13 @@ export default function ChartRenderer({
                   top: `${startY}px`,
                   width: '8px',
                   height: '8px',
-                  backgroundColor: 'rgba(59, 130, 246, 0.9)',
+                  backgroundColor: MEASURE_COLORS.BG,
                   border: '2px solid white',
                   borderRadius: '50%',
                   transform: 'translate(-50%, -50%)',
                   pointerEvents: 'none',
                   zIndex: 11,
-                  boxShadow: '0 0 8px rgba(59, 130, 246, 0.6)',
+                  boxShadow: MEASURE_COLORS.GLOW,
                 }}
               />
             );
@@ -1841,13 +1837,13 @@ export default function ChartRenderer({
                   top: `${endY}px`,
                   width: '8px',
                   height: '8px',
-                  backgroundColor: 'rgba(59, 130, 246, 0.9)',
+                  backgroundColor: MEASURE_COLORS.BG,
                   border: '2px solid white',
                   borderRadius: '50%',
                   transform: 'translate(-50%, -50%)',
                   pointerEvents: 'none',
                   zIndex: 11,
-                  boxShadow: '0 0 8px rgba(59, 130, 246, 0.6)',
+                  boxShadow: MEASURE_COLORS.GLOW,
                 }}
               />
             );
@@ -1868,7 +1864,7 @@ export default function ChartRenderer({
             const isOverheated = marker.isOverheated;
             // 강도에 따라 쉐브론 개수 결정 (1-3개)
             const chevronCount = marker.strength === 'strong' ? 3 : marker.strength === 'medium' ? 2 : 1;
-            const color = marker.direction === 'bullish' ? '#22c55e' : '#ef4444';
+            const color = marker.direction === 'bullish' ? COLORS.LONG : COLORS.SHORT;
 
             return (
               <div
@@ -1953,9 +1949,9 @@ export default function ChartRenderer({
                       width: `${barWidth}px`,
                       height: `${barHeight}px`,
                       marginBottom: `${barGap}px`,
-                      backgroundColor: isLargeWall ? 'rgba(239, 68, 68, 0.8)' : 'rgba(239, 68, 68, 0.5)',
+                      backgroundColor: isLargeWall ? WALL_COLORS.ASK_LARGE : WALL_COLORS.ASK_NORMAL,
                       borderRadius: '2px',
-                      borderLeft: isLargeWall ? '2px solid #ef4444' : 'none',
+                      borderLeft: isLargeWall ? `2px solid ${WALL_COLORS.ASK_BORDER}` : 'none',
                     }}
                   />
                 );
@@ -1966,7 +1962,7 @@ export default function ChartRenderer({
                 style={{
                   width: `${maxBarWidth}px`,
                   height: '2px',
-                  backgroundColor: 'rgba(250, 204, 21, 0.6)',
+                  backgroundColor: WALL_COLORS.SPREAD,
                   margin: '2px 0',
                 }}
               />
@@ -1984,9 +1980,9 @@ export default function ChartRenderer({
                       width: `${barWidth}px`,
                       height: `${barHeight}px`,
                       marginBottom: `${barGap}px`,
-                      backgroundColor: isLargeWall ? 'rgba(34, 197, 94, 0.8)' : 'rgba(34, 197, 94, 0.5)',
+                      backgroundColor: isLargeWall ? WALL_COLORS.BID_LARGE : WALL_COLORS.BID_NORMAL,
                       borderRadius: '2px',
-                      borderLeft: isLargeWall ? '2px solid #22c55e' : 'none',
+                      borderLeft: isLargeWall ? `2px solid ${WALL_COLORS.BID_BORDER}` : 'none',
                     }}
                   />
                 );
@@ -2016,12 +2012,7 @@ export default function ChartRenderer({
 
       {/* 미니 모드 글로우 점 (마지막 가격 위치) */}
       {mini && lastPointCoord && (() => {
-        const dotColors = {
-          green: { bg: 'rgba(34, 197, 94, 1)', shadow: 'rgba(34, 197, 94, 0.8), 0 0 16px rgba(34, 197, 94, 0.5), 0 0 24px rgba(34, 197, 94, 0.3)' },
-          red: { bg: 'rgba(239, 68, 68, 1)', shadow: 'rgba(239, 68, 68, 0.8), 0 0 16px rgba(239, 68, 68, 0.5), 0 0 24px rgba(239, 68, 68, 0.3)' },
-          gray: { bg: 'rgba(107, 114, 128, 1)', shadow: 'rgba(107, 114, 128, 0.8), 0 0 16px rgba(107, 114, 128, 0.5), 0 0 24px rgba(107, 114, 128, 0.3)' },
-        };
-        const dotColor = dotColors[chartColor];
+        const dotColor = GLOW_DOT_COLORS[chartColor];
         return (
           <div
             style={{

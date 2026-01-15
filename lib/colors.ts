@@ -124,6 +124,71 @@ export const INDICATOR_COLORS = {
   // 횡보 구간 (amber)
   CONSOLIDATION_BG: rgba(COLORS.OI, 0.08),
   CONSOLIDATION_BORDER: rgba(COLORS.OI, 0.4),
+
+  // Volume Profile 라인
+  POC: rgba(COLORS.POC, 0.9),
+  POC_LABEL: COLORS.POC,
+  VAH: rgba(COLORS.VAH, 0.7),
+  VAH_LABEL: rgba(COLORS.VAH, 0.9),
+  VAL: rgba(COLORS.VAL, 0.7),
+  VAL_LABEL: rgba(COLORS.VAL, 0.9),
+  VWAP: rgba(COLORS.CVD, 0.9),  // purple
+  VWAP_LABEL: COLORS.CVD,
+
+  // ATR 타겟 라인
+  ATR_LONG: rgba(COLORS.LONG, 0.6),
+  ATR_LONG_LABEL: rgba(COLORS.LONG, 0.9),
+  ATR_SHORT: rgba(COLORS.SHORT, 0.6),
+  ATR_SHORT_LABEL: rgba(COLORS.SHORT, 0.9),
+
+  // 오더블록
+  SUPPORT: rgba(COLORS.LONG, 0.8),
+  RESISTANCE: rgba(COLORS.SHORT, 0.8),
+} as const;
+
+// 마켓 신호 마커 색상
+export const MARKER_COLORS = {
+  REAL_BULL: rgba(COLORS.BULLISH, 0.9),
+  SHORT_TRAP: rgba(COLORS.BULLISH, 0.9),
+  PUMP_DUMP: rgba(COLORS.ORANGE, 0.9),
+  MORE_DROP: rgba(COLORS.SHORT, 0.9),
+  LONG_ENTRY: rgba(COLORS.CYAN, 0.9),
+} as const;
+
+// 측정 박스 색상
+export const MEASURE_COLORS = {
+  BG: 'rgba(59, 130, 246, 0.9)',
+  GLOW: '0 0 8px rgba(59, 130, 246, 0.6)',
+} as const;
+
+// 호가벽 색상
+export const WALL_COLORS = {
+  // 매도벽 (빨강)
+  ASK_LARGE: rgba(COLORS.SHORT, 0.8),
+  ASK_NORMAL: rgba(COLORS.SHORT, 0.5),
+  ASK_BORDER: COLORS.SHORT,
+  // 매수벽 (초록)
+  BID_LARGE: rgba(COLORS.LONG, 0.8),
+  BID_NORMAL: rgba(COLORS.LONG, 0.5),
+  BID_BORDER: COLORS.LONG,
+  // 스프레드 구분선
+  SPREAD: rgba(COLORS.POC, 0.6),
+} as const;
+
+// 글로우 점 색상 (미니차트용)
+export const GLOW_DOT_COLORS = {
+  green: {
+    bg: COLORS.LONG,
+    shadow: `${rgba(COLORS.LONG, 0.8)}, 0 0 16px ${rgba(COLORS.LONG, 0.5)}, 0 0 24px ${rgba(COLORS.LONG, 0.3)}`,
+  },
+  red: {
+    bg: COLORS.SHORT,
+    shadow: `${rgba(COLORS.SHORT, 0.8)}, 0 0 16px ${rgba(COLORS.SHORT, 0.5)}, 0 0 24px ${rgba(COLORS.SHORT, 0.3)}`,
+  },
+  gray: {
+    bg: COLORS.NEUTRAL,
+    shadow: `${rgba(COLORS.NEUTRAL, 0.8)}, 0 0 16px ${rgba(COLORS.NEUTRAL, 0.5)}, 0 0 24px ${rgba(COLORS.NEUTRAL, 0.3)}`,
+  },
 } as const;
 
 // 툴팁 색상
