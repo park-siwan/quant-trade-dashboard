@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode, useState } from 'react';
+import { SocketProvider } from '@/contexts/SocketContext';
 
 interface ProvidersProps {
   children: ReactNode;
@@ -22,6 +23,8 @@ export function Providers({ children }: ProvidersProps) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <SocketProvider>{children}</SocketProvider>
+    </QueryClientProvider>
   );
 }

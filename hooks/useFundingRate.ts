@@ -1,49 +1,31 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePolling } from './usePolling';
-import { POLLING_INTERVALS } from '@/lib/config';
-
-export interface FundingRateData {
-  symbol: string;
-  fundingRate: number;
-  fundingTime: number;
-  nextFundingRate: number | null;
-  markPrice: number;
-  indexPrice: number;
-  signal: 'LONG' | 'SHORT' | 'NEUTRAL';
-  signalStrength: 'STRONG' | 'MEDIUM' | 'WEAK';
-  description: string;
-}
+import { useSocket, FundingRateData } from '@/contexts/SocketContext';
 
 interface UseFundingRateParams {
   symbol: string;
-  refreshInterval?: number;
+  refreshInterval?: number; // Ignored - data comes from socket
 }
 
-export function useFundingRate({
-  symbol,
-  refreshInterval = POLLING_INTERVALS.FUNDING_RATE,
-}: UseFundingRateParams) {
+/**
+ * 펀딩 레이트 데이터 훅
+ * 백엔드 socket.io를 통해 실시간 데이터 수신
+ */
+export function useFundingRate({ symbol }: UseFundingRateParams) {
+  const { fundingRateData, isConnected } = useSocket();
   const [timeUntilFunding, setTimeUntilFunding] = useState<string>('--:--:--');
-
-  const polling = usePolling<FundingRateData>({
-    endpoint: '/exchange/funding-rate',
-    params: { symbol },
-    refreshInterval,
-  });
 
   // 다음 펀딩까지 남은 시간 계산
   useEffect(() => {
-    if (!polling.data?.fundingTime) return;
+    if (!fundingRateData?.fundingTime) return;
 
     const updateCountdown = () => {
       const now = Date.now();
-      const diff = polling.data!.fundingTime - now;
+      const diff = fundingRateData.fundingTime - now;
 
       if (diff <= 0) {
         setTimeUntilFunding('00:00:00');
-        polling.refetch();
         return;
       }
 
@@ -62,10 +44,15 @@ export function useFundingRate({
     const interval = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(interval);
-  }, [polling.data?.fundingTime, polling.refetch]);
+  }, [fundingRateData?.fundingTime]);
 
   return {
-    ...polling,
+    data: fundingRateData,
+    isLoading: !fundingRateData && isConnected,
+    isError: false,
+    error: null,
     timeUntilFunding,
   };
 }
+
+export type { FundingRateData };

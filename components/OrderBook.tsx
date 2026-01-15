@@ -137,18 +137,6 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
     : 0;
   const maxTotal = Math.max(maxBidTotal, maxAskTotal);
 
-  // 에러 상태
-  if (error) {
-    return (
-      <div className='backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-2xl p-6 shadow-2xl h-full flex items-center justify-center'>
-        <div className='text-center'>
-          <p className='text-red-400 mb-2'>오더북 연결 실패</p>
-          <p className='text-sm text-gray-400'>{error.message}</p>
-        </div>
-      </div>
-    );
-  }
-
   // 로딩 상태
   if (!isConnected || (orderBook.bids.length === 0 && orderBook.asks.length === 0)) {
     return (

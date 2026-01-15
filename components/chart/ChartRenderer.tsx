@@ -181,9 +181,24 @@ export default function ChartRenderer({
   // 실시간 캔들 업데이트 (update 방식으로 뷰 유지)
   useEffect(() => {
     // 차트가 아직 준비되지 않았거나, realtimeCandle이 없거나, 캔들이 닫힌 경우 스킵
-    if (!realtimeCandle || !candlestickSeriesRef.current || realtimeCandle.isFinal || !chartRef.current) {
+    if (!realtimeCandle) {
+      debug.chart('⚠️ realtimeCandle 없음');
       return;
     }
+    if (!candlestickSeriesRef.current) {
+      debug.chart('⚠️ candlestickSeriesRef 없음');
+      return;
+    }
+    if (realtimeCandle.isFinal) {
+      debug.chart('⚠️ 캔들 종료됨, 업데이트 스킵');
+      return;
+    }
+    if (!chartRef.current) {
+      debug.chart('⚠️ chartRef 없음');
+      return;
+    }
+
+    debug.chart('📈 차트 업데이트:', realtimeCandle.close.toFixed(2));
 
     try {
       // 차트가 dispose되지 않았는지 확인

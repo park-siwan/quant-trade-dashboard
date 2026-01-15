@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { fetchLongShortRatio, LongShortRatioData } from '@/lib/api/exchange';
+'use client';
+
+import { useSocket, LongShortRatioData } from '@/contexts/SocketContext';
 
 interface UseLongShortRatioParams {
   symbol?: string;
@@ -7,57 +8,33 @@ interface UseLongShortRatioParams {
   enabled?: boolean;
 }
 
+// 레거시 타입 호환성 유지
 export interface LongShortRatio {
-  longRatio: number; // 0~1 (예: 0.52 = 52% 롱)
-  shortRatio: number; // 0~1 (예: 0.48 = 48% 숏)
-  dominant: 'long' | 'short' | 'neutral'; // 우세한 쪽
-  dominance: number; // 우세 정도 (0~0.5, 클수록 한쪽으로 치우침)
+  longRatio: number;
+  shortRatio: number;
+  dominant: 'long' | 'short' | 'neutral';
+  dominance: number;
   timestamp: number;
 }
 
+/**
+ * 롱숏 비율 데이터 훅
+ * 백엔드 socket.io를 통해 실시간 데이터 수신
+ */
 export function useLongShortRatio({
   symbol = 'BTCUSDT',
   period = '1h',
   enabled = true,
 }: UseLongShortRatioParams = {}) {
-  const query = useQuery({
-    queryKey: ['longShortRatio', symbol, period],
-    queryFn: () => fetchLongShortRatio(symbol, period),
-    refetchInterval: 60_000, // 1분마다 갱신
-    staleTime: 30_000, // 30초 동안 fresh
-    enabled,
-  });
-
-  // 데이터 가공
-  const ratio: LongShortRatio | null = (() => {
-    if (!query.data?.result?.list?.[0]) return null;
-
-    const data = query.data.result.list[0];
-    const longRatio = parseFloat(data.buyRatio);
-    const shortRatio = parseFloat(data.sellRatio);
-
-    // 우세한 쪽 판단
-    const diff = longRatio - shortRatio;
-    let dominant: 'long' | 'short' | 'neutral';
-    if (diff > 0.02) {
-      dominant = 'long';
-    } else if (diff < -0.02) {
-      dominant = 'short';
-    } else {
-      dominant = 'neutral';
-    }
-
-    return {
-      longRatio,
-      shortRatio,
-      dominant,
-      dominance: Math.abs(diff) / 2, // 0~0.5 범위로 정규화
-      timestamp: parseInt(data.timestamp),
-    };
-  })();
+  const { longShortRatioData, isConnected } = useSocket();
 
   return {
-    ...query,
-    ratio,
+    data: longShortRatioData,
+    isLoading: !longShortRatioData && isConnected,
+    isError: false,
+    error: null,
+    ratio: longShortRatioData, // 기존 API 호환
   };
 }
+
+export type { LongShortRatioData };

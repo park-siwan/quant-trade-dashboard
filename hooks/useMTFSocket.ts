@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   MTFTimeframeData,
   MTFOverviewData,
@@ -11,7 +10,6 @@ import {
   MTFActionInfo,
   OrderBlock,
 } from '@/lib/types/index';
-import { API_CONFIG } from '@/lib/config';
 import {
   TIMEFRAMES,
   timeframeToSeconds,
@@ -24,7 +22,7 @@ import {
   DIVERGENCE_TYPE_PRIORITY,
 } from '@/lib/divergence';
 import { ADX } from '@/lib/thresholds';
-import { debug } from '@/lib/debug';
+import { useSocket } from '@/contexts/SocketContext';
 
 // Re-export for backward compatibility
 export { getNextCandleClose, getSecondsUntilClose };
@@ -555,64 +553,22 @@ export const validateMTFSignal = (
 };
 
 export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocketParams = {}) {
-  const [isConnected, setIsConnected] = useState(false);
+  const { mtfData: backendData, lastMtfUpdate: lastUpdate, isConnected, subscribeMtf } = useSocket();
   const [isLoading, setIsLoading] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<number>(0);
-  const [backendData, setBackendData] = useState<BackendMTFData | null>(null);
 
-  const socketRef = useRef<Socket | null>(null);
-
-  // Socket.io 연결
+  // 로딩 상태 업데이트
   useEffect(() => {
-    if (!enabled || typeof window === 'undefined') return;
-
-    const socket = io(`${API_CONFIG.BASE_URL}/mtf`, {
-      transports: ['polling', 'websocket'], // polling 먼저 시도 (더 안정적)
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 10000,
-      forceNew: true,
-    });
-
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      debug.socket('Connected via', socket.io.engine.transport.name);
-      setIsConnected(true);
-      socket.emit('subscribe', { symbol });
-    });
-
-    socket.on('disconnect', (reason) => {
-      debug.socket('Disconnected:', reason);
-      setIsConnected(false);
-    });
-
-    socket.on('mtf:data', (data: BackendMTFData) => {
-      setBackendData(data);
-      setLastUpdate(Date.now());
+    if (backendData) {
       setIsLoading(false);
-    });
+    }
+  }, [backendData]);
 
-    socket.on('connect_error', (error) => {
-      debug.socket('[MTF Socket] Connection error (will retry):', error.message);
-      setIsLoading(false); // 로딩 상태 해제
-    });
-
-    socket.io.on('reconnect', (attempt) => {
-      debug.socket('Reconnected after', attempt, 'attempts');
-    });
-
-    socket.io.on('reconnect_attempt', (attempt) => {
-      debug.socket('Reconnect attempt', attempt);
-    });
-
-    return () => {
-      socket.disconnect();
-      socketRef.current = null;
-    };
-  }, [enabled, symbol]);
+  // 심볼 구독 (필요시)
+  useEffect(() => {
+    if (enabled) {
+      subscribeMtf(symbol);
+    }
+  }, [enabled, symbol, subscribeMtf]);
 
   // 다음 캔들 마감 시간
   const nextCloseTime = useMemo(() => {
@@ -659,7 +615,7 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
 
     // Order Blocks (4h) - transform to OrderBlock type
     const rawOrderBlocks = h4Data?.orderBlocks?.activeBlocks || h4Data?.orderBlocks?.blocks;
-    const orderBlocks: OrderBlock[] | undefined = rawOrderBlocks?.map((ob, index) => ({
+    const orderBlocks: OrderBlock[] | undefined = rawOrderBlocks?.map((ob: any, index: number) => ({
       type: ob.type,
       startIndex: ob.startIndex ?? index,
       timestamp: ob.timestamp,
@@ -676,10 +632,8 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
 
   // 수동 새로고침 (재구독)
   const refetch = useCallback(() => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('subscribe', { symbol });
-    }
-  }, [symbol]);
+    subscribeMtf(symbol);
+  }, [symbol, subscribeMtf]);
 
   // 특정 타임프레임의 원본 다이버전스 시그널 가져오기
   const getRawDivergences = useCallback((timeframe: string) => {
