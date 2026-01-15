@@ -6,14 +6,10 @@
  * 모두 이 정책을 사용해야 함
  */
 
+import { RSI } from './thresholds';
+
 // timeframe.ts에서 재사용
 export { DIVERGENCE_EXPIRY_CANDLES } from './timeframe';
-
-// RSI 필터링 임계값
-export const RSI_FILTER_THRESHOLDS = {
-  OVERSOLD: 40,    // bullish 다이버전스: RSI가 이 값 미만이어야 유효
-  OVERBOUGHT: 60,  // bearish 다이버전스: RSI가 이 값 초과여야 유효
-} as const;
 
 /**
  * 다이버전스가 RSI 조건에 의해 필터링되어야 하는지 확인
@@ -30,9 +26,11 @@ export function shouldFilterDivergence(
   }
 
   if (direction === 'bullish') {
-    return rsiValue >= RSI_FILTER_THRESHOLDS.OVERSOLD;
+    // bullish: RSI < 40 이어야 유효
+    return rsiValue >= RSI.FILTER_LOW;
   } else {
-    return rsiValue <= RSI_FILTER_THRESHOLDS.OVERBOUGHT;
+    // bearish: RSI > 60 이어야 유효
+    return rsiValue <= RSI.FILTER_HIGH;
   }
 }
 

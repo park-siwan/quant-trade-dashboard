@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useTTS } from './useTTS';
 import { SignalScore } from '@/lib/scoring';
 import { MTFDivergenceInfo } from '@/lib/types';
+import { SCORE, COOLDOWN } from '@/lib/thresholds';
 
 const COOLDOWN_STORAGE_KEY = 'trade-alert-cooldowns';
 
@@ -75,9 +76,9 @@ const saveCooldowns = (cooldowns: Record<string, number>) => {
 export function useTradeAlert(options: TradeAlertOptions = {}) {
   const {
     enabled = true,
-    strongSignalThreshold = 70,  // 강한 신호 70점으로 상향
-    entryThreshold = 60,         // 진입 타점 60점으로 상향 (기존 50점)
-    cooldownMs = 300000,         // 5분 쿨다운 (기존 1분)
+    strongSignalThreshold = SCORE.ALERT.STRONG_SIGNAL,
+    entryThreshold = SCORE.ALERT.ENTRY,
+    cooldownMs = COOLDOWN.ALERT,
     onAlert,
   } = options;
 
@@ -124,16 +125,16 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
     const prevShort = prevState?.shortScore ?? 0;
     const prevDirection = prevState?.dominantDirection ?? 'neutral';
 
-    // 현재 우세 방향 결정 (10점 이상 차이나야 방향 확정)
+    // 현재 우세 방향 결정
     const scoreDiff = currentLong - currentShort;
     let currentDirection: 'long' | 'short' | 'neutral' = 'neutral';
-    if (scoreDiff >= 10) currentDirection = 'long';
-    else if (scoreDiff <= -10) currentDirection = 'short';
+    if (scoreDiff >= SCORE.DIRECTION_DIFF) currentDirection = 'long';
+    else if (scoreDiff <= -SCORE.DIRECTION_DIFF) currentDirection = 'short';
 
     // 점수 변화량
     const longChange = currentLong - prevLong;
     const shortChange = currentShort - prevShort;
-    const SIGNIFICANT_CHANGE = 10; // 10점 이상 변화시 의미있는 변화
+    const SIGNIFICANT_CHANGE = SCORE.DIRECTION_DIFF;
 
     // 중복 알림 방지 헬퍼
     const triggerAlert = (alertKey: string, message: string, alertFn: () => void) => {
