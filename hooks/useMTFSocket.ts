@@ -596,7 +596,7 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
     });
 
     socket.on('connect_error', (error) => {
-      console.warn('[MTF Socket] Connection error (will retry):', error.message);
+      debug.socket('[MTF Socket] Connection error (will retry):', error.message);
       setIsLoading(false); // 로딩 상태 해제
     });
 

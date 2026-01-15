@@ -13,6 +13,7 @@ import {
   IChartApi,
   ISeriesApi,
   IPriceLine,
+  Time,
 } from 'lightweight-charts';
 import {
   addRsiIndicator,
@@ -32,6 +33,7 @@ import {
   getAreaSeriesOptions,
   PANEL_CONFIG,
 } from '@/lib/chart/chartConfig';
+import { debug } from '@/lib/debug';
 import {
   DivergenceSignal,
   EmaData,
@@ -241,9 +243,9 @@ export default function ChartRenderer({
     } catch (err) {
       // disposed 에러는 무시 (차트가 재생성 중)
       if (err instanceof Error && err.message.includes('disposed')) {
-        console.warn('⚠️ 차트가 재생성 중입니다.');
+        debug.chart('⚠️ 차트가 재생성 중입니다.');
       } else {
-        console.error('❌ 캔들 업데이트 에러:', err);
+        debug.chart('❌ 캔들 업데이트 에러:', err);
       }
     }
   }, [realtimeCandle, mini]);
@@ -554,7 +556,7 @@ export default function ChartRenderer({
 
       addDivergenceLines(
         chart,
-        mainSeries as any,
+        mainSeries as ISeriesApi<'Candlestick'>,
         rsiSeries,
         obvSeries,
         cvdSeries,
@@ -577,7 +579,7 @@ export default function ChartRenderer({
 
     // 크로스오버 마커 추가 (미니 모드에서는 스킵)
     if (crossoverEvents && crossoverEvents.length > 0 && mainSeries && !mini) {
-      addCrossoverMarkers(mainSeries as any, crossoverEvents);
+      addCrossoverMarkers(mainSeries as ISeriesApi<'Candlestick'>, crossoverEvents);
     }
 
     // CVD + OI 신호 마커 - 커스텀 오버레이 방식으로 변경 (아래 JSX에서 처리)
@@ -734,7 +736,7 @@ export default function ChartRenderer({
           const currentPrice = mainSeries?.coordinateToPrice(currentY);
 
           if (currentTime !== null && currentPrice !== null) {
-            const startX = chart.timeScale().timeToCoordinate(currentMeasurePoints.start.time as any);
+            const startX = chart.timeScale().timeToCoordinate(currentMeasurePoints.start.time as Time);
             const startY = mainSeries?.priceToCoordinate(currentMeasurePoints.start.price);
 
             if (startX !== null && startY !== null) {
@@ -1154,8 +1156,8 @@ export default function ChartRenderer({
     }
 
     // 두 점의 화면 좌표 계산
-    const startX = chartRef.current.timeScale().timeToCoordinate(measurePoints.start.time as any);
-    const endX = chartRef.current.timeScale().timeToCoordinate(measurePoints.end.time as any);
+    const startX = chartRef.current.timeScale().timeToCoordinate(measurePoints.start.time as Time);
+    const endX = chartRef.current.timeScale().timeToCoordinate(measurePoints.end.time as Time);
     const startY = candlestickSeriesRef.current.priceToCoordinate(measurePoints.start.price);
     const endY = candlestickSeriesRef.current.priceToCoordinate(measurePoints.end.price);
 
@@ -1325,7 +1327,7 @@ export default function ChartRenderer({
 
       recentBreaks.forEach((breakEvent) => {
         const timeValue = breakEvent.breakTime / 1000;
-        const x = chartRef.current!.timeScale().timeToCoordinate(timeValue as any);
+        const x = chartRef.current!.timeScale().timeToCoordinate(timeValue as Time);
         let y = candlestickSeriesRef.current!.priceToCoordinate(breakEvent.breakPrice);
 
         if (x === null || y === null || x < 0 || x > 2000 || y < 0 || y > 1000) return;
@@ -1806,7 +1808,7 @@ export default function ChartRenderer({
 
         {/* 측정 시작점 마커 */}
         {measurePoints.start && chartRef.current && candlestickSeriesRef.current && (() => {
-          const startX = chartRef.current!.timeScale().timeToCoordinate(measurePoints.start.time as any);
+          const startX = chartRef.current!.timeScale().timeToCoordinate(measurePoints.start.time as Time);
           const startY = candlestickSeriesRef.current!.priceToCoordinate(measurePoints.start.price);
           if (startX !== null && startY !== null) {
             return (
@@ -1833,7 +1835,7 @@ export default function ChartRenderer({
 
         {/* 측정 끝점 마커 */}
         {measurePoints.end && chartRef.current && candlestickSeriesRef.current && (() => {
-          const endX = chartRef.current!.timeScale().timeToCoordinate(measurePoints.end.time as any);
+          const endX = chartRef.current!.timeScale().timeToCoordinate(measurePoints.end.time as Time);
           const endY = candlestickSeriesRef.current!.priceToCoordinate(measurePoints.end.price);
           if (endX !== null && endY !== null) {
             return (

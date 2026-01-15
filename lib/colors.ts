@@ -126,6 +126,24 @@ export const INDICATOR_COLORS = {
   CONSOLIDATION_BORDER: rgba(COLORS.OI, 0.4),
 } as const;
 
+// 툴팁 색상
+export const TOOLTIP_COLORS = {
+  // 배경/기본
+  BG: rgba(COLORS.WHITE, 0.05),
+  BORDER: rgba(COLORS.ORANGE, 0.3),
+  DIVIDER: rgba(COLORS.WHITE, 0.2),
+  DIVIDER_LIGHT: rgba(COLORS.WHITE, 0.1),
+  SHADOW: `0 8px 32px ${rgba(COLORS.BLACK, 0.4)}, 0 0 20px ${rgba(COLORS.ORANGE, 0.1)}`,
+
+  // 알림 박스 - 높은 신뢰도 (라임)
+  CONFIRM_BG: rgba(COLORS.BULLISH, 0.1),
+  CONFIRM_BORDER: rgba(COLORS.BULLISH, 0.3),
+
+  // 알림 박스 - 신호 상충 (오렌지)
+  CONFLICT_BG: rgba(COLORS.ORANGE, 0.1),
+  CONFLICT_BORDER: rgba(COLORS.ORANGE, 0.3),
+} as const;
+
 // 신호 스타일 (signal.ts에서 이전)
 export const SIGNAL_COLORS = {
   long_ok: {

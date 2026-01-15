@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { API_CONFIG } from '@/lib/config';
 import { API } from '@/lib/constants';
+import { devLog } from '@/lib/debug';
 
 interface UsePollingParams<T> {
   endpoint: string;
@@ -63,7 +64,7 @@ export function usePolling<T>({
       if (!mountedRef.current) return;
       // 서버 연결 실패 시 조용히 처리 (콘솔에 한 번만 출력)
       if (err instanceof Error && err.name !== 'AbortError') {
-        console.warn(`[usePolling] ${endpoint}: ${err.message}`);
+        devLog(`[usePolling] ${endpoint}: ${err.message}`);
       }
       setError(err instanceof Error ? err : new Error('Unknown error'));
     } finally {

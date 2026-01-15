@@ -1,26 +1,11 @@
 'use client';
 
 import { useOrderBook, OrderBookLevel, RatioHistoryPoint } from '@/hooks/useOrderBook';
+import { calculateSMA } from '@/lib/utils/math';
 
 interface OrderBookProps {
   symbol?: string;
   limit?: number;
-}
-
-// 이동평균 계산 함수
-function calculateSMA(data: number[], period: number): number[] {
-  const result: number[] = [];
-  for (let i = 0; i < data.length; i++) {
-    if (i < period - 1) {
-      // 초기 데이터는 가능한 범위로 평균
-      const slice = data.slice(0, i + 1);
-      result.push(slice.reduce((a, b) => a + b, 0) / slice.length);
-    } else {
-      const slice = data.slice(i - period + 1, i + 1);
-      result.push(slice.reduce((a, b) => a + b, 0) / period);
-    }
-  }
-  return result;
 }
 
 // 미니 차트 컴포넌트

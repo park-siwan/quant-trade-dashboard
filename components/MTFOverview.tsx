@@ -12,6 +12,7 @@ import { useCoinglass } from '@/hooks/useCoinglass';
 import SignalChip from './SignalChip';
 import { AnimatedValue, AnimatedCell } from '@/components/shared';
 import { directionText } from '@/lib/classnames';
+import { ANIMATION } from '@/lib/constants';
 
 // TradeAlert 훅 반환 타입
 interface TradeAlertReturn {
@@ -74,7 +75,7 @@ const RsiDisplay = memo(({ rsi }: { rsi: number | null }) => {
       setIsAnimating(true);
       setBarWidth(rsi);
       prevRsi.current = rsi;
-      const timer = setTimeout(() => setIsAnimating(false), 500);
+      const timer = setTimeout(() => setIsAnimating(false), ANIMATION.COLOR_FADE);
       return () => clearTimeout(timer);
     }
   }, [rsi]);
@@ -217,7 +218,7 @@ const AdxDisplay = memo(({ adx, isStrongTrend }: { adx: number | null; isStrongT
       setIsAnimating(true);
       setBarWidth(Math.min(adx * 2, 100));
       prevAdx.current = adx;
-      const timer = setTimeout(() => setIsAnimating(false), 500);
+      const timer = setTimeout(() => setIsAnimating(false), ANIMATION.COLOR_FADE);
       return () => clearTimeout(timer);
     }
   }, [adx]);
@@ -274,7 +275,7 @@ const AtrRatioDisplay = memo(({ atrRatio }: { atrRatio: number | null }) => {
       setIsAnimating(true);
       setBarWidth(Math.min(atrRatio * 50, 100));
       prevAtr.current = atrRatio;
-      const timer = setTimeout(() => setIsAnimating(false), 500);
+      const timer = setTimeout(() => setIsAnimating(false), ANIMATION.COLOR_FADE);
       return () => clearTimeout(timer);
     }
   }, [atrRatio]);

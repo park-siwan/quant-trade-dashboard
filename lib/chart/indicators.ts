@@ -16,6 +16,7 @@ import {
   ConsolidationZone,
 } from '@/lib/types/index';
 import { INDICATOR_COLORS } from '@/lib/colors';
+import { debug } from '@/lib/debug';
 
 // 중복 타임스탬프 제거 유틸리티 (lightweight-charts 요구사항)
 function dedupeByTime<T extends { time: Time }>(data: T[]): T[] {
@@ -499,7 +500,7 @@ export function addDivergenceLines(
       endPrice =
         pair.direction === 'bearish' ? endCandle.high : endCandle.low;
     } else {
-      console.warn(`⚠️ ${pair.start.type} 다이버전스 캔들 매칭 실패:`, {
+      debug.divergence(`⚠️ ${pair.start.type} 다이버전스 캔들 매칭 실패:`, {
         startTimeSec,
         endTimeSec,
         candleDataRange: candleData.length > 0
@@ -586,7 +587,7 @@ export function addDivergenceLines(
           { time: endRsi.time, value: endRsi.value },
         ]);
       } else {
-        console.warn('⚠️ RSI 데이터를 찾을 수 없음:', {
+        debug.divergence('⚠️ RSI 데이터를 찾을 수 없음:', {
           startTimeSec,
           endTimeSec,
           rsiDataLength: rsiData.length,
@@ -635,7 +636,7 @@ export function addDivergenceLines(
           { time: endObv.time, value: endObv.value },
         ]);
       } else {
-        console.warn('⚠️ OBV 데이터를 찾을 수 없음:', {
+        debug.divergence('⚠️ OBV 데이터를 찾을 수 없음:', {
           startTimeSec,
           endTimeSec,
           obvDataLength: obvData.length,
@@ -684,7 +685,7 @@ export function addDivergenceLines(
           { time: endCvd.time, value: endCvd.value },
         ]);
       } else {
-        console.warn('⚠️ CVD 데이터를 찾을 수 없음:', {
+        debug.divergence('⚠️ CVD 데이터를 찾을 수 없음:', {
           startTimeSec,
           endTimeSec,
           cvdDataLength: cvdData.length,
@@ -733,7 +734,7 @@ export function addDivergenceLines(
           { time: endOi.time, value: endOi.value },
         ]);
       } else {
-        console.warn('⚠️ OI 데이터를 찾을 수 없음:', {
+        debug.divergence('⚠️ OI 데이터를 찾을 수 없음:', {
           startTimeSec,
           endTimeSec,
           oiDataLength: oiData.length,
