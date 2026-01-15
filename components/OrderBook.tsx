@@ -2,6 +2,7 @@
 
 import { useOrderBook, OrderBookLevel, RatioHistoryPoint } from '@/hooks/useOrderBook';
 import { calculateSMA } from '@/lib/utils/math';
+import { ORDERBOOK_COLORS } from '@/lib/colors';
 
 interface OrderBookProps {
   symbol?: string;
@@ -57,8 +58,8 @@ function RatioChart({ data }: { data: RatioHistoryPoint[] }) {
 
   // 색상 결정 (매수 우세: 초록, 매도 우세: 빨강)
   const isAbove50 = currentRatio > 50;
-  const strokeColor = isAbove50 ? '#84cc16' : '#ef4444';
-  const fillColor = isAbove50 ? 'rgba(132, 204, 22, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+  const strokeColor = isAbove50 ? ORDERBOOK_COLORS.CHART_BID : ORDERBOOK_COLORS.CHART_ASK;
+  const fillColor = isAbove50 ? ORDERBOOK_COLORS.CHART_BID_FILL : ORDERBOOK_COLORS.CHART_ASK_FILL;
 
   return (
     <div className='relative'>
@@ -85,7 +86,7 @@ function RatioChart({ data }: { data: RatioHistoryPoint[] }) {
           y1={baseY}
           x2={width - padding.right}
           y2={baseY}
-          stroke='rgba(255,255,255,0.2)'
+          stroke={ORDERBOOK_COLORS.GRID}
           strokeDasharray='4,4'
         />
 
@@ -104,13 +105,13 @@ function RatioChart({ data }: { data: RatioHistoryPoint[] }) {
         />
 
         {/* Y축 레이블 */}
-        <text x={width - 2} y={padding.top + 8} fontSize='8' fill='rgba(255,255,255,0.4)' textAnchor='end'>
+        <text x={width - 2} y={padding.top + 8} fontSize='8' fill={ORDERBOOK_COLORS.TEXT_MUTED} textAnchor='end'>
           {maxY}%
         </text>
-        <text x={width - 2} y={baseY + 3} fontSize='8' fill='rgba(255,255,255,0.4)' textAnchor='end'>
+        <text x={width - 2} y={baseY + 3} fontSize='8' fill={ORDERBOOK_COLORS.TEXT_MUTED} textAnchor='end'>
           50%
         </text>
-        <text x={width - 2} y={height - padding.bottom} fontSize='8' fill='rgba(255,255,255,0.4)' textAnchor='end'>
+        <text x={width - 2} y={height - padding.bottom} fontSize='8' fill={ORDERBOOK_COLORS.TEXT_MUTED} textAnchor='end'>
           {minY}%
         </text>
       </svg>
@@ -203,8 +204,8 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
                   className='absolute right-0 top-0 h-full transition-all duration-300'
                   style={{
                     width: `${widthPercent}%`,
-                    background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.25), rgba(239,68,68,0.4))',
-                    boxShadow: '0 0 15px rgba(239,68,68,0.4), inset 0 0 10px rgba(239,68,68,0.2)'
+                    background: ORDERBOOK_COLORS.ASK_GRADIENT,
+                    boxShadow: ORDERBOOK_COLORS.ASK_GLOW
                   }}
                 />
                 <div className='relative grid grid-cols-3 gap-2 text-[11px]'>
@@ -284,8 +285,8 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
                   className='absolute right-0 top-0 h-full transition-all duration-300'
                   style={{
                     width: `${widthPercent}%`,
-                    background: 'linear-gradient(90deg, transparent, rgba(163,230,53,0.25), rgba(163,230,53,0.4))',
-                    boxShadow: '0 0 15px rgba(163,230,53,0.4), inset 0 0 10px rgba(163,230,53,0.2)'
+                    background: ORDERBOOK_COLORS.BID_GRADIENT,
+                    boxShadow: ORDERBOOK_COLORS.BID_GLOW
                   }}
                 />
                 <div className='relative grid grid-cols-3 gap-2 text-[11px]'>
@@ -331,8 +332,8 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
               <div
                 className='relative h-3 rounded-full'
                 style={{
-                  background: 'linear-gradient(90deg, rgba(239,68,68,0.3), rgba(239,68,68,0.5))',
-                  boxShadow: '0 0 15px rgba(239,68,68,0.4), inset 0 0 8px rgba(239,68,68,0.2)'
+                  background: ORDERBOOK_COLORS.ASK_BAR_GRADIENT,
+                  boxShadow: ORDERBOOK_COLORS.ASK_BAR_GLOW
                 }}
               >
                 {/* 초록 (매수) - 빨강 배경 위에 덮음 */}
@@ -340,8 +341,8 @@ export default function OrderBook({ symbol = 'BTCUSDT', limit = 20 }: OrderBookP
                   className='absolute left-0 top-0 h-full rounded-l-full transition-all duration-300'
                   style={{
                     width: `${bidPercent}%`,
-                    background: 'linear-gradient(90deg, rgba(163,230,53,0.5), rgba(163,230,53,0.7))',
-                    boxShadow: '0 0 15px rgba(163,230,53,0.5), inset 0 0 8px rgba(163,230,53,0.3)'
+                    background: ORDERBOOK_COLORS.BID_BAR_GRADIENT,
+                    boxShadow: ORDERBOOK_COLORS.BID_BAR_GLOW
                   }}
                 />
               </div>

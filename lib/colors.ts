@@ -162,3 +162,28 @@ export const SIGNAL_COLORS = {
     fade: rgba(COLORS.NEUTRAL, 0.02),
   },
 } as const;
+
+// 오더북 색상
+export const ORDERBOOK_COLORS = {
+  // 차트 스트로크/필
+  CHART_BID: '#84cc16',  // lime-500
+  CHART_ASK: '#ef4444',  // red-500
+  CHART_BID_FILL: rgba('#84cc16', 0.2),
+  CHART_ASK_FILL: rgba('#ef4444', 0.2),
+
+  // 그리드/텍스트
+  GRID: rgba(COLORS.WHITE, 0.2),
+  TEXT_MUTED: rgba(COLORS.WHITE, 0.4),
+
+  // 매도 호가 그래디언트
+  ASK_GRADIENT: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.25), rgba(239,68,68,0.4))',
+  ASK_GLOW: '0 0 15px rgba(239,68,68,0.4), inset 0 0 10px rgba(239,68,68,0.2)',
+  ASK_BAR_GRADIENT: 'linear-gradient(90deg, rgba(239,68,68,0.3), rgba(239,68,68,0.5))',
+  ASK_BAR_GLOW: '0 0 15px rgba(239,68,68,0.4), inset 0 0 8px rgba(239,68,68,0.2)',
+
+  // 매수 호가 그래디언트
+  BID_GRADIENT: 'linear-gradient(90deg, transparent, rgba(163,230,53,0.25), rgba(163,230,53,0.4))',
+  BID_GLOW: '0 0 15px rgba(163,230,53,0.4), inset 0 0 10px rgba(163,230,53,0.2)',
+  BID_BAR_GRADIENT: 'linear-gradient(90deg, rgba(163,230,53,0.5), rgba(163,230,53,0.7))',
+  BID_BAR_GLOW: '0 0 15px rgba(163,230,53,0.5), inset 0 0 8px rgba(163,230,53,0.3)',
+} as const;

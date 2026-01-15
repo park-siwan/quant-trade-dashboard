@@ -1215,7 +1215,7 @@ export default function ChartRenderer({
       crossoverEvents.forEach((event) => {
         if (event.type === 'none') return;
 
-        const time = (event.timestamp / 1000) as any;
+        const time = (event.timestamp / 1000) as Time;
         const x = chartRef.current!.timeScale().timeToCoordinate(time);
 
         if (x === null || x < 0 || x > 5000) return;
@@ -1271,7 +1271,7 @@ export default function ChartRenderer({
         const config = signalConfig[signal.type];
         if (!config) return;
 
-        const time = (signal.timestamp / 1000) as any;
+        const time = (signal.timestamp / 1000) as Time;
         const x = chartRef.current!.timeScale().timeToCoordinate(time);
 
         if (x === null || x < 0 || x > 5000) return;
