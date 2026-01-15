@@ -93,7 +93,67 @@ setTimeout(() => {}, ANIMATION.COLOR_FADE);
 const THROTTLE = WEBSOCKET.THROTTLE_MS;
 ```
 
-## Claude Code 탐색 최적화
+## Claude Code 최적화 전략
+
+> 핵심: Claude Code가 **덜 찾아다니고 덜 고민하게** 만드는 것
+
+### 탐색 속도 높이기
+
+1. **파일명을 기능 그대로 짓기**
+   ```
+   // Bad
+   utils.ts, helpers.ts, common.ts
+
+   // Good
+   formatCurrency.ts, useOrderStatus.ts, calculateScore.ts
+   ```
+   파일명만 보고 찾아갈 수 있게
+
+2. **index.ts로 re-export 정리**
+   ```typescript
+   // lib/index.ts
+   export * from './colors';
+   export * from './constants';
+   export * from './storage';
+   ```
+   import 경로 헤매는 시간 감소
+
+3. **파일당 200줄 이하 유지**
+   - 길어지면 위아래 왔다갔다 하느라 느려짐
+   - 500줄 넘으면 반드시 분리 검토
+
+4. **관련 파일 한 폴더에 모으기**
+   ```
+   features/order/
+   ├── OrderCard.tsx      # 컴포넌트
+   ├── useOrder.ts        # 훅
+   ├── order.types.ts     # 타입
+   └── order.constants.ts # 상수
+   ```
+   컨텍스트 한번에 로드됨
+
+### 생산 속도 높이기
+
+1. **예시 코드/템플릿 제공** (아래 "코드 작성 가이드" 섹션)
+   - 컴포넌트 구조, 훅 패턴 등 템플릿 박아두면 그대로 찍어냄
+
+2. **타입 빡빡하게**
+   ```typescript
+   // Bad - 선택지 넓음
+   type Status = string;
+
+   // Good - 선택지 좁음, 추론 빠름
+   type Status = 'pending' | 'success' | 'error';
+   ```
+
+3. **프롬프트 2단계로 시키기**
+   ```
+   // Bad - 엉뚱한 데 손대기 쉬움
+   "이 버그 고쳐줘"
+
+   // Good - 탐색 먼저, 정확도 상승
+   "먼저 관련 파일 찾아서 알려주고, 그다음 수정해"
+   ```
 
 ### 빠른 탐색을 위한 파일 구조
 1. **상수/설정 먼저 확인**: `lib/` 디렉토리의 상수 파일들 우선 탐색
