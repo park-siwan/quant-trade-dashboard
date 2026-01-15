@@ -2,6 +2,7 @@
 
 import { useRef, useCallback, useState, useEffect } from 'react';
 import { TTS } from '@/lib/constants';
+import { loadFromStorage, saveToStorage, cleanupTimestampRecord } from '@/lib/storage';
 
 // 숫자 → 한글 음성 파일 매핑
 const ONES_MAP: Record<number, string> = {
@@ -85,38 +86,23 @@ const TTS_PLAYED_KEY = 'tts-last-played';
 
 // 소리가 최근에 재생되었는지 확인 (탭 간 동기화)
 function canPlaySound(soundKey: string): boolean {
-  if (typeof window === 'undefined') return true;
-  try {
-    const stored = localStorage.getItem(TTS_PLAYED_KEY);
-    if (!stored) return true;
-    const data = JSON.parse(stored);
-    const lastPlayed = data[soundKey];
-    // 같은 소리 재생 방지
-    if (lastPlayed && Date.now() - lastPlayed < TTS.DEDUP_WINDOW) {
-      return false;
-    }
-    return true;
-  } catch {
-    return true;
+  const data = loadFromStorage<Record<string, number>>(TTS_PLAYED_KEY, {});
+  const lastPlayed = data[soundKey];
+  // 같은 소리 재생 방지
+  if (lastPlayed && Date.now() - lastPlayed < TTS.DEDUP_WINDOW) {
+    return false;
   }
+  return true;
 }
 
 // 소리 재생 기록 저장
 function markSoundPlayed(soundKey: string) {
-  if (typeof window === 'undefined') return;
-  try {
-    const stored = localStorage.getItem(TTS_PLAYED_KEY);
-    const data = stored ? JSON.parse(stored) : {};
-    data[soundKey] = Date.now();
-    // 오래된 기록 정리
-    const now = Date.now();
-    for (const key of Object.keys(data)) {
-      if (now - data[key] > TTS.CLEANUP_THRESHOLD) delete data[key];
-    }
-    localStorage.setItem(TTS_PLAYED_KEY, JSON.stringify(data));
-  } catch {
-    // 에러 무시
-  }
+  const data = loadFromStorage<Record<string, number>>(TTS_PLAYED_KEY, {});
+  data[soundKey] = Date.now();
+  // 오래된 기록 정리 후 저장
+  saveToStorage(TTS_PLAYED_KEY, data, (d) =>
+    cleanupTimestampRecord(d, TTS.CLEANUP_THRESHOLD)
+  );
 }
 
 export function useTTS(options: TTSOptions = {}) {

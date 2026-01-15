@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { AlertItem } from '@/components/AlertSnackbar';
+import { loadFromStorage, saveToStorage, cleanupArrayByTimestamp } from '@/lib/storage';
 
 const STORAGE_KEY = 'trade-alerts';
 const ALERT_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24시간 후 자동 삭제
@@ -12,30 +13,15 @@ interface UseAlertHistoryOptions {
   enabled?: boolean;
 }
 
-// localStorage에서 알림 로드
-const loadAlerts = (): AlertItem[] => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return [];
-    const alerts: AlertItem[] = JSON.parse(stored);
-    // 24시간 지난 알림 필터링
-    const now = Date.now();
-    return alerts.filter(a => now - a.timestamp < ALERT_EXPIRY_MS);
-  } catch {
-    return [];
-  }
-};
+// 알림 로드 (24시간 지난 항목 필터링)
+const loadAlerts = (): AlertItem[] =>
+  loadFromStorage<AlertItem[]>(STORAGE_KEY, [], (alerts) =>
+    cleanupArrayByTimestamp(alerts, ALERT_EXPIRY_MS)
+  );
 
-// localStorage에 알림 저장
-const saveAlerts = (alerts: AlertItem[]) => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(alerts));
-  } catch {
-    // localStorage 용량 초과 등 에러 무시
-  }
-};
+// 알림 저장
+const saveAlerts = (alerts: AlertItem[]) =>
+  saveToStorage(STORAGE_KEY, alerts);
 
 export function useAlertHistory(options: UseAlertHistoryOptions = {}) {
   const {
@@ -72,9 +58,7 @@ export function useAlertHistory(options: UseAlertHistoryOptions = {}) {
       if (e.key === STORAGE_KEY && e.newValue) {
         try {
           const newAlerts: AlertItem[] = JSON.parse(e.newValue);
-          // 24시간 지난 알림 필터링
-          const now = Date.now();
-          const filtered = newAlerts.filter(a => now - a.timestamp < ALERT_EXPIRY_MS);
+          const filtered = cleanupArrayByTimestamp(newAlerts, ALERT_EXPIRY_MS);
           setAlerts(filtered);
         } catch {
           // 파싱 에러 무시

@@ -5,6 +5,7 @@ import { useTTS } from './useTTS';
 import { SignalScore } from '@/lib/scoring';
 import { MTFDivergenceInfo } from '@/lib/types';
 import { SCORE, COOLDOWN } from '@/lib/thresholds';
+import { loadFromStorage, saveToStorage, cleanupTimestampRecord } from '@/lib/storage';
 
 const COOLDOWN_STORAGE_KEY = 'trade-alert-cooldowns';
 
@@ -43,35 +44,17 @@ interface DivergenceState {
   timestamp: number;
 }
 
-// localStorage에서 쿨다운 로드
-const loadCooldowns = (): Record<string, number> => {
-  if (typeof window === 'undefined') return {};
-  try {
-    const stored = localStorage.getItem(COOLDOWN_STORAGE_KEY);
-    if (!stored) return {};
-    return JSON.parse(stored);
-  } catch {
-    return {};
-  }
-};
+const COOLDOWN_TTL_MS = 60 * 60 * 1000; // 1시간
 
-// localStorage에 쿨다운 저장
-const saveCooldowns = (cooldowns: Record<string, number>) => {
-  if (typeof window === 'undefined') return;
-  try {
-    // 1시간 지난 쿨다운은 제거
-    const now = Date.now();
-    const cleaned: Record<string, number> = {};
-    for (const [key, time] of Object.entries(cooldowns)) {
-      if (now - time < 60 * 60 * 1000) {
-        cleaned[key] = time;
-      }
-    }
-    localStorage.setItem(COOLDOWN_STORAGE_KEY, JSON.stringify(cleaned));
-  } catch {
-    // 에러 무시
-  }
-};
+// 쿨다운 로드
+const loadCooldowns = (): Record<string, number> =>
+  loadFromStorage(COOLDOWN_STORAGE_KEY, {});
+
+// 쿨다운 저장 (1시간 지난 항목 정리)
+const saveCooldowns = (cooldowns: Record<string, number>) =>
+  saveToStorage(COOLDOWN_STORAGE_KEY, cooldowns, (data) =>
+    cleanupTimestampRecord(data, COOLDOWN_TTL_MS)
+  );
 
 export function useTradeAlert(options: TradeAlertOptions = {}) {
   const {
