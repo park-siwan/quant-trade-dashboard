@@ -128,6 +128,139 @@ const THROTTLE = WEBSOCKET.THROTTLE_MS;
 3. JSDoc 주석으로 사용법 명시
 4. 기존 코드 점진적 마이그레이션
 
+## 자주 발견되는 비효율 패턴
+
+리팩토링 과정에서 반복적으로 발견된 안티패턴들입니다.
+
+### 1. 하드코딩된 RGBA 색상
+```typescript
+// Bad - 27+ 인스턴스 발견
+color: 'rgba(34, 197, 94, 0.3)'
+color: 'rgba(239, 68, 68, 0.5)'
+borderColor: '#22c55e80'
+
+// 문제점
+// - 색상 변경 시 전체 검색 필요
+// - 불투명도 불일치 발생
+// - 테마 변경 불가능
+```
+
+### 2. 중복된 localStorage 보일러플레이트
+```typescript
+// Bad - 3개 훅에서 동일 패턴 반복 (64줄 → 31줄로 감소)
+if (typeof window === 'undefined') return defaultValue;
+try {
+  const stored = localStorage.getItem(KEY);
+  if (!stored) return defaultValue;
+  return JSON.parse(stored);
+} catch {
+  return defaultValue;
+}
+
+// 문제점
+// - SSR 체크 반복
+// - 에러 처리 일관성 부족
+// - 정리(cleanup) 로직 누락 가능
+```
+
+### 3. 방향성 조건부 클래스 반복
+```typescript
+// Bad - 31+ 인스턴스 발견
+className={isLong ? 'text-green-400' : 'text-red-400'}
+className={direction === 'bullish' ? 'bg-green-500/20' : 'bg-red-500/20'}
+className={`${isLong ? 'border-green-500/30' : 'border-red-500/30'}`}
+
+// 문제점
+// - 색상 코드 불일치 (green-400 vs green-500)
+// - 불투명도 불일치 (20 vs 30)
+// - 타입 처리 불일치 (boolean vs string)
+```
+
+### 4. 분산된 매직 넘버
+```typescript
+// Bad - 여러 파일에 흩어진 동일 값
+setTimeout(() => {}, 500);     // useTradeAlert.ts
+const THROTTLE = 500;          // useMTFSocket.ts
+debounce(fn, 500);             // ChartRenderer.tsx
+
+// 문제점
+// - 의미 파악 어려움 (500ms가 뭘 의미?)
+// - 값 변경 시 전체 검색 필요
+// - 연관된 값들의 관계 불명확
+```
+
+### 5. 동일 컴포넌트 중복 정의
+```typescript
+// Bad - AnimatedNumber가 3개 파일에 각각 정의됨
+// ScoreCard.tsx, RecommendationCard.tsx, MTFOverview.tsx
+
+const AnimatedNumber = ({ value }: { value: number }) => {
+  // 거의 동일한 로직...
+};
+
+// 문제점
+// - 버그 수정 시 3곳 수정 필요
+// - 미세한 구현 차이로 인한 불일치
+// - 번들 크기 증가
+```
+
+### 6. console.log 잔존
+```typescript
+// Bad - 프로덕션 코드에 디버깅 로그
+console.log('Debug:', data);
+console.log('[WebSocket] Connected');
+
+// 검색 명령
+grep -r "console\." --include="*.ts" --include="*.tsx" | grep -v node_modules
+```
+
+### 7. 대형 파일 내 분리 가능한 로직
+```typescript
+// Bad - ChartRenderer.tsx (2000줄)
+// 마커 렌더링, 측정 도구, 이벤트 핸들러가 모두 한 파일에
+
+// 분리 후
+// - ChartMarkers.tsx (마커 전용)
+// - MeasurementBox.tsx (측정 도구)
+// - useChartEvents.ts (이벤트 핸들러)
+```
+
+### 8. 인라인 스타일 객체 반복 생성
+```typescript
+// Bad - 렌더링마다 새 객체 생성
+<div style={{ color: isLong ? '#22c55e' : '#ef4444', opacity: 0.8 }}>
+
+// Good - useMemo 또는 상수로 분리
+const style = useMemo(() => ({
+  color: directionColor(isLong),
+  opacity: 0.8
+}), [isLong]);
+```
+
+### 9. 타입 단언 남용
+```typescript
+// Bad - as 키워드 과다 사용
+const data = response as MTFData;
+const element = ref.current as HTMLDivElement;
+
+// Good - 타입 가드 또는 제네릭 사용
+if (isMTFData(response)) { ... }
+const ref = useRef<HTMLDivElement>(null);
+```
+
+### 10. 중첩된 삼항 연산자
+```typescript
+// Bad - 가독성 저하
+className={score > 80 ? 'text-green-400' : score > 50 ? 'text-yellow-400' : 'text-red-400'}
+
+// Good - 함수로 추출
+function scoreColor(score: number): string {
+  if (score > 80) return 'text-green-400';
+  if (score > 50) return 'text-yellow-400';
+  return 'text-red-400';
+}
+```
+
 ## 자주 사용하는 패턴
 
 ### 방향성 (롱/숏) 처리
