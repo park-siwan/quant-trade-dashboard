@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { API_CONFIG } from '@/lib/config';
+import { API } from '@/lib/constants';
 
 interface UsePollingParams<T> {
   endpoint: string;
@@ -21,7 +22,7 @@ interface UsePollingReturn<T> {
 export function usePolling<T>({
   endpoint,
   params = {},
-  refreshInterval = 5000,
+  refreshInterval = API.DEFAULT_POLLING_INTERVAL,
   enabled = true,
   transform,
 }: UsePollingParams<T>): UsePollingReturn<T> {
@@ -38,7 +39,7 @@ export function usePolling<T>({
       const url = `${API_CONFIG.BASE_URL}${endpoint}${queryString ? `?${queryString}` : ''}`;
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃
+      const timeoutId = setTimeout(() => controller.abort(), API.REQUEST_TIMEOUT);
 
       const response = await fetch(url, {
         signal: controller.signal,

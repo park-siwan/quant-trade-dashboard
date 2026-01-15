@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchCandles } from '@/lib/api/exchange';
 import { timeframeToBinance, getRefreshInterval } from '@/lib/timeframe';
+import { WEBSOCKET, API } from '@/lib/constants';
 
 interface UseCandlesParams {
   symbol: string;
@@ -14,7 +15,7 @@ interface UseCandlesParams {
 export function useCandles({
   symbol,
   timeframe,
-  limit = 1000,
+  limit = API.DEFAULT_CANDLE_LIMIT,
   enableAutoRefresh = true,
   enableWebSocket = true,
 }: UseCandlesParams) {
@@ -122,9 +123,9 @@ export function useCandles({
               // 새 캔들 시작 감지 (캔들 시간이 바뀜)
               const isNewCandle = currentCandleTime !== currentCandleTimeRef.current;
 
-              // throttle: 500ms마다 UI 업데이트 (더 실시간)
+              // throttle: UI 업데이트 주기
               const now = Date.now();
-              const shouldUpdate = now - lastUpdateTimeRef.current > 500;
+              const shouldUpdate = now - lastUpdateTimeRef.current > WEBSOCKET.THROTTLE_MS;
 
               if (shouldUpdate) {
                 lastUpdateTimeRef.current = now;
@@ -177,9 +178,9 @@ export function useCandles({
                 ];
                 appendCandleToCache(confirmedCandle);
 
-                // 10번마다 한 번씩 전체 동기화 (데이터 정합성 보장)
+                // N캔들마다 전체 동기화 (데이터 정합성 보장)
                 syncCountRef.current++;
-                if (syncCountRef.current >= 10) {
+                if (syncCountRef.current >= WEBSOCKET.SYNC_INTERVAL) {
                   syncCountRef.current = 0;
                   refetchRef.current();
                 }

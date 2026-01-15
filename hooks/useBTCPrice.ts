@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { WEBSOCKET } from '@/lib/constants';
 
 interface PriceData {
   price: number;
@@ -59,7 +60,7 @@ export function useBTCPrice() {
 
         ws.onclose = () => {
           if (!isIntentionalClose) {
-            reconnectTimeout = setTimeout(connect, 5000);
+            reconnectTimeout = setTimeout(connect, WEBSOCKET.RECONNECT_DELAY);
           }
         };
       } catch {

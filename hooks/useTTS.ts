@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useCallback, useState, useEffect } from 'react';
+import { TTS } from '@/lib/constants';
 
 // 숫자 → 한글 음성 파일 매핑
 const ONES_MAP: Record<number, string> = {
@@ -90,8 +91,8 @@ function canPlaySound(soundKey: string): boolean {
     if (!stored) return true;
     const data = JSON.parse(stored);
     const lastPlayed = data[soundKey];
-    // 3초 이내에 같은 소리가 재생되었으면 false
-    if (lastPlayed && Date.now() - lastPlayed < 3000) {
+    // 같은 소리 재생 방지
+    if (lastPlayed && Date.now() - lastPlayed < TTS.DEDUP_WINDOW) {
       return false;
     }
     return true;
@@ -107,10 +108,10 @@ function markSoundPlayed(soundKey: string) {
     const stored = localStorage.getItem(TTS_PLAYED_KEY);
     const data = stored ? JSON.parse(stored) : {};
     data[soundKey] = Date.now();
-    // 오래된 기록 정리 (10초 이상 지난 것)
+    // 오래된 기록 정리
     const now = Date.now();
     for (const key of Object.keys(data)) {
-      if (now - data[key] > 10000) delete data[key];
+      if (now - data[key] > TTS.CLEANUP_THRESHOLD) delete data[key];
     }
     localStorage.setItem(TTS_PLAYED_KEY, JSON.stringify(data));
   } catch {

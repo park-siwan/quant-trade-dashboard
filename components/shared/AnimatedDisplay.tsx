@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect, useRef, memo } from 'react';
+import { ANIMATION } from '@/lib/constants';
 
-// 애니메이션 타이밍 상수
+// 애니메이션 타이밍 상수 (로컬 단축 참조)
 const ANIMATION_DURATION = {
-  DIGIT_SPIN: 400,    // DigitSlot 회전
-  COLOR_FADE: 500,    // 색상 페이드
-  INTERPOLATE: 300,   // 값 보간
+  DIGIT_SPIN: ANIMATION.DIGIT_SPIN,
+  COLOR_FADE: ANIMATION.COLOR_FADE,
+  INTERPOLATE: ANIMATION.VALUE_INTERPOLATE,
 } as const;
 
 type Direction = 'up' | 'down' | null;
@@ -325,7 +326,7 @@ export const AnimatedCell = memo(({
     if (prevKey.current !== dataKey) {
       setIsUpdated(true);
       prevKey.current = dataKey;
-      const timer = setTimeout(() => setIsUpdated(false), 500);
+      const timer = setTimeout(() => setIsUpdated(false), ANIMATION.CELL_UPDATE);
       return () => clearTimeout(timer);
     }
   }, [dataKey]);
