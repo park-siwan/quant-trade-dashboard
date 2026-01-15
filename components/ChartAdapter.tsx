@@ -292,10 +292,6 @@ export default function ChartAdapter({
   const divergenceSignals: DivergenceSignal[] = useMemo(() => {
     const wsSignals = getRawDivergences(selectedTimeframe);
 
-    // 디버그: 받은 다이버전스 시그널 출력
-    console.log(`📡 [${selectedTimeframe}] WebSocket 다이버전스 시그널:`, wsSignals);
-    console.log(`📡 [${selectedTimeframe}] CVD 시그널:`, wsSignals.filter((s: { type: string }) => s.type === 'cvd'));
-
     return wsSignals.map((s: {
       type: string;
       direction: string;

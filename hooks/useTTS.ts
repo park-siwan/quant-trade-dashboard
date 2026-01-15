@@ -211,14 +211,11 @@ export function useTTS(options: TTSOptions = {}) {
     // 탭 간 중복 방지: 같은 소리가 다른 탭에서 최근에 재생되었는지 확인
     const soundKey = files.join('_');
     if (!canPlaySound(soundKey)) {
-      console.log('[TTS] 다른 탭에서 이미 재생됨, 스킵:', soundKey);
       return;
     }
 
     // 오디오가 아직 잠금 해제되지 않았으면 대기열에 추가 (최대 1개만 보관)
     if (!hasUserInteraction) {
-      // 콘솔에 알림 (디버깅용)
-      console.log('[TTS] 오디오 재생 대기 중 - 페이지를 클릭하면 활성화됩니다');
       // 최근 알림만 보관 (오래된 것 삭제)
       pendingQueueRef.current = [files];
       return;

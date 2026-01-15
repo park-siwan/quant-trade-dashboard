@@ -24,6 +24,7 @@ import {
   DIVERGENCE_TYPE_PRIORITY,
 } from '@/lib/divergence';
 import { ADX } from '@/lib/thresholds';
+import { debug } from '@/lib/debug';
 
 // Re-export for backward compatibility
 export { getNextCandleClose, getSecondsUntilClose };
@@ -578,13 +579,13 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('[MTF Socket] Connected via', socket.io.engine.transport.name);
+      debug.socket('Connected via', socket.io.engine.transport.name);
       setIsConnected(true);
       socket.emit('subscribe', { symbol });
     });
 
     socket.on('disconnect', (reason) => {
-      console.log('[MTF Socket] Disconnected:', reason);
+      debug.socket('Disconnected:', reason);
       setIsConnected(false);
     });
 
@@ -600,11 +601,11 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
     });
 
     socket.io.on('reconnect', (attempt) => {
-      console.log('[MTF Socket] Reconnected after', attempt, 'attempts');
+      debug.socket('Reconnected after', attempt, 'attempts');
     });
 
     socket.io.on('reconnect_attempt', (attempt) => {
-      console.log('[MTF Socket] Reconnect attempt', attempt);
+      debug.socket('Reconnect attempt', attempt);
     });
 
     return () => {

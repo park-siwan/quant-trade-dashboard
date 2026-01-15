@@ -735,15 +735,6 @@ export default function MTFOverview({
   useEffect(() => {
     if (!alertEnabled || !tradeAlert || !derivedData) return;
 
-    // 디버그: 활성 다이버전스 목록
-    if (derivedData.activeDivergences.length > 0) {
-      console.log('📋 활성 다이버전스 목록:', derivedData.activeDivergences.map(tf => ({
-        timeframe: tf.timeframe,
-        type: tf.divergence?.type,
-        direction: tf.divergence?.direction,
-      })));
-    }
-
     // 최근 다이버전스만 알림
     derivedData.activeDivergences.forEach(tf => {
       if (tf.divergence) {

@@ -426,38 +426,7 @@ export function addDivergenceLines(
         confirmed: signal.confirmed !== false,
       });
 
-      console.log(`🔧 ${signal.type} ${signal.direction} 다이버전스: end만 있어서 start 자동 생성`, {
-        type: signal.type,
-        direction: signal.direction,
-        endTimestamp: new Date(signal.timestamp).toLocaleString(),
-        syntheticStartTimestamp: new Date(estimatedStartTimestamp).toLocaleString(),
-      });
     }
-  }
-
-  // 디버깅: 원본 시그널 및 매칭된 쌍 출력
-  console.log('📊 다이버전스 시그널 원본:', signals);
-  console.log('📊 CVD 시그널만:', signals.filter(s => s.type === 'cvd'));
-  console.log('📊 CVD start 시그널:', signals.filter(s => s.type === 'cvd' && s.phase === 'start'));
-  console.log('📊 CVD end 시그널:', signals.filter(s => s.type === 'cvd' && s.phase === 'end'));
-  console.log('🔗 매칭된 다이버전스 쌍:', divergencePairs);
-  console.log('📈 타입별 다이버전스:', {
-    rsi: divergencePairs.filter(p => p.start.type === 'rsi').length,
-    obv: divergencePairs.filter(p => p.start.type === 'obv').length,
-    cvd: divergencePairs.filter(p => p.start.type === 'cvd').length,
-    oi: divergencePairs.filter(p => p.start.type === 'oi').length,
-  });
-
-  // CVD 쌍 상세 디버깅
-  const cvdPairs = divergencePairs.filter(p => p.start.type === 'cvd');
-  if (cvdPairs.length > 0) {
-    console.log('🔍 CVD 다이버전스 쌍 상세:', cvdPairs.map(p => ({
-      direction: p.direction,
-      startTimestamp: p.start.timestamp,
-      endTimestamp: p.end.timestamp,
-      startPriceValue: p.start.priceValue,
-      endPriceValue: p.end.priceValue,
-    })));
   }
 
   // 다이버전스 라벨 마커 수집
@@ -475,7 +444,6 @@ export function addDivergenceLines(
   divergencePairs.forEach((pair) => {
     // 미확정(confirmed=false) 다이버전스는 표시하지 않음 (리페인팅 방지)
     if (!pair.confirmed) {
-      console.log(`⏳ ${pair.start.type} ${pair.direction} 다이버전스 미확정 - 차트 표시 대기`);
       return;
     }
 
@@ -540,19 +508,6 @@ export function addDivergenceLines(
     }
 
     if (startPrice !== undefined && endPrice !== undefined) {
-      const startTime = pair.start.timestamp / 1000;
-      const endTime = pair.end.timestamp / 1000;
-      console.log(`✅ ${pair.start.type.toUpperCase()} 다이버전스 가격선:`, {
-        type: pair.start.type,
-        direction: pair.direction,
-        startPrice: startPrice.toFixed(2),
-        endPrice: endPrice.toFixed(2),
-        startTime: new Date(startTime * 1000).toLocaleString(),
-        endTime: new Date(endTime * 1000).toLocaleString(),
-        isFiltered: pair.isFiltered,
-        color,
-      });
-
       // 가격 라인 시리즈로 선 그리기
       const priceLineSeries = chart.addSeries(
         LineSeries,
@@ -611,13 +566,6 @@ export function addDivergenceLines(
       const startRsi = findClosestRsi(startTimeSec);
       const endRsi = findClosestRsi(endTimeSec);
 
-      console.log('🔍 RSI 선 그리기:', {
-        startTimeSec,
-        endTimeSec,
-        startRsi,
-        endRsi,
-      });
-
       if (startRsi && endRsi) {
         const rsiLineSeries = chart.addSeries(
           LineSeries,
@@ -666,13 +614,6 @@ export function addDivergenceLines(
 
       const startObv = findClosestObv(startTimeSec);
       const endObv = findClosestObv(endTimeSec);
-
-      console.log('🔍 OBV 선 그리기:', {
-        startTimeSec,
-        endTimeSec,
-        startObv,
-        endObv,
-      });
 
       if (startObv && endObv) {
         const obvLineSeries = chart.addSeries(
@@ -723,16 +664,6 @@ export function addDivergenceLines(
       const startCvd = findClosestCvd(startTimeSec);
       const endCvd = findClosestCvd(endTimeSec);
 
-      console.log('🔍 CVD 선 그리기:', {
-        startTimeSec,
-        endTimeSec,
-        startCvd,
-        endCvd,
-        cvdDataRange: cvdData.length > 0
-          ? `${cvdData[0].time} ~ ${cvdData[cvdData.length - 1].time}`
-          : 'empty',
-      });
-
       if (startCvd && endCvd) {
         const cvdLineSeries = chart.addSeries(
           LineSeries,
@@ -782,13 +713,6 @@ export function addDivergenceLines(
       const startOi = findClosestOi(startTimeSec);
       const endOi = findClosestOi(endTimeSec);
 
-      console.log('🔍 OI 선 그리기:', {
-        startTimeSec,
-        endTimeSec,
-        startOi,
-        endOi,
-      });
-
       if (startOi && endOi) {
         const oiLineSeries = chart.addSeries(
           LineSeries,
@@ -822,7 +746,6 @@ export function addDivergenceLines(
     // 시간순 정렬 (lightweight-charts 요구사항)
     divergenceMarkers.sort((a, b) => (a.time as number) - (b.time as number));
     createSeriesMarkers(candlestickSeries, divergenceMarkers);
-    console.log(`✅ ${divergenceMarkers.length}개의 다이버전스 라벨 마커 추가됨`);
   }
 }
 
@@ -901,8 +824,6 @@ export function addCvdOiMarkers(
 
   // 한 번에 모든 마커 추가
   createSeriesMarkers(candlestickSeries, markers);
-
-  console.log(`✅ ${marketSignals.length}개의 CVD+OI 신호 마커 추가됨`);
 }
 
 /**
@@ -981,13 +902,7 @@ export function addConsolidationZones(
       { time: endTime, value: zone.high },
     ]);
 
-    console.log(
-      `⚠️ 현재 횡보 중! ${zone.candleCount}캔들, 범위 ${zone.rangePercent.toFixed(2)}% - Breakout 주의!`,
-    );
   });
 
-  if (activeZones.length > 0) {
-    console.log(`✅ ${activeZones.length}개의 현재 횡보 구간 표시됨`);
-  }
   return series;
 }

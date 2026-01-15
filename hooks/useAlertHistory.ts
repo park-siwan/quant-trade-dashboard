@@ -101,7 +101,6 @@ export function useAlertHistory(options: UseAlertHistoryOptions = {}) {
         a.message === message && now - a.timestamp < 30000
       );
       if (isDuplicate) {
-        console.log('[AlertHistory] 중복 알림 무시:', message);
         return prev;
       }
 
@@ -160,7 +159,6 @@ export function useAlertHistory(options: UseAlertHistoryOptions = {}) {
 
     const interval = setInterval(() => {
       if (reminderCallbackRef.current && unreadCount > 0) {
-        console.log(`[AlertHistory] ${unreadCount}개의 읽지 않은 알림 재알림`);
         reminderCallbackRef.current();
       }
     }, reminderInterval);

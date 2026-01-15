@@ -694,8 +694,6 @@ export default function ChartRenderer({
         });
         // 가로선은 DOM으로 렌더링 (priceLines state)
       });
-
-      console.log(`✅ ${orderBlockData.activeBlocks.length}개의 오더블록 표시됨`);
     }
 
     // 패널 높이를 4:1:1:1 비율로 설정 (즉시 실행)
