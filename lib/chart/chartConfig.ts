@@ -1,28 +1,29 @@
 /**
  * 차트 설정 및 테마 중앙 관리
  */
-import { ColorType, DeepPartial, ChartOptions, TimeChartOptions } from 'lightweight-charts';
+import { ColorType, DeepPartial, TimeChartOptions } from 'lightweight-charts';
+import { COLORS, CHART_COLORS, rgba } from '@/lib/colors';
 
 // 차트 테마 색상
 export const CHART_THEME = {
-  background: '#0c0908',           // 따뜻한 블랙
-  textColor: '#d1d5db',
-  gridColor: 'rgba(45, 38, 32, 0.25)',
-  separatorColor: 'rgba(255, 255, 255, 0.3)',
-  separatorHoverColor: 'rgba(255, 255, 255, 0.5)',
+  background: COLORS.CHART_BG,
+  textColor: COLORS.TEXT_SECONDARY,
+  gridColor: CHART_COLORS.GRID,
+  separatorColor: CHART_COLORS.SEPARATOR,
+  separatorHoverColor: CHART_COLORS.SEPARATOR_HOVER,
 } as const;
 
 // 캔들 색상
 export const CANDLE_COLORS = {
   UP: {
-    body: 'rgba(34, 197, 94, 0.3)',      // green-500 투명
-    border: 'rgba(134, 239, 172, 0.8)',   // green-300 테두리
-    wick: 'rgba(34, 197, 94, 0.6)',       // 심지
+    body: CHART_COLORS.CANDLE_UP,
+    border: CHART_COLORS.CANDLE_UP_BORDER,
+    wick: CHART_COLORS.CANDLE_UP_WICK,
   },
   DOWN: {
-    body: 'rgba(239, 68, 68, 0.3)',       // red-500 투명
-    border: 'rgba(252, 165, 165, 0.8)',   // red-300 테두리
-    wick: 'rgba(239, 68, 68, 0.6)',       // 심지
+    body: CHART_COLORS.CANDLE_DOWN,
+    border: CHART_COLORS.CANDLE_DOWN_BORDER,
+    wick: CHART_COLORS.CANDLE_DOWN_WICK,
   },
 } as const;
 
@@ -154,12 +155,12 @@ export function formatSeoulTime(time: number): string {
  */
 export function getCandlestickOptions(opacity: number = 0.3) {
   return {
-    upColor: `rgba(34, 197, 94, ${opacity})`,
-    downColor: `rgba(239, 68, 68, ${opacity})`,
-    borderUpColor: 'rgba(134, 239, 172, 0.8)',
-    borderDownColor: 'rgba(252, 165, 165, 0.8)',
-    wickUpColor: 'rgba(34, 197, 94, 0.6)',
-    wickDownColor: 'rgba(239, 68, 68, 0.6)',
+    upColor: rgba(COLORS.LONG, opacity),
+    downColor: rgba(COLORS.SHORT, opacity),
+    borderUpColor: CHART_COLORS.CANDLE_UP_BORDER,
+    borderDownColor: CHART_COLORS.CANDLE_DOWN_BORDER,
+    wickUpColor: CHART_COLORS.CANDLE_UP_WICK,
+    wickDownColor: CHART_COLORS.CANDLE_DOWN_WICK,
   };
 }
 
@@ -168,9 +169,9 @@ export function getCandlestickOptions(opacity: number = 0.3) {
  */
 export function getAreaSeriesOptions() {
   return {
-    lineColor: 'rgba(251, 146, 60, 0.9)',
-    topColor: 'rgba(251, 146, 60, 0.3)',
-    bottomColor: 'rgba(251, 146, 60, 0.05)',
+    lineColor: CHART_COLORS.MINI_LINE,
+    topColor: CHART_COLORS.MINI_TOP,
+    bottomColor: CHART_COLORS.MINI_BOTTOM,
     lineWidth: 2 as const,
     priceLineVisible: false,
     lastValueVisible: false,

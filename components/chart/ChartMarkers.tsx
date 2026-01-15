@@ -1,6 +1,7 @@
 'use client';
 
 import { memo } from 'react';
+import { COLORS, CHART_COLORS, rgba } from '@/lib/colors';
 
 // 크로스오버 마커 데이터
 export interface CrossoverMarkerData {
@@ -41,6 +42,13 @@ interface StructureMarkersProps {
   markers: StructureMarkerData[];
 }
 
+// 마커 색상 상수
+const MARKER_COLORS = {
+  GOLDEN_CROSS: COLORS.BULLISH,  // lime-400
+  DEAD_CROSS: COLORS.BEARISH,   // red-400
+  FILTERED: COLORS.FILTERED,    // gray-400
+} as const;
+
 /**
  * 크로스오버 마커 (골든크로스/데드크로스)
  */
@@ -61,14 +69,13 @@ export const CrossoverMarkers = memo(({ markers }: CrossoverMarkersProps) => {
             zIndex: 20,
             fontSize: '16px',
             fontWeight: 'bold',
-            // 필터링된 신호는 회색, 아니면 골든=초록/데드=빨강
             color: marker.isFiltered
-              ? '#9ca3af' // gray-400
+              ? MARKER_COLORS.FILTERED
               : marker.type === 'golden_cross'
-              ? '#a3e635' // lime-400
-              : '#f87171', // red-400
-            textShadow: '0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.5)',
-            opacity: marker.isFiltered ? 0.6 : 1, // 필터링된 신호는 투명도
+              ? MARKER_COLORS.GOLDEN_CROSS
+              : MARKER_COLORS.DEAD_CROSS,
+            textShadow: `0 0 4px ${CHART_COLORS.SHADOW_DARK}, 0 0 8px ${CHART_COLORS.SHADOW_MEDIUM}`,
+            opacity: marker.isFiltered ? 0.6 : 1,
           }}
         >
           ✕
@@ -128,8 +135,8 @@ export const StructureMarkers = memo(({ markers }: StructureMarkersProps) => {
         const isChoch = marker.type === 'choch';
         const isStrong = marker.strength === 'strong';
 
-        // 색상 설정
-        const bgOpacity = isChoch ? '0.3' : '0.2';
+        const baseColor = isBullish ? COLORS.BULLISH : COLORS.SHORT;
+        const bgOpacity = isChoch ? 0.3 : 0.2;
         const textColor = isBullish ? 'text-lime-400' : 'text-red-400';
 
         return (
@@ -147,8 +154,8 @@ export const StructureMarkers = memo(({ markers }: StructureMarkersProps) => {
                 isStrong ? 'border-2' : 'border'
               }`}
               style={{
-                backgroundColor: `rgba(${isBullish ? '163, 230, 53' : '239, 68, 68'}, ${bgOpacity})`,
-                borderColor: `rgba(${isBullish ? '163, 230, 53' : '239, 68, 68'}, 0.6)`,
+                backgroundColor: rgba(baseColor, bgOpacity),
+                borderColor: rgba(baseColor, 0.6),
               }}
             >
               {isChoch ? 'CHoCH' : 'BOS'}
@@ -166,9 +173,9 @@ export const SIGNAL_CONFIG: Record<
   string,
   { label: string; color: string; position: 'above' | 'below' }
 > = {
-  REAL_BULL: { label: '↑매수세', color: 'rgba(163, 230, 53, 0.9)', position: 'below' },
-  SHORT_TRAP: { label: '⚠숏탈출', color: 'rgba(163, 230, 53, 0.9)', position: 'above' },
-  PUMP_DUMP: { label: '⚠고점', color: 'rgba(251, 146, 60, 0.9)', position: 'above' },
-  MORE_DROP: { label: '↓매도세', color: 'rgba(239, 68, 68, 0.9)', position: 'above' },
-  LONG_ENTRY: { label: '★롱타점', color: 'rgba(34, 211, 238, 0.9)', position: 'below' },
+  REAL_BULL: { label: '↑매수세', color: CHART_COLORS.SIGNAL_BULLISH, position: 'below' },
+  SHORT_TRAP: { label: '⚠숏탈출', color: CHART_COLORS.SIGNAL_BULLISH, position: 'above' },
+  PUMP_DUMP: { label: '⚠고점', color: CHART_COLORS.SIGNAL_ORANGE, position: 'above' },
+  MORE_DROP: { label: '↓매도세', color: CHART_COLORS.SIGNAL_BEARISH, position: 'above' },
+  LONG_ENTRY: { label: '★롱타점', color: CHART_COLORS.SIGNAL_CYAN, position: 'below' },
 };

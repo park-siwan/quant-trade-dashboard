@@ -15,6 +15,7 @@ import {
   MarketSignal,
   ConsolidationZone,
 } from '@/lib/types/index';
+import { INDICATOR_COLORS } from '@/lib/colors';
 
 // 중복 타임스탬프 제거 유틸리티 (lightweight-charts 요구사항)
 function dedupeByTime<T extends { time: Time }>(data: T[]): T[] {
@@ -125,7 +126,7 @@ export function addCvdIndicator(
   const cvdSeries = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(96, 165, 250, 0.5)', // 하늘색 (blue-400) 투명도 50%
+      color: INDICATOR_COLORS.CVD_LINE,
       lineWidth: 2,
       priceScaleId: 'cvd',
       crosshairMarkerVisible: true,
@@ -166,7 +167,7 @@ export function addAtrIndicator(
   const atrSeries = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(251, 146, 60, 0.7)', // orange-400 투명도 70%
+      color: INDICATOR_COLORS.ATR_LINE,
       lineWidth: 2,
       priceScaleId: 'atr',
       crosshairMarkerVisible: true,
@@ -207,7 +208,7 @@ export function addOiIndicator(
   const oiSeries = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(192, 132, 252, 0.5)', // 자주색 (purple-400) 투명도 50%
+      color: INDICATOR_COLORS.OI_LINE,
       lineWidth: 2,
       priceScaleId: 'oi',
       crosshairMarkerVisible: true,
@@ -295,7 +296,7 @@ export function addEmaIndicators(
   const ema20Series = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(239, 68, 68, 0.25)', // 빨간색 (투명도 25%)
+      color: INDICATOR_COLORS.EMA_FAST,
       lineWidth: 2,
       lastValueVisible: false,
       priceLineVisible: false,
@@ -308,7 +309,7 @@ export function addEmaIndicators(
   const ema50Series = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(59, 130, 246, 0.25)', // 파란색 (투명도 25%)
+      color: INDICATOR_COLORS.EMA_MID,
       lineWidth: 3,
       lastValueVisible: false,
       priceLineVisible: false,
@@ -321,7 +322,7 @@ export function addEmaIndicators(
   const ema200Series = chart.addSeries(
     LineSeries,
     {
-      color: 'rgba(34, 197, 94, 0.25)', // 초록색 (투명도 25%)
+      color: INDICATOR_COLORS.EMA_SLOW,
       lineWidth: 4,
       lastValueVisible: false,
       priceLineVisible: false,
@@ -449,10 +450,10 @@ export function addDivergenceLines(
 
     // 필터링된 신호는 회색, 정상 신호는 선명한 색상
     const color = pair.isFiltered
-      ? 'rgba(156, 163, 175, 0.7)' // gray-400 (투명도 70%)
+      ? INDICATOR_COLORS.DIV_FILTERED
       : pair.direction === 'bullish'
-      ? 'rgba(163, 230, 53, 0.95)' // lime-400 (롱 타점)
-      : 'rgba(248, 113, 113, 0.95)'; // red-400 (숏 타점)
+      ? INDICATOR_COLORS.DIV_BULLISH
+      : INDICATOR_COLORS.DIV_BEARISH;
 
     // 1. 가격 패널에 선 그리기
     // useClosePrice=true면 종가 기준 (라인 차트용)
@@ -842,8 +843,8 @@ export function addConsolidationZones(
   const activeZones = zones.filter((zone) => zone.isActive);
 
   activeZones.forEach((zone) => {
-    const color = 'rgba(251, 191, 36, 0.08)'; // amber-400 (현재 횡보 - 아주 연하게)
-    const borderColor = 'rgba(251, 191, 36, 0.4)'; // amber-400
+    const color = INDICATOR_COLORS.CONSOLIDATION_BG;
+    const borderColor = INDICATOR_COLORS.CONSOLIDATION_BORDER;
 
     const startTime = (zone.startTimestamp / 1000) as Time;
     const endTime = (zone.endTimestamp / 1000) as Time;
