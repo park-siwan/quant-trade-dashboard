@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ChartAdapter from '@/components/ChartAdapter';
 import MTFOverview from '@/components/MTFOverview';
 import AlertSnackbar, { AlertItem } from '@/components/AlertSnackbar';
@@ -8,89 +8,7 @@ import { BarChart3, Table2, BookOpen, Bitcoin, Volume2, VolumeX } from 'lucide-r
 import { useBTCPrice } from '@/hooks/useBTCPrice';
 import { useTradeAlert } from '@/hooks/useTradeAlert';
 import { useAlertHistory } from '@/hooks/useAlertHistory';
-
-// 개별 숫자 슬롯 컴포넌트
-const DigitSlot = ({ digit, direction }: { digit: string; direction: 'up' | 'down' | null }) => {
-  const [currentDigit, setCurrentDigit] = useState(digit);
-  const [prevDigit, setPrevDigit] = useState(digit);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const prevDigitRef = useRef(digit);
-
-  useEffect(() => {
-    if (prevDigitRef.current !== digit) {
-      setPrevDigit(prevDigitRef.current);
-      setCurrentDigit(digit);
-      setIsSpinning(true);
-      prevDigitRef.current = digit;
-
-      const timer = setTimeout(() => setIsSpinning(false), 400);
-      return () => clearTimeout(timer);
-    }
-  }, [digit]);
-
-  // 숫자가 아니면 그냥 표시 ($ , 등) - 수직 정렬 맞춤
-  if (!/\d/.test(digit)) {
-    return <span className="inline-flex items-center justify-center">{digit}</span>;
-  }
-
-  return (
-    <span className="inline-flex items-center justify-center w-[0.6em] h-full overflow-hidden relative">
-      {/* 이전 숫자 */}
-      {isSpinning && (
-        <span
-          className={`absolute inset-0 flex items-center justify-center ${
-            direction === 'up' ? 'animate-digit-out-up' : 'animate-digit-out-down'
-          }`}
-        >
-          {prevDigit}
-        </span>
-      )}
-      {/* 현재 숫자 */}
-      <span
-        className={`flex items-center justify-center ${
-          isSpinning
-            ? direction === 'up'
-              ? 'animate-digit-in-up'
-              : 'animate-digit-in-down'
-            : ''
-        }`}
-      >
-        {currentDigit}
-      </span>
-    </span>
-  );
-};
-
-// 공항 전광판 스타일 가격 애니메이션 컴포넌트
-const AnimatedPrice = ({ value }: { value: number }) => {
-  const [direction, setDirection] = useState<'up' | 'down' | null>(null);
-  const previousValue = useRef(value);
-  const formattedValue = `$${value.toLocaleString()}`;
-
-  useEffect(() => {
-    if (previousValue.current !== value) {
-      setDirection(value > previousValue.current ? 'up' : 'down');
-      previousValue.current = value;
-
-      const timer = setTimeout(() => setDirection(null), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [value]);
-
-  const colorClass = direction === 'up'
-    ? 'text-green-400'
-    : direction === 'down'
-      ? 'text-red-400'
-      : 'text-white';
-
-  return (
-    <span className={`inline-flex items-center h-7 font-mono transition-colors duration-300 ${colorClass}`}>
-      {formattedValue.split('').map((char, i) => (
-        <DigitSlot key={i} digit={char} direction={direction} />
-      ))}
-    </span>
-  );
-};
+import { AnimatedPrice } from '@/components/shared';
 
 type TabType = 'chart' | 'mtf' | 'glossary';
 

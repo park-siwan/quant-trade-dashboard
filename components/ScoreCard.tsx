@@ -1,84 +1,13 @@
 'use client';
 
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { MTFOverviewData, OrderBlock } from '@/lib/types';
 import { calculateSignalScore, confidenceLabels, SignalScore, MarketStructureData } from '@/lib/scoring';
 import { TrendingUp, TrendingDown, Activity, BarChart3, Layers, ArrowUpDown, Zap } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import { AnimatedNumber } from '@/components/shared';
 
 const RadarScoreChart = dynamic(() => import('./RadarScoreChart'), { ssr: false });
-
-// 개별 숫자 슬롯 컴포넌트
-const DigitSlot = ({ digit, direction, size = 'normal' }: { digit: string; direction: 'up' | 'down' | null; size?: 'normal' | 'large' }) => {
-  const [currentDigit, setCurrentDigit] = useState(digit);
-  const [prevDigit, setPrevDigit] = useState(digit);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const prevDigitRef = useRef(digit);
-
-  useEffect(() => {
-    if (prevDigitRef.current !== digit) {
-      setPrevDigit(prevDigitRef.current);
-      setCurrentDigit(digit);
-      setIsSpinning(true);
-      prevDigitRef.current = digit;
-
-      const timer = setTimeout(() => setIsSpinning(false), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [digit]);
-
-  const sizeClass = size === 'large' ? 'w-[0.65em] h-[1.3em]' : 'w-[0.6em] h-[1.2em]';
-
-  return (
-    <span className={`inline-block ${sizeClass} overflow-hidden relative`}>
-      {isSpinning && (
-        <span
-          className={`absolute inset-0 flex items-center justify-center ${
-            direction === 'up' ? 'animate-digit-out-up' : 'animate-digit-out-down'
-          }`}
-        >
-          {prevDigit}
-        </span>
-      )}
-      <span
-        className={`flex items-center justify-center ${
-          isSpinning
-            ? direction === 'up'
-              ? 'animate-digit-in-up'
-              : 'animate-digit-in-down'
-            : ''
-        }`}
-      >
-        {currentDigit}
-      </span>
-    </span>
-  );
-};
-
-// 공항 전광판 스타일 점수 컴포넌트
-const AnimatedNumber = ({ value, className }: { value: number; className?: string }) => {
-  const [direction, setDirection] = useState<'up' | 'down' | null>(null);
-  const previousValue = useRef(value);
-  const valueStr = String(value);
-
-  useEffect(() => {
-    if (previousValue.current !== value) {
-      setDirection(value > previousValue.current ? 'up' : 'down');
-      previousValue.current = value;
-
-      const timer = setTimeout(() => setDirection(null), 600);
-      return () => clearTimeout(timer);
-    }
-  }, [value]);
-
-  return (
-    <span className={`inline-flex items-center justify-center ${className || ''}`}>
-      {valueStr.split('').map((char, i) => (
-        <DigitSlot key={i} digit={char} direction={direction} size="large" />
-      ))}
-    </span>
-  );
-};
 
 interface ScoreCardProps {
   mtfData: MTFOverviewData;

@@ -1,115 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
 import { Recommendation, WaitCondition, DirectionRecommendation } from '@/lib/recommendation';
 import { TrendingUp, TrendingDown, Ban, Clock, CheckCircle, Target, ShieldAlert, Crosshair, Scale, ChevronUp } from 'lucide-react';
+import { AnimatedPrice, AnimatedPercent } from '@/components/shared';
 
 interface RecommendationCardProps {
   recommendation: Recommendation;
   currentPrice?: number;
 }
-
-// 개별 숫자 슬롯 컴포넌트
-const DigitSlot = ({ digit, direction, size = 'normal' }: { digit: string; direction: 'up' | 'down' | null; size?: 'normal' | 'large' }) => {
-  const [currentDigit, setCurrentDigit] = useState(digit);
-  const [prevDigit, setPrevDigit] = useState(digit);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const prevDigitRef = useRef(digit);
-
-  useEffect(() => {
-    if (prevDigitRef.current !== digit) {
-      setPrevDigit(prevDigitRef.current);
-      setCurrentDigit(digit);
-      setIsSpinning(true);
-      prevDigitRef.current = digit;
-
-      const timer = setTimeout(() => setIsSpinning(false), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [digit]);
-
-  const sizeClass = size === 'large' ? 'w-[0.55em] h-[1.2em]' : 'w-[0.5em] h-[1.1em]';
-
-  return (
-    <span className={`inline-block ${sizeClass} overflow-hidden relative`}>
-      {isSpinning && (
-        <span
-          className={`absolute inset-0 flex items-center justify-center ${
-            direction === 'up' ? 'animate-digit-out-up' : 'animate-digit-out-down'
-          }`}
-        >
-          {prevDigit}
-        </span>
-      )}
-      <span
-        className={`flex items-center justify-center ${
-          isSpinning
-            ? direction === 'up'
-              ? 'animate-digit-in-up'
-              : 'animate-digit-in-down'
-            : ''
-        }`}
-      >
-        {currentDigit}
-      </span>
-    </span>
-  );
-};
-
-// 애니메이션 숫자 컴포넌트
-const AnimatedPrice = ({ value, prefix = '', suffix = '', className = '' }: { value: number; prefix?: string; suffix?: string; className?: string }) => {
-  const [direction, setDirection] = useState<'up' | 'down' | null>(null);
-  const previousValue = useRef(value);
-  const formatted = value.toLocaleString(undefined, { maximumFractionDigits: 0 });
-
-  useEffect(() => {
-    if (previousValue.current !== value) {
-      setDirection(value > previousValue.current ? 'up' : 'down');
-      previousValue.current = value;
-
-      const timer = setTimeout(() => setDirection(null), 600);
-      return () => clearTimeout(timer);
-    }
-  }, [value]);
-
-  return (
-    <span className={`flex items-baseline justify-center ${className}`}>
-      <span className="h-[1.2em] flex items-center -translate-y-[0.7px]">{prefix}</span>
-      {formatted.split('').map((char, i) => (
-        char === ',' ? <span key={i} className="h-[1.2em] flex items-center">,</span> : <DigitSlot key={i} digit={char} direction={direction} size="large" />
-      ))}
-      {suffix && <span className="h-[1.2em] flex items-center">{suffix}</span>}
-    </span>
-  );
-};
-
-// 애니메이션 퍼센트 컴포넌트
-const AnimatedPercent = ({ value, showSign = true, className = '' }: { value: number; showSign?: boolean; className?: string }) => {
-  const [direction, setDirection] = useState<'up' | 'down' | null>(null);
-  const previousValue = useRef(value);
-  const formatted = Math.abs(value).toFixed(0);
-  const sign = showSign ? (value >= 0 ? '+' : '-') : '';
-
-  useEffect(() => {
-    if (previousValue.current !== value) {
-      setDirection(value > previousValue.current ? 'up' : 'down');
-      previousValue.current = value;
-
-      const timer = setTimeout(() => setDirection(null), 600);
-      return () => clearTimeout(timer);
-    }
-  }, [value]);
-
-  return (
-    <span className={`flex items-baseline justify-center ${className}`}>
-      <span className="h-[1.1em] flex items-center">{sign}</span>
-      {formatted.split('').map((char, i) => (
-        <DigitSlot key={i} digit={char} direction={direction} size="normal" />
-      ))}
-      <span className="h-[1.1em] flex items-center">%</span>
-    </span>
-  );
-};
 
 // 상태별 스타일
 const statusStyles = {
