@@ -6,6 +6,7 @@ import { calculateSignalScore, confidenceLabels, SignalScore, MarketStructureDat
 import { TrendingUp, TrendingDown, Activity, BarChart3, Layers, ArrowUpDown, Zap } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { AnimatedNumber } from '@/components/shared';
+import { directionText } from '@/lib/classnames';
 
 const RadarScoreChart = dynamic(() => import('./RadarScoreChart'), { ssr: false });
 
@@ -38,8 +39,8 @@ const ScoreDetails = ({
   score: SignalScore;
   type: 'long' | 'short';
 }) => {
-  const colorClass = type === 'long' ? 'text-green-400' : 'text-red-400';
-  const colorClassMuted = type === 'long' ? 'text-green-400/80' : 'text-red-400/80';
+  const colorClass = directionText(type);
+  const colorClassMuted = directionText(type, true);
   const Icon = type === 'long' ? TrendingUp : TrendingDown;
 
   // 레이더 차트와 동일한 순서 (대척점: 추세↔다이버전스, 거래량↔지지/저항, 모멘텀↔시장심리)

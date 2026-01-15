@@ -3,6 +3,7 @@
 import { Recommendation, WaitCondition, DirectionRecommendation } from '@/lib/recommendation';
 import { TrendingUp, TrendingDown, Ban, Clock, CheckCircle, Target, ShieldAlert, Crosshair, Scale, ChevronUp } from 'lucide-react';
 import { AnimatedPrice, AnimatedPercent } from '@/components/shared';
+import { directionText, directionBg, directionTextBg } from '@/lib/classnames';
 
 interface RecommendationCardProps {
   recommendation: Recommendation;
@@ -42,9 +43,7 @@ function ConditionCard({ condition, index }: { condition: WaitCondition; index: 
     <div className="bg-white/[0.02] rounded p-2 border border-white/5">
       <div className="flex items-center gap-1.5 mb-1">
         <span
-          className={`text-[12px] font-bold px-1.5 py-0.5 rounded ${
-            isLong ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-          }`}
+          className={`text-[12px] font-bold px-1.5 py-0.5 rounded ${directionTextBg(isLong)}`}
         >
           {index + 1}. {isLong ? '롱' : '숏'}
         </span>
@@ -88,16 +87,14 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
       {/* 방향 표시 */}
       <div className="flex items-center gap-2">
         <div
-          className={`flex items-center gap-1.5 px-2 py-1 rounded ${
-            isLong ? 'bg-green-500/20' : 'bg-red-500/20'
-          }`}
+          className={`flex items-center gap-1.5 px-2 py-1 rounded ${directionBg(isLong)}`}
         >
           {isLong ? (
             <TrendingUp className="w-3.5 h-3.5 text-green-400" />
           ) : (
             <TrendingDown className="w-3.5 h-3.5 text-red-400" />
           )}
-          <span className={`text-sm font-bold ${isLong ? 'text-green-400' : 'text-red-400'}`}>
+          <span className={`text-sm font-bold ${directionText(isLong)}`}>
             {isLong ? '롱' : '숏'}
           </span>
         </div>
@@ -309,9 +306,7 @@ function DirectionCompareCard({ long, short, primaryDirection }: {
             <TrendingDown className={`w-4 h-4 ${isPrimary ? 'text-red-400' : 'text-gray-400'}`} />
           )}
           <span className={`text-sm font-bold ${
-            isPrimary
-              ? isLong ? 'text-green-400' : 'text-red-400'
-              : 'text-gray-400'
+            isPrimary ? directionText(isLong) : 'text-gray-400'
           }`}>
             {isLong ? '롱' : '숏'}
           </span>

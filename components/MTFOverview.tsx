@@ -11,6 +11,7 @@ import { generateRecommendation } from '@/lib/recommendation';
 import { useCoinglass } from '@/hooks/useCoinglass';
 import SignalChip from './SignalChip';
 import { AnimatedValue, AnimatedCell } from '@/components/shared';
+import { directionText } from '@/lib/classnames';
 
 // TradeAlert 훅 반환 타입
 interface TradeAlertReturn {
@@ -139,7 +140,7 @@ const DirectionStrengthDisplay = ({
 
   if (strength === 'strong') {
     arrows = arrow + arrow + arrow;  // ↑↑↑ or ↓↓↓
-    color = isUp ? 'text-green-400' : 'text-red-400';
+    color = directionText(isUp);
   } else if (strength === 'medium') {
     arrows = arrow + arrow;          // ↑↑ or ↓↓
     color = isUp ? 'text-teal-400' : 'text-orange-400';
@@ -191,7 +192,7 @@ const DivergenceDisplay = ({ divergence, timeframe }: {
 
   return (
     <div className="flex flex-col items-start">
-      <span className={`text-xs font-semibold ${isBullish ? 'text-green-400' : 'text-red-400'}`}>
+      <span className={`text-xs font-semibold ${directionText(isBullish)}`}>
         {isBullish ? '↑' : '↓'} {typeLabel}
       </span>
       <span className="text-[11px] text-gray-500">{timeAgo} ago</span>
