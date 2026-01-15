@@ -362,6 +362,7 @@ export interface MTFDivergenceInfo {
   candlesAgo: number; // 몇 캔들 전
   isExpired: boolean; // 유효기간 만료 여부
   confirmed?: boolean; // 피봇 확정 여부 (캔들 종가 확정 후 true)
+  isFiltered?: boolean; // RSI 필터링 여부 (필터링된 경우 알림 안함)
 }
 
 export interface MTFTimeframeData {

@@ -103,6 +103,7 @@ interface DivergenceInfo {
   candlesAgo: number;
   isExpired: boolean;
   confirmed?: boolean; // 피봇 확정 여부 (캔들 종가 확정 후 true)
+  isFiltered?: boolean; // RSI 필터링 여부 (알림 제외용)
 }
 
 interface RawTimeframeData {
@@ -230,7 +231,8 @@ const DIVERGENCE_TYPE_PRIORITY: Record<string, number> = {
 const getAllDivergences = (
   signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number; confirmed?: boolean }> | undefined,
   totalCandles: number,
-  timeframe: string
+  timeframe: string,
+  rsiData?: number[] // RSI 데이터 (필터링 계산용)
 ): DivergenceInfo[] => {
   if (!signals?.length) return [];
 
@@ -242,6 +244,20 @@ const getAllDivergences = (
   const divergences = endSignals.map(signal => {
     const candlesAgo = signal.index !== undefined ? totalCandles - 1 - signal.index : 0;
     const isExpired = candlesAgo > expiryCandles;
+
+    // RSI 기반 필터링 계산
+    // bullish 다이버전스: RSI < 40 이어야 유효 (과매도 구간)
+    // bearish 다이버전스: RSI > 60 이어야 유효 (과매수 구간)
+    let isFiltered = false;
+    if (rsiData && signal.index !== undefined && rsiData[signal.index] !== undefined) {
+      const rsiAtSignal = rsiData[signal.index];
+      if (signal.direction === 'bullish' && rsiAtSignal >= 40) {
+        isFiltered = true; // RSI가 과매도 구간이 아니면 필터링
+      } else if (signal.direction === 'bearish' && rsiAtSignal <= 60) {
+        isFiltered = true; // RSI가 과매수 구간이 아니면 필터링
+      }
+    }
+
     return {
       type: signal.type as 'rsi' | 'obv' | 'cvd' | 'oi',
       direction: signal.direction as 'bullish' | 'bearish',
@@ -249,11 +265,14 @@ const getAllDivergences = (
       candlesAgo,
       isExpired,
       confirmed: signal.confirmed, // 피봇 확정 여부 전달
+      isFiltered,
     };
   });
 
-  // 우선순위 정렬: 1) 만료 여부, 2) 타입 우선순위, 3) 최신순
+  // 우선순위 정렬: 1) 필터링 여부, 2) 만료 여부, 3) 타입 우선순위, 4) 최신순
   return divergences.sort((a, b) => {
+    // 필터링 안된 것이 우선
+    if (a.isFiltered !== b.isFiltered) return a.isFiltered ? 1 : -1;
     // 만료되지 않은 것이 우선
     if (a.isExpired !== b.isExpired) return a.isExpired ? 1 : -1;
     // 타입 우선순위
@@ -269,9 +288,10 @@ const getAllDivergences = (
 const getLatestDivergence = (
   signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number }> | undefined,
   totalCandles: number,
-  timeframe: string
+  timeframe: string,
+  rsiData?: number[]
 ): DivergenceInfo | null => {
-  const all = getAllDivergences(signals, totalCandles, timeframe);
+  const all = getAllDivergences(signals, totalCandles, timeframe, rsiData);
   return all.length > 0 ? all[0] : null;
 };
 
@@ -306,13 +326,14 @@ const processBackendData = (tf: BackendTimeframeData): RawTimeframeData | null =
   const cvdAnalysis = analyzeCvd(cvd);
   const oiAnalysis = analyzeOi(oi);
 
-  // 모든 다이버전스 추출 (우선순위 정렬)
+  // 모든 다이버전스 추출 (우선순위 정렬, RSI 필터링 적용)
   const divergences = getAllDivergences(
     tf.signals?.divergence,
     candles.length,
-    tf.timeframe
+    tf.timeframe,
+    rsiArray // RSI 데이터로 필터링
   );
-  // 대표 다이버전스 (첫 번째)
+  // 대표 다이버전스 (첫 번째 - 필터링 안된 것 우선)
   const divergence = divergences.length > 0 ? divergences[0] : null;
 
   const adx = tf.adx?.currentAdx ?? null;

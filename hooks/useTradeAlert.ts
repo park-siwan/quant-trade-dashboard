@@ -233,6 +233,15 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
   ) => {
     if (!enabled || !divergence || divergence.isExpired) return;
 
+    // 필터링된 다이버전스는 알림 안함 (RSI 조건 미충족 등)
+    if (divergence.isFiltered) {
+      console.log(`🚫 [${timeframe}] 다이버전스 필터링됨 - 알림 스킵:`, {
+        type: divergence.type,
+        direction: divergence.direction,
+      });
+      return;
+    }
+
     // 확정되지 않은 다이버전스는 알림 안함 (종가 미확정 시 리페인팅 방지)
     if (divergence.confirmed === false) {
       console.log(`⏳ [${timeframe}] 다이버전스 미확정 - 알림 대기:`, {
