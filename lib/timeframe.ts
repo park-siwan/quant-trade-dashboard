@@ -127,10 +127,10 @@ export function calculateTimeRange(candleCount: number, timeframe: string): stri
  * 다이버전스 유효기간 (캔들 수 기준)
  */
 export const DIVERGENCE_EXPIRY_CANDLES: Record<string, number> = {
-  '5m': 24,
-  '15m': 24,
-  '30m': 48,
-  '1h': 72,
-  '4h': 42,
-  '1d': 14,
+  '5m': 24,   // 2시간
+  '15m': 24,  // 6시간
+  '30m': 24,  // 12시간
+  '1h': 24,   // 24시간
+  '4h': 24,   // 4일
+  '1d': 24,   // 24일
 };

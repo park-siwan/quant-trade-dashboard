@@ -257,18 +257,16 @@ const getAllDivergences = (
     };
   });
 
-  // 우선순위 정렬: 1) 필터링 여부, 2) 만료 여부, 3) 타입 우선순위, 4) 최신순
+  // 우선순위 정렬: 1) 만료 여부, 2) 최신순, 3) 타입 우선순위
   return divergences.sort((a, b) => {
-    // 필터링 안된 것이 우선
-    if (a.isFiltered !== b.isFiltered) return a.isFiltered ? 1 : -1;
     // 만료되지 않은 것이 우선
     if (a.isExpired !== b.isExpired) return a.isExpired ? 1 : -1;
-    // 타입 우선순위
+    // 최신순 (가장 최근 다이버전스 우선)
+    if (a.candlesAgo !== b.candlesAgo) return a.candlesAgo - b.candlesAgo;
+    // 같은 시점이면 타입 우선순위
     const priorityA = DIVERGENCE_TYPE_PRIORITY[a.type] || 0;
     const priorityB = DIVERGENCE_TYPE_PRIORITY[b.type] || 0;
-    if (priorityA !== priorityB) return priorityB - priorityA;
-    // 최신순
-    return a.candlesAgo - b.candlesAgo;
+    return priorityB - priorityA;
   });
 };
 
