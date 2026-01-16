@@ -447,13 +447,16 @@ export default function ChartRenderer({
     // 저장된 뷰 범위가 있으면 복원
     if (savedVisibleLogicalRangeRef.current) {
       chart.timeScale().setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
+    } else if (mini) {
+      // 미니 차트: 전체 데이터 표시
+      chart.timeScale().fitContent();
     } else {
-      // 첫 렌더링: 전체 데이터를 3배 축소하여 표시
+      // 메인 차트: 최대 축소 (전체 데이터를 화면 중앙에 작게 표시)
       const dataLength = data.length;
-      const extraSpace = mini ? 0 : dataLength; // 메인 차트는 양쪽에 여유 공간 추가
+      const totalRange = dataLength * 10; // 10배 넓은 범위로 최대 축소
       chart.timeScale().setVisibleLogicalRange({
-        from: -extraSpace,
-        to: dataLength + extraSpace,
+        from: -totalRange / 2,
+        to: dataLength + totalRange / 2,
       });
     }
     // 가격 스케일 자동 맞춤
