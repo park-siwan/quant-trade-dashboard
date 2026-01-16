@@ -1,5 +1,29 @@
 # Claude Code 프로젝트 가이드
 
+## 모노레포 구조
+
+```
+/Users/siwan/projects/quant/
+├── quant-trade/              # 백엔드 (NestJS)
+│   ├── src/
+│   │   ├── exchange/         # 거래소 API (Bybit)
+│   │   ├── realtime/         # WebSocket 실시간 데이터
+│   │   └── indicators/       # 기술적 지표 계산
+│   │       ├── divergence/   # 다이버전스 감지
+│   │       ├── cvd-oi/       # CVD, OI 계산
+│   │       ├── adx/          # ADX 지표
+│   │       └── vwap-atr/     # VWAP, ATR
+│   └── port: 4000
+│
+└── quant-trade-dashboard/    # 프론트엔드 (Next.js) ← 현재 프로젝트
+    ├── components/           # React 컴포넌트
+    ├── hooks/                # 커스텀 훅
+    ├── lib/                  # 유틸리티, 상수
+    └── port: 3000
+```
+
+**중요:** 백엔드 수정이 필요하면 `/Users/siwan/projects/quant/quant-trade/` 경로 사용
+
 ## 프로젝트 개요
 BTC 트레이딩 대시보드 - Next.js 14 + TypeScript + lightweight-charts
 
