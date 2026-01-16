@@ -310,7 +310,7 @@ export default function ChartRenderer({
       timeScale: {
         timeVisible: !mini, // 미니 모드에서 시간 숨김
         secondsVisible: false,
-        rightOffset: mini ? 50 : 20, // 우측 여백 (미니 차트는 더 넓게)
+        rightOffset: mini ? 70 : 20, // 우측 여백 (미니 차트는 더 넓게)
         lockVisibleTimeRangeOnResize: true, // 리사이즈 시 시간 범위 유지
         barSpacing: mini ? 3 : 1, // 초기 캔들 간격
         minBarSpacing: 0.001, // 최소 간격 (fitContent가 1000개 다 표시하도록)
