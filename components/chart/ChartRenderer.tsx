@@ -448,8 +448,13 @@ export default function ChartRenderer({
     if (savedVisibleLogicalRangeRef.current) {
       chart.timeScale().setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
     } else {
-      // 첫 렌더링: 전체 데이터가 보이도록 축소
-      chart.timeScale().fitContent();
+      // 첫 렌더링: 전체 데이터를 3배 축소하여 표시
+      const dataLength = data.length;
+      const extraSpace = mini ? 0 : dataLength; // 메인 차트는 양쪽에 여유 공간 추가
+      chart.timeScale().setVisibleLogicalRange({
+        from: -extraSpace,
+        to: dataLength + extraSpace,
+      });
     }
     // 가격 스케일 자동 맞춤
     chart.priceScale('right').applyOptions({ autoScale: true });

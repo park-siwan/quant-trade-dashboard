@@ -45,7 +45,7 @@ export const API = {
   REQUEST_TIMEOUT: 10000,    // 10초
 
   // 캔들 조회 제한
-  DEFAULT_CANDLE_LIMIT: 3000, // 전체 흐름 보기 위해 3배 증가
+  DEFAULT_CANDLE_LIMIT: 1000,
 
   // 폴링 기본 주기
   DEFAULT_POLLING_INTERVAL: 5000,
