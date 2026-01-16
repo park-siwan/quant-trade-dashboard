@@ -312,6 +312,8 @@ export default function ChartRenderer({
         secondsVisible: false,
         rightOffset: mini ? 15 : 20, // 우측 여백
         lockVisibleTimeRangeOnResize: true, // 리사이즈 시 시간 범위 유지
+        barSpacing: mini ? 3 : 2, // 캔들 간격 축소 (기본 6 → 2)
+        minBarSpacing: 1, // 최소 간격
       },
       kineticScroll: {
         touch: false, // 터치 스크롤 비활성화 (들썩임 방지)
