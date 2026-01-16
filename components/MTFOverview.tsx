@@ -424,7 +424,7 @@ const TimeframeRow = ({
     <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
       <td className="px-2 py-1.5">
         <div className="flex items-center gap-1.5">
-          <span className="text-[13px] font-mono font-black text-yellow-300 bg-white/10 px-1.5 py-0.5 rounded">
+          <span className="text-[13px] font-mono font-black text-gray-200 bg-white/10 px-1.5 py-0.5 rounded">
             {data.timeframe}
           </span>
           {getSignalIndicator()}
