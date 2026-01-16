@@ -443,18 +443,16 @@ export default function ChartRenderer({
       candlestickSeriesRef.current = candlestickSeries;
     }
 
-    // 미니 모드: 뷰 상태 복원 또는 초기 설정
-    if (mini) {
-      // 저장된 뷰 범위가 있으면 복원
-      if (savedVisibleLogicalRangeRef.current) {
-        chart.timeScale().setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
-      } else {
-        // 첫 렌더링: 전체 데이터가 보이도록 축소
-        chart.timeScale().fitContent();
-      }
-      // 가격 스케일 자동 맞춤
-      chart.priceScale('right').applyOptions({ autoScale: true });
+    // 뷰 상태 복원 또는 초기 설정
+    // 저장된 뷰 범위가 있으면 복원
+    if (savedVisibleLogicalRangeRef.current) {
+      chart.timeScale().setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
+    } else {
+      // 첫 렌더링: 전체 데이터가 보이도록 축소
+      chart.timeScale().fitContent();
     }
+    // 가격 스케일 자동 맞춤
+    chart.priceScale('right').applyOptions({ autoScale: true });
 
     // 초기 가격 정보 설정 (최신 캔들)
     if (data.length > 0) {
