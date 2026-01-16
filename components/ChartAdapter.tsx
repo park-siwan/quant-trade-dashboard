@@ -301,6 +301,7 @@ export default function ChartAdapter({
       priceValue?: number;
       indicatorValue?: number;
       isFiltered?: boolean;
+      confirmed?: boolean;
     }) => ({
       index: s.index ?? 0,
       type: s.type as 'rsi' | 'obv' | 'cvd' | 'oi',
@@ -311,6 +312,7 @@ export default function ChartAdapter({
       priceValue: s.priceValue, // 가격 값 (차트 라인용)
       indicatorValue: s.indicatorValue, // 지표 값
       isFiltered: s.isFiltered, // 필터링 여부
+      confirmed: s.confirmed, // 피봇 확정 여부
     }));
   }, [getRawDivergences, selectedTimeframe]);
 
