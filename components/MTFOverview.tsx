@@ -158,7 +158,8 @@ const DivergenceDisplay = ({ divergence, timeframe }: {
   divergence: MTFTimeframeData['divergence'];
   timeframe: string;
 }) => {
-  if (!divergence) {
+  // 미확정 다이버전스는 표시하지 않음 (차트/알림과 일관성)
+  if (!divergence || !divergence.confirmed) {
     return <span className="text-gray-500 text-xs">-</span>;
   }
 
@@ -407,9 +408,9 @@ const TimeframeRow = ({
   data: MTFTimeframeData;
   onRefresh: () => void;
 }) => {
-  // 신호 표시 (다이버전스 또는 추세 기반)
+  // 신호 표시 (확정된 다이버전스만)
   const getSignalIndicator = () => {
-    if (data.divergence && !data.divergence.isExpired) {
+    if (data.divergence && data.divergence.confirmed && !data.divergence.isExpired) {
       const isBullish = data.divergence.direction === 'bullish';
       return (
         <span className={`text-[10px] font-bold ${isBullish ? 'text-green-400' : 'text-red-400'}`}>

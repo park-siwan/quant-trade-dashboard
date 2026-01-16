@@ -223,7 +223,8 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
     }
 
     // 확정되지 않은 다이버전스는 알림 안함 (종가 미확정 시 리페인팅 방지)
-    if (divergence.confirmed === false) {
+    // confirmed가 명시적으로 true인 경우만 알림 (undefined도 제외)
+    if (!divergence.confirmed) {
       return;
     }
 
