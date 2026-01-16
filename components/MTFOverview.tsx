@@ -113,7 +113,7 @@ const RsiDisplay = memo(({ rsi }: { rsi: number | null }) => {
           style={{ width: `${barWidth}%` }}
         />
       </div>
-      <AnimatedValue value={rsi} decimals={0} className={`text-xs font-mono ${textColor}`} />
+      <AnimatedValue value={rsi} decimals={1} className={`text-xs font-mono ${textColor}`} />
       {label && <span className={`text-[11px] ${textColor} ${isAnimating ? 'animate-flash-up' : ''}`}>{label}</span>}
     </div>
   );
@@ -256,7 +256,7 @@ const AdxDisplay = memo(({ adx, isStrongTrend }: { adx: number | null; isStrongT
           style={{ width: `${barWidth}%` }}
         />
       </div>
-      <AnimatedValue value={adx} decimals={0} className={`text-xs font-mono ${textColor}`} />
+      <AnimatedValue value={adx} decimals={1} className={`text-xs font-mono ${textColor}`} />
       <span className={`text-[11px] ${textColor} ${isAnimating && isStrongTrend ? 'animate-flash-up' : ''}`}>{label}</span>
     </div>
   );
