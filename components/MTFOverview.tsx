@@ -407,10 +407,28 @@ const TimeframeRow = ({
   data: MTFTimeframeData;
   onRefresh: () => void;
 }) => {
+  // 신호 표시 (다이버전스 또는 추세 기반)
+  const getSignalIndicator = () => {
+    if (data.divergence && !data.divergence.isExpired) {
+      const isBullish = data.divergence.direction === 'bullish';
+      return (
+        <span className={`text-[10px] font-bold ${isBullish ? 'text-green-400' : 'text-red-400'}`}>
+          {isBullish ? '▲' : '▼'}
+        </span>
+      );
+    }
+    return null;
+  };
+
   return (
     <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-      <td className="px-2 py-1.5 text-[10px] font-mono font-semibold text-gray-300">
-        {data.timeframe}
+      <td className="px-2 py-1.5">
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] font-mono font-bold text-white">
+            {data.timeframe}
+          </span>
+          {getSignalIndicator()}
+        </div>
       </td>
       <td className="px-2 py-1.5">
         <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${getStatusBg(data.trend)}`}>
