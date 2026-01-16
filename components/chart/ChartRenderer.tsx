@@ -444,11 +444,14 @@ export default function ChartRenderer({
     }
 
     // 뷰 상태 복원 또는 초기 설정
-    // 저장된 뷰 범위가 있으면 복원
-    if (savedVisibleLogicalRangeRef.current) {
+    if (mini) {
+      // 미니 차트: 항상 전체 데이터 표시 (저장된 상태 무시)
+      chart.timeScale().fitContent();
+    } else if (savedVisibleLogicalRangeRef.current) {
+      // 메인 차트: 저장된 뷰 범위 복원
       chart.timeScale().setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
     } else {
-      // 전체 캔들이 화면에 다 보이도록 축소
+      // 메인 차트: 첫 렌더링 시 전체 표시
       chart.timeScale().fitContent();
     }
     // 가격 스케일 자동 맞춤
