@@ -55,7 +55,7 @@ function ConditionCard({ condition, index }: { condition: WaitCondition; index: 
       </div>
       <div className="text-[12px] text-gray-300">
         <span className="font-mono text-white">
-          ${condition.triggerPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          {condition.triggerPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </span>{' '}
         {condition.triggerType === 'touch' ? '터치' : condition.triggerType === 'break' ? '돌파' : '접근'}
         {' + '}
@@ -115,7 +115,7 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
                 <span>진입가</span>
               </div>
               <div className="font-mono text-gray-300 text-[12px]">
-                <AnimatedPrice value={entryPrice} prefix="$" />
+                <AnimatedPrice value={entryPrice} />
               </div>
             </div>
             <div className="text-center border-x border-white/5">
@@ -124,7 +124,7 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
                 <span>손절 (-{Math.abs(slPercent).toFixed(1)}%)</span>
               </div>
               <div className="font-mono text-gray-300 text-[12px]">
-                <AnimatedPrice value={stopLoss} prefix="$" />
+                <AnimatedPrice value={stopLoss} />
               </div>
             </div>
             <div className="text-center">
@@ -133,7 +133,7 @@ function EntryInfo({ recommendation }: { recommendation: Recommendation }) {
                 <span>익절 (+{Math.abs(tpPercent).toFixed(1)}%)</span>
               </div>
               <div className="font-mono text-gray-300 text-[12px]">
-                <AnimatedPrice value={takeProfit} prefix="$" />
+                <AnimatedPrice value={takeProfit} />
               </div>
             </div>
           </div>
@@ -319,18 +319,18 @@ function DirectionCompareCard({ long, short, primaryDirection }: {
         <div className="space-y-1 text-[11px]">
           <div className="flex justify-between">
             <span className="text-gray-500">진입</span>
-            <span className="font-mono text-gray-300">${rec.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            <span className="font-mono text-gray-300">{rec.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">손절</span>
             <span className="font-mono text-red-400">
-              ${rec.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              {rec.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">익절</span>
             <span className="font-mono text-green-400">
-              ${rec.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              {rec.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </span>
           </div>
         </div>

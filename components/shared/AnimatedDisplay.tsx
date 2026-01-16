@@ -106,7 +106,7 @@ function useValueDirection(value: number) {
  */
 export const AnimatedPrice = memo(({
   value,
-  prefix = '$',
+  prefix = '',
   suffix = '',
   decimals = 0,
   className = '',
@@ -134,12 +134,12 @@ export const AnimatedPrice = memo(({
     : '';
 
   return (
-    <span className={`inline-flex items-center font-mono transition-colors duration-300 ${colorClass} ${className}`}>
-      {prefix && <span className="inline-flex items-center">{prefix}</span>}
+    <span className={`inline-flex items-baseline font-mono transition-colors duration-300 ${colorClass} ${className}`}>
+      {prefix && <span>{prefix}</span>}
       {formatted.split('').map((char, i) => (
         <DigitSlot key={i} digit={char} direction={direction} size="normal" />
       ))}
-      {suffix && <span className="inline-flex items-center">{suffix}</span>}
+      {suffix && <span>{suffix}</span>}
     </span>
   );
 });
