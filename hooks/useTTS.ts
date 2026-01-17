@@ -4,6 +4,9 @@ import { useRef, useCallback, useState, useEffect } from 'react';
 import { TTS } from '@/lib/constants';
 import { loadFromStorage, saveToStorage, cleanupTimestampRecord } from '@/lib/storage';
 
+// 페이지가 마지막으로 숨겨진 시간
+let lastHiddenTime = 0;
+
 // 숫자 → 한글 음성 파일 매핑
 const ONES_MAP: Record<number, string> = {
   1: '일', 2: '이', 3: '삼', 4: '사', 5: '오',
@@ -114,6 +117,38 @@ export function useTTS(options: TTSOptions = {}) {
   const isProcessingRef = useRef(false);
   const pendingQueueRef = useRef<string[][]>([]); // 잠금 해제 전 대기열
 
+  // 페이지 visibility 변경 감지 - 잠자기 복귀 시 큐 클리어
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // 숨겨질 때 시간 기록
+        lastHiddenTime = Date.now();
+      } else {
+        // 다시 보일 때 - 오래 숨겨졌으면 큐 클리어
+        const hiddenDuration = Date.now() - lastHiddenTime;
+        if (lastHiddenTime > 0 && hiddenDuration > TTS.SLEEP_THRESHOLD) {
+          console.log(`[TTS] 잠자기 복귀 (${Math.round(hiddenDuration / 1000)}초), 큐 클리어`);
+          queueRef.current = [];
+          pendingQueueRef.current = [];
+          // 재생 중인 오디오도 중지
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+          }
+          setIsPlaying(false);
+        }
+        lastHiddenTime = 0;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   // 사용자 상호작용 후 잠금 해제
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -191,7 +226,7 @@ export function useTTS(options: TTSOptions = {}) {
     isProcessingRef.current = false;
   }, [playSequence]);
 
-  // 큐에 추가 (탭 간 중복 방지)
+  // 큐에 추가 (탭 간 중복 방지 + 큐 크기 제한)
   const enqueue = useCallback((files: string[]) => {
     if (!enabled) return;
 
@@ -206,6 +241,12 @@ export function useTTS(options: TTSOptions = {}) {
       // 최근 알림만 보관 (오래된 것 삭제)
       pendingQueueRef.current = [files];
       return;
+    }
+
+    // 큐 크기 제한 - 초과 시 오래된 것 버림
+    while (queueRef.current.length >= TTS.MAX_QUEUE_SIZE) {
+      const dropped = queueRef.current.shift();
+      console.log('[TTS] 큐 초과, 오래된 알림 버림:', dropped?.[0]);
     }
 
     // 재생 기록 저장 (다른 탭에서 중복 재생 방지)
