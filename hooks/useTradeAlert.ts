@@ -93,6 +93,18 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
     return true;
   }, [cooldownMs]);
 
+  // 다이버전스 전용 쿨다운 체크 (타임프레임별 쿨다운)
+  const canAlertDivergence = useCallback((alertType: string, timeframe: string): boolean => {
+    const now = Date.now();
+    const lastTime = lastAlertTimeRef.current[alertType] || 0;
+    // 타임프레임별 쿨다운 적용 (없으면 기본 5분)
+    const tfCooldown = COOLDOWN.DIVERGENCE[timeframe] || COOLDOWN.ALERT;
+    if (now - lastTime < tfCooldown) return false;
+    lastAlertTimeRef.current[alertType] = now;
+    saveCooldowns(lastAlertTimeRef.current);
+    return true;
+  }, []);
+
   // 점수 변화 감지 및 알림 (신호 변화 기반)
   const checkScoreAlert = useCallback((
     longScore: SignalScore,
@@ -237,8 +249,8 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
       divergence.timestamp > prev.timestamp;
 
     if (isNew && divergence.candlesAgo <= 3) { // 최근 3캔들 이내만
-      const alertKey = `div_${timeframe}_${divergence.direction}`;
-      if (canAlert(alertKey)) {
+      const alertKey = `div_${timeframe}_${divergence.type}_${divergence.direction}`;
+      if (canAlertDivergence(alertKey, timeframe)) {
         const tfMap: Record<string, '5m' | '15m' | '1h' | '4h'> = {
           '5m': '5m',
           '15m': '15m',
@@ -267,7 +279,7 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
         timestamp: divergence.timestamp,
       };
     }
-  }, [enabled, canAlert, tts, onAlert]);
+  }, [enabled, canAlertDivergence, tts, onAlert]);
 
   // 수동 알림 (테스트용)
   const triggerEntryAlert = useCallback((
