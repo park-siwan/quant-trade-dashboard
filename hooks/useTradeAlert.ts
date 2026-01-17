@@ -93,13 +93,11 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
     return true;
   }, [cooldownMs]);
 
-  // 다이버전스 전용 쿨다운 체크 (타임프레임별 쿨다운)
-  const canAlertDivergence = useCallback((alertType: string, timeframe: string): boolean => {
+  // 다이버전스 전용 쿨다운 체크 (1시간 통일)
+  const canAlertDivergence = useCallback((alertType: string): boolean => {
     const now = Date.now();
     const lastTime = lastAlertTimeRef.current[alertType] || 0;
-    // 타임프레임별 쿨다운 적용 (없으면 기본 5분)
-    const tfCooldown = COOLDOWN.DIVERGENCE[timeframe] || COOLDOWN.ALERT;
-    if (now - lastTime < tfCooldown) return false;
+    if (now - lastTime < COOLDOWN.DIVERGENCE) return false;
     lastAlertTimeRef.current[alertType] = now;
     saveCooldowns(lastAlertTimeRef.current);
     return true;
@@ -250,7 +248,7 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
 
     if (isNew && divergence.candlesAgo <= 3) { // 최근 3캔들 이내만
       const alertKey = `div_${timeframe}_${divergence.type}_${divergence.direction}`;
-      if (canAlertDivergence(alertKey, timeframe)) {
+      if (canAlertDivergence(alertKey)) {
         const tfMap: Record<string, '5m' | '15m' | '1h' | '4h'> = {
           '5m': '5m',
           '15m': '15m',
