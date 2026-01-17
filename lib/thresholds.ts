@@ -69,5 +69,5 @@ export const FUNDING = {
 export const COOLDOWN = {
   ALERT: 300000,        // 기본 알림 쿨다운 (5분)
   DUPLICATE_MSG: 1000,  // 중복 메시지 방지 (1초)
-  DIVERGENCE: 60 * 60 * 1000, // 다이버전스 쿨다운 (1시간) - 모든 타임프레임 동일
+  // 다이버전스는 쿨다운 없음 - 피봇 타임스탬프 기준 한 번만 알림
 } as const;

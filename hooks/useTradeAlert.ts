@@ -93,13 +93,15 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
     return true;
   }, [cooldownMs]);
 
-  // 다이버전스 전용 쿨다운 체크 (1시간 통일)
-  const canAlertDivergence = useCallback((alertType: string): boolean => {
-    const now = Date.now();
-    const lastTime = lastAlertTimeRef.current[alertType] || 0;
-    if (now - lastTime < COOLDOWN.DIVERGENCE) return false;
-    lastAlertTimeRef.current[alertType] = now;
-    saveCooldowns(lastAlertTimeRef.current);
+  // 다이버전스 중복 알림 방지 (피봇 타임스탬프 기준)
+  const alertedDivergencesRef = useRef<Set<string>>(new Set());
+
+  const canAlertDivergence = useCallback((divergenceKey: string): boolean => {
+    // 이미 알림한 다이버전스면 스킵
+    if (alertedDivergencesRef.current.has(divergenceKey)) {
+      return false;
+    }
+    alertedDivergencesRef.current.add(divergenceKey);
     return true;
   }, []);
 
@@ -247,7 +249,8 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
       divergence.timestamp > prev.timestamp;
 
     if (isNew && divergence.candlesAgo <= 3) { // 최근 3캔들 이내만
-      const alertKey = `div_${timeframe}_${divergence.type}_${divergence.direction}`;
+      // 피봇 타임스탬프로 고유 식별 (같은 다이버전스는 한 번만 알림)
+      const alertKey = `div_${timeframe}_${divergence.type}_${divergence.direction}_${divergence.timestamp}`;
       if (canAlertDivergence(alertKey)) {
         const tfMap: Record<string, '5m' | '15m' | '1h' | '4h'> = {
           '5m': '5m',
