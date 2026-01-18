@@ -373,7 +373,8 @@ const calculateAction = (
 ): MTFActionInfo => {
   const { trend, divergence, rsi, isStrongTrend, atrRatio } = tfData;
 
-  if (divergence && !divergence.isExpired) {
+  // 유효한 다이버전스만 신호 생성 (만료 안 됨 + 필터링 안 됨)
+  if (divergence && !divergence.isExpired && !divergence.isFiltered) {
     const divDirection = divergence.direction;
 
     if (divDirection === 'bullish' && (overallTrend === 'bullish' || higherTfTrend === 'bullish')) {
@@ -412,14 +413,16 @@ const calculateAction = (
   }
 
   if (trend === 'bullish') {
-    if (divergence && divergence.direction === 'bearish') {
+    // 필터링 안 된 역방향 다이버전스만 경고
+    if (divergence && divergence.direction === 'bearish' && !divergence.isFiltered) {
       const suffix = divergence.isExpired ? '(만료)' : '';
       return { action: 'reversal_warn', reason: `반락주의${suffix}` };
     }
     return { action: 'trend_hold', reason: '상승추세 유지' };
   }
   if (trend === 'bearish') {
-    if (divergence && divergence.direction === 'bullish') {
+    // 필터링 안 된 역방향 다이버전스만 경고
+    if (divergence && divergence.direction === 'bullish' && !divergence.isFiltered) {
       const suffix = divergence.isExpired ? '(만료)' : '';
       return { action: 'reversal_warn', reason: `반등주의${suffix}` };
     }
