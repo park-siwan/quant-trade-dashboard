@@ -162,6 +162,7 @@ export default function ChartRenderer({
   const chartRef = useRef<IChartApi | null>(null);
   const measureLineRef = useRef<ISeriesApi<'Line'> | null>(null);
   const volumeProfileLinesRef = useRef<IPriceLine[]>([]); // Volume Profile 라인 ref (Y축 라벨용)
+  const isChartDisposedRef = useRef<boolean>(false); // 차트 dispose 상태 추적
 
   // Volume Profile 표시 토글 (useEffect보다 먼저 선언해야 함)
   const [showVolumeProfile, setShowVolumeProfile] = useState(true);
@@ -198,12 +199,17 @@ export default function ChartRenderer({
       debug.chart('⚠️ chartRef 없음');
       return;
     }
+    // dispose 상태 체크
+    if (isChartDisposedRef.current) {
+      debug.chart('⚠️ 차트가 dispose됨, 업데이트 스킵');
+      return;
+    }
 
     debug.chart('📈 차트 업데이트:', realtimeCandle.close.toFixed(2));
 
     try {
       // 차트가 dispose되지 않았는지 확인
-      if (candlestickSeriesRef.current) {
+      if (candlestickSeriesRef.current && !isChartDisposedRef.current) {
         // 미니 모드 (AreaSeries)와 일반 모드 (CandlestickSeries) 구분
         if (mini) {
           // AreaSeries는 { time, value } 형식 사용
@@ -279,6 +285,9 @@ export default function ChartRenderer({
       const panelHeight = 280; // 각 패널당 높이
       chartHeight = panelCount * panelHeight;
     }
+
+    // 차트 생성 전 dispose 플래그 초기화
+    isChartDisposedRef.current = false;
 
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
@@ -1083,43 +1092,59 @@ export default function ChartRenderer({
 
     // 클린업
     return () => {
+      // dispose 플래그 설정 (먼저 설정하여 다른 콜백이 접근 못하게)
+      isChartDisposedRef.current = true;
+
       // 뷰 상태 저장 (재생성 시 복원용)
-      const currentRange = chart.timeScale().getVisibleLogicalRange();
-      if (currentRange) {
-        savedVisibleLogicalRangeRef.current = {
-          from: currentRange.from,
-          to: currentRange.to,
-        };
+      try {
+        const currentRange = chart.timeScale().getVisibleLogicalRange();
+        if (currentRange) {
+          savedVisibleLogicalRangeRef.current = {
+            from: currentRange.from,
+            to: currentRange.to,
+          };
+        }
+        chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleScaleChange);
+      } catch {
+        // disposed 상태에서 접근 시 무시
       }
-      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleScaleChange);
       window.removeEventListener('resize', handleResize);
-      chart.remove();
+      try {
+        chart.remove();
+      } catch {
+        // 이미 제거된 경우 무시
+      }
     };
   }, [
     data.length, // 캔들 개수만 체크 (데이터 내용 변경은 무시)
-    oiData?.length,
+    // 지표 데이터는 존재 여부만 체크 (length 변경으로 인한 불필요한 재생성 방지)
+    oiData != null && oiData.length > 0,
     emaData !== undefined,
-    divergenceSignals?.length,
+    divergenceSignals != null && divergenceSignals.length > 0,
     trendAnalysis !== undefined,
-    crossoverEvents?.length,
-    marketSignals?.length,
-    volumeProfile?.poc, // Volume Profile 변경 시 재렌더링
-    vwapAtrData?.currentVwap, // VWAP 변경 시 재렌더링
-    vwapAtrData?.atr?.length, // ATR 변경 시 재렌더링
-    orderBlockData?.activeBlocks?.length, // 오더블록 변경 시 재렌더링
-    marketStructureData?.structureBreaks?.length, // CHoCH 변경 시 재렌더링
+    crossoverEvents != null && crossoverEvents.length > 0,
+    marketSignals != null && marketSignals.length > 0,
+    volumeProfile != null, // POC 값 변경은 무시, 존재 여부만 체크
+    vwapAtrData != null, // VWAP/ATR 존재 여부만 체크
+    orderBlockData != null && (orderBlockData.activeBlocks?.length ?? 0) > 0,
+    marketStructureData != null && (marketStructureData.structureBreaks?.length ?? 0) > 0,
     timeframe, // 타임프레임 변경 시 재렌더링
     mini, // 미니 모드 변경 시 재렌더링
   ]);
 
   // Volume Profile 라인 토글 (차트 재생성 없이 Y축 라벨만 숨김/표시)
   useEffect(() => {
-    volumeProfileLinesRef.current.forEach((line) => {
-      line.applyOptions({
-        lineVisible: false, // 전체 가로선은 항상 숨김 (DOM으로 렌더링)
-        axisLabelVisible: showVolumeProfile,
+    if (isChartDisposedRef.current) return;
+    try {
+      volumeProfileLinesRef.current.forEach((line) => {
+        line.applyOptions({
+          lineVisible: false, // 전체 가로선은 항상 숨김 (DOM으로 렌더링)
+          axisLabelVisible: showVolumeProfile,
+        });
       });
-    });
+    } catch {
+      // disposed 상태에서 접근 시 무시
+    }
   }, [showVolumeProfile]);
 
   // 크로스오버 X 마커 좌표 상태
@@ -1166,7 +1191,7 @@ export default function ChartRenderer({
 
   // 측정 박스 업데이트 (확정된 박스)
   useEffect(() => {
-    if (!chartRef.current || !candlestickSeriesRef.current) return;
+    if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
     if (!measurePoints.start || !measurePoints.end) {
       // 끝점이 없으면 박스 제거 (미리보기는 crosshairMove에서 처리)
       setMeasureBox(null);
@@ -1226,7 +1251,7 @@ export default function ChartRenderer({
     }
 
     const updateCrossoverMarkers = () => {
-      if (!chartRef.current || !candlestickSeriesRef.current) return;
+      if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
 
       const markers: Array<{ x: number; y: number; type: 'golden_cross' | 'dead_cross'; isFiltered?: boolean }> = [];
 
@@ -1281,7 +1306,7 @@ export default function ChartRenderer({
     };
 
     const updateSignalMarkers = () => {
-      if (!chartRef.current || !candlestickSeriesRef.current) return;
+      if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
 
       const markers: Array<{ x: number; y: number; type: string; label: string; color: string; position: 'above' | 'below' }> = [];
 
@@ -1327,7 +1352,7 @@ export default function ChartRenderer({
     }
 
     const updateStructureMarkers = () => {
-      if (!chartRef.current || !candlestickSeriesRef.current) return;
+      if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
 
       const markers: Array<{
         x: number;
@@ -1383,7 +1408,7 @@ export default function ChartRenderer({
     }
 
     const updateOrderBookBars = () => {
-      if (!chartRef.current || !candlestickSeriesRef.current) return;
+      if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
 
       const bars: Array<{
         y: number;
@@ -1443,7 +1468,7 @@ export default function ChartRenderer({
     }
 
     const updatePriceLines = () => {
-      if (!chartRef.current || !candlestickSeriesRef.current) return;
+      if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
 
       const lines: Array<{ y: number; startX: number; label: string; color: string }> = [];
 
@@ -1524,7 +1549,7 @@ export default function ChartRenderer({
     }
 
     const updateLastPoint = () => {
-      if (!chartRef.current || !candlestickSeriesRef.current) return;
+      if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
 
       const lastCandle = data[data.length - 1];
       const x = chartRef.current!.timeScale().timeToCoordinate(lastCandle.time);
