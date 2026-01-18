@@ -1551,9 +1551,15 @@ export default function ChartRenderer({
     const updateLastPoint = () => {
       if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
 
-      const lastCandle = data[data.length - 1];
-      const x = chartRef.current!.timeScale().timeToCoordinate(lastCandle.time);
-      const y = candlestickSeriesRef.current!.priceToCoordinate(lastCandle.close);
+      // 실시간 캔들이 있으면 실시간 가격 사용, 없으면 마지막 히스토리 캔들 사용
+      const useRealtime = realtimeCandle && !realtimeCandle.isFinal;
+      const price = useRealtime ? realtimeCandle.close : data[data.length - 1].close;
+      const time = useRealtime
+        ? (realtimeCandle.timestamp / 1000) as typeof data[0]['time']
+        : data[data.length - 1].time;
+
+      const x = chartRef.current!.timeScale().timeToCoordinate(time);
+      const y = candlestickSeriesRef.current!.priceToCoordinate(price);
 
       if (x !== null && y !== null) {
         setLastPointCoord({ x, y });
@@ -1562,7 +1568,7 @@ export default function ChartRenderer({
 
     const rafId = requestAnimationFrame(updateLastPoint);
     return () => cancelAnimationFrame(rafId);
-  }, [mini, scaleUpdateTrigger, data]);
+  }, [mini, scaleUpdateTrigger, data, realtimeCandle]);
 
   return (
     <div className='w-full' style={mini ? { height: '100%' } : undefined}>
