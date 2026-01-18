@@ -365,71 +365,42 @@ const calculateStrengthScore = (timeframes: RawTimeframeData[]): number => {
   return maxCount / trends.length;
 };
 
-// 액션 추천 계산
+// 액션 추천 계산 (역추세 매매 전용 - 다이버전스 기반)
 const calculateAction = (
   tfData: RawTimeframeData,
-  overallTrend: MTFStatus,
-  higherTfTrend: MTFStatus
+  _overallTrend: MTFStatus,
+  _higherTfTrend: MTFStatus
 ): MTFActionInfo => {
-  const { trend, divergence, rsi, isStrongTrend, atrRatio } = tfData;
+  const { divergence, rsi, isStrongTrend } = tfData;
 
   // 유효한 다이버전스만 신호 생성 (만료 안 됨 + 필터링 안 됨)
   if (divergence && !divergence.isExpired && !divergence.isFiltered) {
     const divDirection = divergence.direction;
 
-    if (divDirection === 'bullish' && (overallTrend === 'bullish' || higherTfTrend === 'bullish')) {
-      return { action: 'long_ok', reason: '추세+다이버전스 일치' };
-    }
-    if (divDirection === 'bearish' && (overallTrend === 'bearish' || higherTfTrend === 'bearish')) {
-      return { action: 'short_ok', reason: '추세+다이버전스 일치' };
+    // 강한 추세에서 역추세 다이버전스 → 주의
+    if (isStrongTrend) {
+      return { action: 'reversal_warn', reason: '강한추세 역행🔥' };
     }
 
-    if (divDirection === 'bullish' && (overallTrend === 'bearish' || higherTfTrend === 'bearish')) {
-      const reason = isStrongTrend ? '강한추세 역행🔥' : '역추세 다이버전스';
-      return { action: 'reversal_warn', reason };
-    }
-    if (divDirection === 'bearish' && (overallTrend === 'bullish' || higherTfTrend === 'bullish')) {
-      const reason = isStrongTrend ? '강한추세 역행🔥' : '역추세 다이버전스';
-      return { action: 'reversal_warn', reason };
-    }
-
+    // 다이버전스 방향에 따른 신호
     if (divDirection === 'bullish') {
-      return { action: 'long_ok', reason: '다이버전스 발생' };
+      return { action: 'long_ok', reason: '상승 다이버전스' };
     }
-    return { action: 'short_ok', reason: '다이버전스 발생' };
+    return { action: 'short_ok', reason: '하락 다이버전스' };
   }
 
-  if (rsi !== null && !isStrongTrend) {
-    if (rsi >= 70 && trend === 'bullish') {
+  // RSI 극단값 경고 (다이버전스 없이도 역추세 기회 포착)
+  if (rsi !== null) {
+    if (rsi >= 75) {
       return { action: 'reversal_warn', reason: 'RSI 과매수' };
     }
-    if (rsi <= 30 && trend === 'bearish') {
+    if (rsi <= 25) {
       return { action: 'reversal_warn', reason: 'RSI 과매도' };
     }
   }
 
-  if (trend === 'neutral' && atrRatio !== null && atrRatio < 0.8) {
-    return { action: 'wait', reason: '횡보 저변동' };
-  }
-
-  if (trend === 'bullish') {
-    // 필터링 안 된 역방향 다이버전스만 경고
-    if (divergence && divergence.direction === 'bearish' && !divergence.isFiltered) {
-      const suffix = divergence.isExpired ? '(만료)' : '';
-      return { action: 'reversal_warn', reason: `반락주의${suffix}` };
-    }
-    return { action: 'trend_hold', reason: '상승추세 유지' };
-  }
-  if (trend === 'bearish') {
-    // 필터링 안 된 역방향 다이버전스만 경고
-    if (divergence && divergence.direction === 'bullish' && !divergence.isFiltered) {
-      const suffix = divergence.isExpired ? '(만료)' : '';
-      return { action: 'reversal_warn', reason: `반등주의${suffix}` };
-    }
-    return { action: 'trend_hold', reason: '하락추세 유지' };
-  }
-
-  return { action: 'wait', reason: '명확한 신호 없음' };
+  // 다이버전스 없으면 대기
+  return { action: 'wait', reason: '다이버전스 대기' };
 };
 
 // Volume Profile 계산
