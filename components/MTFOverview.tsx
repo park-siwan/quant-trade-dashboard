@@ -436,6 +436,7 @@ const TimeframeRow = ({
 
   return (
     <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
+      {/* 시간 */}
       <td className="px-2 py-1.5">
         <div className="flex items-center gap-1.5">
           <span className="text-[13px] font-mono font-black text-gray-200 bg-white/10 px-1.5 py-0.5 rounded">
@@ -444,6 +445,11 @@ const TimeframeRow = ({
           {getSignalIndicator()}
         </div>
       </td>
+      {/* 신호 */}
+      <td className="px-2 py-1.5">
+        <ActionDisplay actionInfo={data.actionInfo} />
+      </td>
+      {/* 추세 */}
       <td className="px-2 py-1.5">
         <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${getStatusBg(data.trend)}`}>
           <StatusIcon status={data.trend} />
@@ -456,41 +462,36 @@ const TimeframeRow = ({
           </span>
         </div>
       </td>
+      {/* 추세력(ADX) */}
+      <td className="px-2 py-1.5">
+        <AdxDisplay adx={data.adx} isStrongTrend={data.isStrongTrend} />
+      </td>
+      {/* RSI */}
       <td className="px-2 py-1.5">
         <RsiDisplay rsi={data.rsi} />
       </td>
+      {/* 괴리(DIV) */}
+      <td className="px-2 py-1.5">
+        <DivergenceDisplay divergence={data.divergence} timeframe={data.timeframe} />
+      </td>
+      {/* 매수세(CVD) */}
       <td className="px-2 py-1.5 text-center">
         <DirectionStrengthDisplay
           direction={data.cvdDirection}
           strength={data.cvdStrength}
         />
       </td>
+      {/* 변동성(ATR) */}
+      <td className="px-2 py-1.5">
+        <AtrRatioDisplay atrRatio={data.atrRatio} />
+      </td>
+      {/* 포지션(OI) */}
       <td className="px-2 py-1.5 text-center">
         <DirectionStrengthDisplay
           direction={data.oiDirection}
           strength={data.oiStrength}
         />
       </td>
-      <td className="px-2 py-1.5">
-        <AdxDisplay adx={data.adx} isStrongTrend={data.isStrongTrend} />
-      </td>
-      <td className="px-2 py-1.5">
-        <AtrRatioDisplay atrRatio={data.atrRatio} />
-      </td>
-      <td className="px-2 py-1.5">
-        <DivergenceDisplay divergence={data.divergence} timeframe={data.timeframe} />
-      </td>
-      <td className="px-2 py-1.5">
-        <ActionDisplay actionInfo={data.actionInfo} />
-      </td>
-      {/* 시계 컬럼 주석처리
-      <td className="px-2 py-1.5">
-        <CandleCountdown
-          timeframe={data.timeframe}
-          onRefresh={onRefresh}
-        />
-      </td>
-      */}
     </tr>
   );
 };
@@ -831,34 +832,29 @@ export default function MTFOverview({
           <thead>
             <tr className="border-b border-white/10">
               <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">시간</th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">신호</th>
               <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">추세</th>
-              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">RSI</th>
-              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 text-center relative group cursor-help">
-                매수세<span className="text-gray-600">(CVD)</span>
-                <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">누적 거래량 델타 (매수-매도 차이)</span>
-              </th>
-              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 text-center relative group cursor-help">
-                포지션<span className="text-gray-600">(OI)</span>
-                <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">미결제약정 (포지션 증감)</span>
-              </th>
               <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 relative group cursor-help">
                 추세력<span className="text-gray-600">(ADX)</span>
                 <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">추세 강도 (25+ 강한 추세🔥)</span>
+              </th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">RSI</th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 relative group cursor-help">
+                괴리<span className="text-gray-600">(DIV)</span>
+                <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">가격↔지표 다이버전스</span>
+              </th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 text-center relative group cursor-help">
+                매수세<span className="text-gray-600">(CVD)</span>
+                <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">누적 거래량 델타 (매수-매도 차이)</span>
               </th>
               <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 relative group cursor-help">
                 변동성<span className="text-gray-600">(ATR)</span>
                 <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">평균 변동폭 대비 (1.0x = 평균)</span>
               </th>
-              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 relative group cursor-help">
-                괴리<span className="text-gray-600">(DIV)</span>
-                <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">가격↔지표 다이버전스</span>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 text-center relative group cursor-help">
+                포지션<span className="text-gray-600">(OI)</span>
+                <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">미결제약정 (포지션 증감)</span>
               </th>
-              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">신호</th>
-              {/* 시계 컬럼 주석처리
-              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">
-                <Clock className="w-2.5 h-2.5 inline" />
-              </th>
-              */}
             </tr>
           </thead>
           <tbody>
