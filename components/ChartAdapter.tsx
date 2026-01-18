@@ -435,14 +435,11 @@ export default function ChartAdapter({
   if (mini) {
     return (
       <div className='relative bg-white/[0.02] border border-white/10 rounded-xl overflow-hidden h-full'>
-        {/* 타임프레임 + 신호 라벨 */}
-        <div className='absolute top-2 left-2 z-10 flex items-center gap-1'>
+        {/* 타임프레임 라벨 */}
+        <div className='absolute top-2 left-2 z-10'>
           <span className='px-2 py-0.5 bg-black/50 rounded text-xs font-bold text-white'>
             {TIMEFRAMES.find(tf => tf.value === selectedTimeframe)?.label || selectedTimeframe}
           </span>
-          {actionInfo && (
-            <SignalChip action={actionInfo.action} reason={actionInfo.reason} size="md" />
-          )}
         </div>
         <ChartRenderer
           data={chartData}
@@ -489,6 +486,14 @@ export default function ChartAdapter({
                 {symbol}
               </h2>
             </div>
+          </div>
+
+          {/* EMA 설명 */}
+          <div className='flex items-center gap-2 px-2 py-1 rounded-lg bg-white/5 text-xs'>
+            <span className='text-blue-400 font-bold'>━</span>
+            <span className='text-gray-400'>EMA 50</span>
+            <span className='text-green-400 font-bold'>━</span>
+            <span className='text-gray-400'>EMA 200</span>
           </div>
 
           {/* 시장 구조 (추세) 표시 */}

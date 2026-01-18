@@ -247,28 +247,15 @@ export function addEmaIndicators(
   emaData: EmaData,
   candles: Array<{ time: number }>,
 ): {
-  ema20: ISeriesApi<'Line'>;
   ema50: ISeriesApi<'Line'>;
   ema200: ISeriesApi<'Line'>;
 } {
   // EMA 데이터를 LineData 형식으로 변환
-  const ema20LineData: LineData[] = [];
   const ema50LineData: LineData[] = [];
   const ema200LineData: LineData[] = [];
 
   candles.forEach((candle, index) => {
     const time = candle.time as Time;
-
-    // EMA 20
-    const ema20Value = emaData.ema20?.[index];
-    if (
-      ema20Value !== null &&
-      ema20Value !== undefined &&
-      !isNaN(ema20Value) &&
-      typeof ema20Value === 'number'
-    ) {
-      ema20LineData.push({ time, value: ema20Value });
-    }
 
     // EMA 50
     const ema50Value = emaData.ema50?.[index];
@@ -293,25 +280,12 @@ export function addEmaIndicators(
     }
   });
 
-  // EMA 20 시리즈 추가 (빨간색 - 가장 빠른 이평선, 가장 얇음)
-  const ema20Series = chart.addSeries(
-    LineSeries,
-    {
-      color: INDICATOR_COLORS.EMA_FAST,
-      lineWidth: 2,
-      lastValueVisible: false,
-      priceLineVisible: false,
-    },
-    0, // 메인 패널
-  );
-  ema20Series.setData(dedupeByTime(ema20LineData));
-
-  // EMA 50 시리즈 추가 (파란색 - 중간 속도, 중간 두께)
+  // EMA 50 시리즈 추가 (파란색)
   const ema50Series = chart.addSeries(
     LineSeries,
     {
       color: INDICATOR_COLORS.EMA_MID,
-      lineWidth: 3,
+      lineWidth: 2,
       lastValueVisible: false,
       priceLineVisible: false,
     },
@@ -319,12 +293,12 @@ export function addEmaIndicators(
   );
   ema50Series.setData(dedupeByTime(ema50LineData));
 
-  // EMA 200 시리즈 추가 (초록색 - 가장 느린 이평선, 가장 두꺼움)
+  // EMA 200 시리즈 추가 (초록색)
   const ema200Series = chart.addSeries(
     LineSeries,
     {
       color: INDICATOR_COLORS.EMA_SLOW,
-      lineWidth: 4,
+      lineWidth: 2,
       lastValueVisible: false,
       priceLineVisible: false,
     },
@@ -333,7 +307,6 @@ export function addEmaIndicators(
   ema200Series.setData(dedupeByTime(ema200LineData));
 
   return {
-    ema20: ema20Series,
     ema50: ema50Series,
     ema200: ema200Series,
   };

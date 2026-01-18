@@ -63,7 +63,8 @@ import {
   formatMinutesToDuration as formatTimeRange,
   calculateTimeRange,
 } from '@/lib/timeframe';
-import { getChartColor, SIGNAL_STYLES } from '@/lib/signal';
+import { getChartColor, SIGNAL_STYLES, getDivergenceFreshnessColors, calculateDivergenceFreshness, ChartColorType } from '@/lib/signal';
+import { DIVERGENCE_EXPIRY_CANDLES, timeframeToMs } from '@/lib/timeframe';
 
 // VolumeProfileData는 chartTypes.ts에서 re-export
 export type { VolumeProfileData } from './chartTypes';
@@ -358,29 +359,51 @@ export default function ChartRenderer({
     // 미니 모드: 영역 차트 (그라데이션 채우기)
     // 일반 모드: 캔들스틱 차트
     if (mini) {
-      // actionInfo 기반 색상 결정 (공통 유틸리티 사용)
-      const colorType = actionInfo
-        ? getChartColor(actionInfo.action as MTFAction, actionInfo.reason)
-        : (() => {
-            // 폴백: 추세 방향 판단
-            const firstPrice = uniqueData[0]?.close || 0;
-            const lastPrice = uniqueData[uniqueData.length - 1]?.close || 0;
-            return lastPrice >= firstPrice ? 'green' : 'red';
-          })();
+      // 다이버전스 신선도 기반 색상 결정
+      let colorType: ChartColorType = 'gray';
+      let trendColor: string = CHART_COLORS.LINE_NEUTRAL;
+      let trendColorSolid: string = COLORS.NEUTRAL;
+      let trendColorLight: string = SIGNAL_STYLES.wait.rgbLight;
+      let trendColorFade: string = SIGNAL_STYLES.wait.rgbFade;
+
+      // 다이버전스 신호에서 가장 최근의 유효한 다이버전스 찾기
+      if (divergenceSignals && divergenceSignals.length > 0) {
+        // end phase이면서 confirmed이고 필터링되지 않은 것만
+        const validDivergences = divergenceSignals.filter(
+          (sig) => sig.phase === 'end' && sig.confirmed && !sig.isFiltered
+        );
+
+        if (validDivergences.length > 0) {
+          // 가장 최근 다이버전스 (타임스탬프 기준)
+          const latestDiv = validDivergences.reduce((latest, current) =>
+            current.timestamp > latest.timestamp ? current : latest
+          );
+
+          // 만료 시간 계산
+          const expiryCandles = DIVERGENCE_EXPIRY_CANDLES[timeframe] || 24;
+          const expiryMs = expiryCandles * timeframeToMs(timeframe);
+
+          // 신선도 계산
+          const freshness = calculateDivergenceFreshness(latestDiv.timestamp, expiryMs);
+
+          // 신선도가 0보다 크면 (아직 만료되지 않음) 색상 적용
+          if (freshness > 0) {
+            const freshnessColors = getDivergenceFreshnessColors(
+              latestDiv.direction as 'bullish' | 'bearish',
+              freshness
+            );
+
+            colorType = freshnessColors.chartColorType;
+            trendColor = freshnessColors.lineColor;
+            trendColorSolid = freshnessColors.solidColor;
+            trendColorLight = freshnessColors.lightColor;
+            trendColorFade = freshnessColors.fadeColor;
+          }
+        }
+      }
 
       // 글로우 점 색상 업데이트
       setChartColor(colorType);
-
-      const colorMap = {
-        green: { line: CHART_COLORS.LINE_LONG, solid: COLORS.LONG, light: SIGNAL_STYLES.long_ok.rgbLight, fade: SIGNAL_STYLES.long_ok.rgbFade },
-        red: { line: CHART_COLORS.LINE_SHORT, solid: COLORS.SHORT, light: SIGNAL_STYLES.short_ok.rgbLight, fade: SIGNAL_STYLES.short_ok.rgbFade },
-        gray: { line: CHART_COLORS.LINE_NEUTRAL, solid: COLORS.NEUTRAL, light: SIGNAL_STYLES.wait.rgbLight, fade: SIGNAL_STYLES.wait.rgbFade },
-      };
-      const colors = colorMap[colorType];
-      const trendColor = colors.line;
-      const trendColorSolid = colors.solid; // 마커용 불투명 색상
-      const trendColorLight = colors.light;
-      const trendColorFade = colors.fade;
 
       // 영역 시리즈 추가 (하단 그라데이션 채우기)
       const areaSeries = chart.addSeries(

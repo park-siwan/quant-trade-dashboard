@@ -27,12 +27,15 @@ export const RSI = {
   },
 } as const;
 
-// ADX 임계값
+// ADX 임계값 (역추세 매매 필터용)
 export const ADX = {
-  STRONG_TREND: 25,     // 강한 추세 기준
-  VERY_STRONG: 40,      // 매우 강한 추세/과열
-  OPTIMAL_MIN: 20,      // 적정 추세 하한
-  OPTIMAL_MAX: 30,      // 적정 추세 상한
+  WEAK: 20,             // 약한 추세/횡보 (역추세 유리)
+  STRONG: 25,           // 추세 중 (역추세 주의)
+  VERY_STRONG: 40,      // 강한 추세 (역추세 위험)
+  // 레거시 호환
+  STRONG_TREND: 25,
+  OPTIMAL_MIN: 20,
+  OPTIMAL_MAX: 30,
 } as const;
 
 // ATR 임계값
