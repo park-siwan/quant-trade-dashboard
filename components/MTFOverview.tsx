@@ -759,22 +759,20 @@ export default function MTFOverview({
         </div>
       )}
 
-      {/* 스코어 카드 & 추천 타점 */}
-      <div className="grid grid-cols-3 gap-4">
-        <RecommendationCard recommendation={recommendation} />
-        <div className="col-span-2 h-full">
-          <ScoreCard
-            mtfData={data}
-            fundingRate={fundingRate}
-            currentPrice={actualPrice}
-            orderBlocks={orderBlocks}
-            poc={poc}
-            vah={vah}
-            val={val}
-            fearGreedIndex={fearGreedIndex}
-          />
-        </div>
-      </div>
+      {/* 스코어 카드 (디버깅용 전체 너비) */}
+      <ScoreCard
+        mtfData={data}
+        fundingRate={fundingRate}
+        currentPrice={actualPrice}
+        orderBlocks={orderBlocks}
+        poc={poc}
+        vah={vah}
+        val={val}
+        fearGreedIndex={fearGreedIndex}
+      />
+      {/* 추천 타점 - 디버깅 위해 주석 처리
+      <RecommendationCard recommendation={recommendation} />
+      */}
 
       {/* 시간대별 분석 테이블 */}
       <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-3">

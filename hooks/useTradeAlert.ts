@@ -8,6 +8,7 @@ import { SCORE, COOLDOWN } from '@/lib/thresholds';
 import { loadFromStorage, saveToStorage, cleanupTimestampRecord } from '@/lib/storage';
 
 const COOLDOWN_STORAGE_KEY = 'trade-alert-cooldowns';
+const ALERTED_DIVERGENCES_KEY = 'trade-alert-divergences';
 
 // 알림 발생 시 콜백 타입
 export interface AlertEvent {
@@ -56,6 +57,17 @@ const saveCooldowns = (cooldowns: Record<string, number>) =>
     cleanupTimestampRecord(data, COOLDOWN_TTL_MS)
   );
 
+// 다이버전스 알림 기록 로드 (타임스탬프 기반)
+const loadAlertedDivergences = (): Record<string, number> =>
+  loadFromStorage(ALERTED_DIVERGENCES_KEY, {});
+
+// 다이버전스 알림 기록 저장 (24시간 지난 항목 정리)
+const DIVERGENCE_TTL_MS = 24 * 60 * 60 * 1000; // 24시간
+const saveAlertedDivergences = (divergences: Record<string, number>) =>
+  saveToStorage(ALERTED_DIVERGENCES_KEY, divergences, (data) =>
+    cleanupTimestampRecord(data, DIVERGENCE_TTL_MS)
+  );
+
 export function useTradeAlert(options: TradeAlertOptions = {}) {
   const {
     enabled = true,
@@ -93,17 +105,29 @@ export function useTradeAlert(options: TradeAlertOptions = {}) {
     return true;
   }, [cooldownMs]);
 
-  // 다이버전스 중복 알림 방지 (피봇 타임스탬프 기준)
-  const alertedDivergencesRef = useRef<Set<string>>(new Set());
+  // 다이버전스 중복 알림 방지 (피봇 타임스탬프 기준, localStorage 저장)
+  // 동기적 초기화 - useEffect 타이밍 문제 방지
+  const alertedDivergencesRef = useRef<Record<string, number> | null>(null);
+
+  // 최초 접근 시 동기적으로 로드
+  const getAlertedDivergences = useCallback(() => {
+    if (alertedDivergencesRef.current === null) {
+      alertedDivergencesRef.current = loadAlertedDivergences();
+    }
+    return alertedDivergencesRef.current;
+  }, []);
 
   const canAlertDivergence = useCallback((divergenceKey: string): boolean => {
+    const alerted = getAlertedDivergences();
     // 이미 알림한 다이버전스면 스킵
-    if (alertedDivergencesRef.current.has(divergenceKey)) {
+    if (alerted[divergenceKey]) {
       return false;
     }
-    alertedDivergencesRef.current.add(divergenceKey);
+    // 알림 기록 저장
+    alerted[divergenceKey] = Date.now();
+    saveAlertedDivergences(alerted);
     return true;
-  }, []);
+  }, [getAlertedDivergences]);
 
   // 점수 변화 감지 및 알림 (신호 변화 기반)
   const checkScoreAlert = useCallback((

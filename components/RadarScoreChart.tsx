@@ -19,7 +19,7 @@ interface RadarScoreChartProps {
     levels: number;
     sentiment: number;
   };
-  size?: 'normal' | 'large';
+  size?: 'small' | 'normal' | 'large';
 }
 
 // 색상 정의: 초록(롱) + 빨강(숏) - 겹치면 보라색
@@ -114,8 +114,8 @@ export default function RadarScoreChart({ longScores, shortScores, size = 'norma
     return null;
   };
 
-  const height = size === 'large' ? 'h-[300px]' : 'h-[200px]';
-  const outerRadius = size === 'large' ? '85%' : '75%';
+  const height = size === 'large' ? 'h-[300px]' : size === 'small' ? 'h-[130px]' : 'h-[200px]';
+  const outerRadius = size === 'large' ? '85%' : size === 'small' ? '70%' : '75%';
 
   return (
     <div className={`w-full ${height} relative`}>
@@ -153,7 +153,7 @@ export default function RadarScoreChart({ longScores, shortScores, size = 'norma
           />
           <PolarAngleAxis
             dataKey="category"
-            tick={{ fill: '#9ca3af', fontSize: size === 'large' ? 11 : 9 }}
+            tick={{ fill: '#9ca3af', fontSize: size === 'large' ? 11 : size === 'small' ? 7 : 9 }}
             tickLine={false}
             axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
           />

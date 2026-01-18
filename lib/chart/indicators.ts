@@ -442,8 +442,37 @@ export function addDivergenceLines(
     oi: 'OI',
   };
 
+  // 타입+방향별 최신 다이버전스만 표시 (너무 많은 라인 방지)
+  // 최신순 정렬 후 타입+방향별 1개씩만 유지
+  const sortedPairs = [...divergencePairs].sort((a, b) => b.end.timestamp - a.end.timestamp);
+  const seenKeys = new Set<string>();
+  const filteredPairs = sortedPairs.filter(pair => {
+    const key = `${pair.end.type}_${pair.direction}`;
+    if (seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    return true;
+  });
+
+  // 같은 시점(±1캔들)에 여러 타입 다이버전스가 겹치는지 확인
+  const COINCIDE_THRESHOLD = 300 * 1000; // 300초 = 5분 (1캔들)
+  const pairsWithCoincidence = filteredPairs.map(pair => {
+    // 같은 방향, 필터링 안 된 다이버전스 중 시간이 근접한 것 카운트
+    const coincidingCount = filteredPairs.filter(other =>
+      other !== pair &&
+      other.direction === pair.direction &&
+      !other.isFiltered &&
+      other.confirmed &&
+      Math.abs(other.end.timestamp - pair.end.timestamp) <= COINCIDE_THRESHOLD
+    ).length;
+
+    return {
+      ...pair,
+      isCoinciding: coincidingCount > 0, // 1개 이상 겹치면 true
+    };
+  });
+
   // 각 다이버전스 쌍에 대해 선 그리기
-  divergencePairs.forEach((pair) => {
+  pairsWithCoincidence.forEach((pair) => {
     // 미확정(confirmed=false) 다이버전스는 표시하지 않음 (리페인팅 방지)
     if (!pair.confirmed) {
       return;
@@ -455,6 +484,9 @@ export function addDivergenceLines(
       : pair.direction === 'bullish'
       ? INDICATOR_COLORS.DIV_BULLISH
       : INDICATOR_COLORS.DIV_BEARISH;
+
+    // 겹치는 다이버전스(여러 타입이 동시 발생)는 굵게, 단독은 얇게
+    const lineWidth = pair.isFiltered ? 1 : (pair.isCoinciding ? 3 : 1);
 
     // 1. 가격 패널에 선 그리기
     // useClosePrice=true면 종가 기준 (라인 차트용)
@@ -515,7 +547,7 @@ export function addDivergenceLines(
         LineSeries,
         {
           color: color,
-          lineWidth: pair.isFiltered ? 1 : 3, // 필터링된 신호는 얇은 선
+          lineWidth: lineWidth,
           lastValueVisible: false,
           priceLineVisible: false,
           lineStyle: pair.isFiltered ? 2 : 0, // 필터링된 신호는 점선 (2 = dashed)
@@ -528,9 +560,8 @@ export function addDivergenceLines(
         { time: (pair.end.timestamp / 1000) as Time, value: endPrice },
       ]);
 
-      // 다이버전스 끝점에 라벨 마커 추가 (라인과 동일 색상)
+      // 다이버전스 끝점에 라벨 마커 추가 (나중에 그룹화)
       const label = typeLabels[pair.start.type] || pair.start.type.toUpperCase();
-      const arrow = pair.direction === 'bullish' ? '↑' : '↓';
       const markerColor = pair.isFiltered
         ? '#9ca3af' // gray-400
         : pair.direction === 'bullish'
@@ -539,11 +570,13 @@ export function addDivergenceLines(
 
       divergenceMarkers.push({
         time: (pair.end.timestamp / 1000) as Time,
-        position: 'inBar', // 캔들/라인 정중앙에 표시
+        position: pair.direction === 'bullish' ? 'belowBar' : 'aboveBar', // 롱은 하단, 숏은 상단
         color: markerColor,
-        shape: 'circle',
-        text: `${label}${arrow}`,
-      });
+        shape: 'text' as const,
+        text: label,
+        _direction: pair.direction, // 그룹화용 임시 필드
+        _isFiltered: pair.isFiltered,
+      } as SeriesMarker<Time> & { _direction: string; _isFiltered: boolean });
     }
 
     // 2. RSI 패널에 선 그리기
@@ -573,7 +606,7 @@ export function addDivergenceLines(
           LineSeries,
           {
             color: color,
-            lineWidth: pair.isFiltered ? 1 : 3, // 필터링된 신호는 얇은 선
+            lineWidth: lineWidth,
             lastValueVisible: false,
             priceLineVisible: false,
             priceScaleId: 'rsi', // RSI 스케일 사용 (중요!)
@@ -622,7 +655,7 @@ export function addDivergenceLines(
           LineSeries,
           {
             color: color,
-            lineWidth: pair.isFiltered ? 1 : 3, // 필터링된 신호는 얇은 선
+            lineWidth: lineWidth,
             lastValueVisible: false,
             priceLineVisible: false,
             priceScaleId: 'obv', // OBV 스케일 사용 (중요!)
@@ -743,11 +776,60 @@ export function addDivergenceLines(
     }
   });
 
-  // 수집된 다이버전스 마커를 캔들스틱 시리즈에 추가
+  // 수집된 다이버전스 마커를 그룹화하여 캔들스틱 시리즈에 추가
   if (divergenceMarkers.length > 0) {
+    // 같은 시점(±5분) + 같은 방향의 마커들을 그룹화
+    const MARKER_GROUP_THRESHOLD = 300; // 5분 (초 단위)
+    const groupedMarkersMap = new Map<string, {
+      time: Time;
+      position: 'aboveBar' | 'belowBar';
+      labels: string[];
+      color: string;
+      direction: string;
+    }>();
+
+    for (const marker of divergenceMarkers) {
+      const m = marker as SeriesMarker<Time> & { _direction: string; _isFiltered: boolean };
+      const timeKey = Math.floor((m.time as number) / MARKER_GROUP_THRESHOLD) * MARKER_GROUP_THRESHOLD;
+      const key = `${timeKey}_${m._direction}`;
+
+      if (groupedMarkersMap.has(key)) {
+        const group = groupedMarkersMap.get(key)!;
+        if (!group.labels.includes(m.text || '')) {
+          group.labels.push(m.text || '');
+        }
+        // 필터링 안 된 마커의 색상 우선
+        if (!m._isFiltered) {
+          group.color = m.color;
+        }
+      } else {
+        groupedMarkersMap.set(key, {
+          time: m.time,
+          position: m.position as 'aboveBar' | 'belowBar',
+          labels: [m.text || ''],
+          color: m.color,
+          direction: m._direction,
+        });
+      }
+    }
+
+    // 그룹화된 마커를 최종 마커 배열로 변환
+    const finalMarkers: SeriesMarker<Time>[] = [];
+    for (const group of groupedMarkersMap.values()) {
+      // 라벨들을 줄바꿈으로 연결 (스택 효과)
+      const stackedText = group.labels.join('\n');
+      finalMarkers.push({
+        time: group.time,
+        position: group.position,
+        color: group.color,
+        shape: 'text',
+        text: stackedText,
+      });
+    }
+
     // 시간순 정렬 (lightweight-charts 요구사항)
-    divergenceMarkers.sort((a, b) => (a.time as number) - (b.time as number));
-    createSeriesMarkers(candlestickSeries, divergenceMarkers);
+    finalMarkers.sort((a, b) => (a.time as number) - (b.time as number));
+    createSeriesMarkers(candlestickSeries, finalMarkers);
   }
 }
 
