@@ -47,13 +47,14 @@ export const getFreshnessMultiplier = (candlesAgo: number): number => {
   return Math.max(0.1, 1 - (candlesAgo / maxCandles) * 0.9);
 };
 
-// 강도 배율 계산 (0-100 → 0.3-2.0x)
-// 약한 다이버전스(0-30): 0.3-0.7x, 중간(30-60): 0.7-1.2x, 강한(60-100): 1.2-2.0x
+// 강도 배율 계산 (0-100 → 0.1-3.0x)
+// 약한 다이버전스(0-20): 0.1-0.7x, 중간(20-50): 0.7-1.5x, 강한(50-100): 1.5-3.0x
 export const getStrengthMultiplier = (strength: number | undefined): number => {
   if (strength === undefined || strength === null) return 1.0; // 강도 정보 없으면 기본 1x
   const clampedStrength = Math.max(0, Math.min(100, strength));
-  // 0 → 0.3, 50 → 1.0, 100 → 2.0 (선형 보간)
-  return 0.3 + (clampedStrength / 100) * 1.7;
+  // 0 → 0.1, 50 → 1.55, 100 → 3.0 (선형 보간)
+  // 짧은 다이버전스(strength~10)는 약 0.4x, 긴 다이버전스(strength~90)는 약 2.7x
+  return 0.1 + (clampedStrength / 100) * 2.9;
 };
 
 // 단일 다이버전스 점수 계산 (강도 반영)
