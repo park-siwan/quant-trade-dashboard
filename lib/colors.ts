@@ -50,23 +50,27 @@ export const rgba = (hex: string, alpha: number): string => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+// 무채색 캔들 색상 (다이버전스 강조용)
+export const GRAY_UP = '#9ca3af';      // gray-400 (밝은 회색 - 양봉)
+export const GRAY_DOWN = '#4b5563';    // gray-600 (어두운 회색 - 음봉)
+
 // 자주 쓰는 투명도 색상
 export const CHART_COLORS = {
-  // 캔들 바디
-  CANDLE_UP: rgba(COLORS.LONG, 0.3),
-  CANDLE_DOWN: rgba(COLORS.SHORT, 0.3),
+  // 캔들 바디 (무채색)
+  CANDLE_UP: rgba(GRAY_UP, 0.3),
+  CANDLE_DOWN: rgba(GRAY_DOWN, 0.4),
 
-  // 캔들 테두리
-  CANDLE_UP_BORDER: rgba(COLORS.LONG_LIGHT, 0.8),
-  CANDLE_DOWN_BORDER: rgba(COLORS.SHORT_LIGHT, 0.8),
+  // 캔들 테두리 (무채색)
+  CANDLE_UP_BORDER: rgba(GRAY_UP, 0.7),
+  CANDLE_DOWN_BORDER: rgba(GRAY_DOWN, 0.8),
 
-  // 캔들 심지
-  CANDLE_UP_WICK: rgba(COLORS.LONG, 0.6),
-  CANDLE_DOWN_WICK: rgba(COLORS.SHORT, 0.6),
+  // 캔들 심지 (무채색)
+  CANDLE_UP_WICK: rgba(GRAY_UP, 0.5),
+  CANDLE_DOWN_WICK: rgba(GRAY_DOWN, 0.6),
 
-  // 라인
-  LINE_LONG: rgba(COLORS.LONG, 0.5),
-  LINE_SHORT: rgba(COLORS.SHORT, 0.5),
+  // 라인 (무채색)
+  LINE_LONG: rgba(GRAY_UP, 0.5),
+  LINE_SHORT: rgba(GRAY_DOWN, 0.5),
   LINE_NEUTRAL: rgba(COLORS.NEUTRAL, 0.5),
 
   // 다이버전스
@@ -79,15 +83,15 @@ export const CHART_COLORS = {
   SEPARATOR: rgba(COLORS.WHITE, 0.3),
   SEPARATOR_HOVER: rgba(COLORS.WHITE, 0.5),
 
-  // 영역
-  AREA_LONG: rgba(COLORS.LONG, 0.15),
-  AREA_SHORT: rgba(COLORS.SHORT, 0.15),
+  // 영역 (무채색)
+  AREA_LONG: 'rgba(160, 160, 160, 0.12)',
+  AREA_SHORT: 'rgba(100, 100, 100, 0.15)',
   AREA_NEUTRAL: rgba(COLORS.NEUTRAL, 0.15),
 
-  // 미니 차트 (오렌지)
-  MINI_LINE: rgba(COLORS.ORANGE, 0.9),
-  MINI_TOP: rgba(COLORS.ORANGE, 0.3),
-  MINI_BOTTOM: rgba(COLORS.ORANGE, 0.05),
+  // 미니 차트 (무채색 - 어두운 회색)
+  MINI_LINE: 'rgba(60, 60, 60, 1)',
+  MINI_TOP: 'rgba(50, 50, 50, 0.15)',
+  MINI_BOTTOM: 'rgba(50, 50, 50, 0.01)',
 
   // 신호 마커
   SIGNAL_BULLISH: rgba(COLORS.BULLISH, 0.9),
@@ -102,14 +106,14 @@ export const CHART_COLORS = {
 
 // 지표 라인 색상
 export const INDICATOR_COLORS = {
-  // CVD (파란색 계열)
-  CVD_LINE: rgba(COLORS.OBV, 0.5),  // blue-400
+  // CVD (무채색)
+  CVD_LINE: 'rgba(140, 140, 140, 0.4)',
 
-  // OI (보라색)
-  OI_LINE: rgba(COLORS.CVD, 0.5),   // purple-400
+  // OI (무채색)
+  OI_LINE: 'rgba(120, 120, 120, 0.4)',
 
-  // ATR (오렌지)
-  ATR_LINE: rgba(COLORS.ORANGE, 0.7),
+  // ATR (무채색)
+  ATR_LINE: 'rgba(160, 160, 160, 0.5)',
 
   // EMA 라인 (투명도 25%)
   EMA_FAST: rgba(COLORS.SHORT, 0.25),      // 빨강 (가장 빠른)
@@ -121,29 +125,29 @@ export const INDICATOR_COLORS = {
   DIV_BEARISH: rgba(COLORS.BEARISH, 0.95),
   DIV_FILTERED: rgba(COLORS.FILTERED, 0.7),
 
-  // 횡보 구간 (amber)
-  CONSOLIDATION_BG: rgba(COLORS.OI, 0.08),
-  CONSOLIDATION_BORDER: rgba(COLORS.OI, 0.4),
+  // 횡보 구간 (무채색)
+  CONSOLIDATION_BG: 'rgba(150, 150, 150, 0.06)',
+  CONSOLIDATION_BORDER: 'rgba(150, 150, 150, 0.3)',
 
-  // Volume Profile 라인
-  POC: rgba(COLORS.POC, 0.9),
-  POC_LABEL: COLORS.POC,
-  VAH: rgba(COLORS.VAH, 0.7),
-  VAH_LABEL: rgba(COLORS.VAH, 0.9),
-  VAL: rgba(COLORS.VAL, 0.7),
-  VAL_LABEL: rgba(COLORS.VAL, 0.9),
-  VWAP: rgba(COLORS.CVD, 0.9),  // purple
-  VWAP_LABEL: COLORS.CVD,
+  // Volume Profile 라인 (무채색)
+  POC: 'rgba(200, 200, 200, 0.7)',
+  POC_LABEL: '#c8c8c8',
+  VAH: 'rgba(170, 170, 170, 0.5)',
+  VAH_LABEL: 'rgba(170, 170, 170, 0.7)',
+  VAL: 'rgba(130, 130, 130, 0.5)',
+  VAL_LABEL: 'rgba(130, 130, 130, 0.7)',
+  VWAP: 'rgba(180, 180, 180, 0.6)',
+  VWAP_LABEL: '#b4b4b4',
 
-  // ATR 타겟 라인
-  ATR_LONG: rgba(COLORS.LONG, 0.6),
-  ATR_LONG_LABEL: rgba(COLORS.LONG, 0.9),
-  ATR_SHORT: rgba(COLORS.SHORT, 0.6),
-  ATR_SHORT_LABEL: rgba(COLORS.SHORT, 0.9),
+  // ATR 타겟 라인 (무채색)
+  ATR_LONG: 'rgba(160, 160, 160, 0.5)',
+  ATR_LONG_LABEL: 'rgba(160, 160, 160, 0.8)',
+  ATR_SHORT: 'rgba(120, 120, 120, 0.5)',
+  ATR_SHORT_LABEL: 'rgba(120, 120, 120, 0.8)',
 
-  // 오더블록
-  SUPPORT: rgba(COLORS.LONG, 0.8),
-  RESISTANCE: rgba(COLORS.SHORT, 0.8),
+  // 오더블록 (무채색)
+  SUPPORT: 'rgba(170, 170, 170, 0.6)',
+  RESISTANCE: 'rgba(100, 100, 100, 0.6)',
 } as const;
 
 // 마켓 신호 마커 색상
@@ -161,18 +165,18 @@ export const MEASURE_COLORS = {
   GLOW: '0 0 8px rgba(59, 130, 246, 0.6)',
 } as const;
 
-// 호가벽 색상
+// 호가벽 색상 (무채색)
 export const WALL_COLORS = {
-  // 매도벽 (빨강)
-  ASK_LARGE: rgba(COLORS.SHORT, 0.8),
-  ASK_NORMAL: rgba(COLORS.SHORT, 0.5),
-  ASK_BORDER: COLORS.SHORT,
-  // 매수벽 (초록)
-  BID_LARGE: rgba(COLORS.LONG, 0.8),
-  BID_NORMAL: rgba(COLORS.LONG, 0.5),
-  BID_BORDER: COLORS.LONG,
+  // 매도벽 (어두운 회색)
+  ASK_LARGE: 'rgba(100, 100, 100, 0.7)',
+  ASK_NORMAL: 'rgba(100, 100, 100, 0.4)',
+  ASK_BORDER: '#646464',
+  // 매수벽 (밝은 회색)
+  BID_LARGE: 'rgba(160, 160, 160, 0.7)',
+  BID_NORMAL: 'rgba(160, 160, 160, 0.4)',
+  BID_BORDER: '#a0a0a0',
   // 스프레드 구분선
-  SPREAD: rgba(COLORS.POC, 0.6),
+  SPREAD: 'rgba(180, 180, 180, 0.5)',
 } as const;
 
 // 글로우 점 색상 (미니차트용)

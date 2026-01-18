@@ -154,9 +154,10 @@ export function formatSeoulTime(time: number): string {
  * 캔들스틱 시리즈 옵션
  */
 export function getCandlestickOptions(opacity: number = 0.3) {
+  // 무채색 캔들 (다이버전스 강조용)
   return {
-    upColor: rgba(COLORS.LONG, opacity),
-    downColor: rgba(COLORS.SHORT, opacity),
+    upColor: CHART_COLORS.CANDLE_UP,
+    downColor: CHART_COLORS.CANDLE_DOWN,
     borderUpColor: CHART_COLORS.CANDLE_UP_BORDER,
     borderDownColor: CHART_COLORS.CANDLE_DOWN_BORDER,
     wickUpColor: CHART_COLORS.CANDLE_UP_WICK,

@@ -34,7 +34,7 @@ import {
   PANEL_CONFIG,
 } from '@/lib/chart/chartConfig';
 import { debug } from '@/lib/debug';
-import { COLORS, CHART_COLORS, INDICATOR_COLORS, MARKER_COLORS, MEASURE_COLORS, WALL_COLORS, GLOW_DOT_COLORS, rgba } from '@/lib/colors';
+import { COLORS, CHART_COLORS, INDICATOR_COLORS, MARKER_COLORS, MEASURE_COLORS, WALL_COLORS, GLOW_DOT_COLORS, GRAY_UP, GRAY_DOWN, rgba } from '@/lib/colors';
 import {
   DivergenceSignal,
   EmaData,
@@ -219,9 +219,9 @@ export default function ChartRenderer({
           };
           (candlestickSeriesRef.current as ISeriesApi<'Area'>).update(areaUpdate);
         } else {
-          // CandlestickSeries는 전체 OHLC 데이터 사용
+          // CandlestickSeries는 전체 OHLC 데이터 사용 - 무채색
           const isUp = realtimeCandle.close >= realtimeCandle.open;
-          const candleColor = isUp ? COLORS.LONG : COLORS.SHORT;
+          const candleColor = isUp ? GRAY_UP : GRAY_DOWN;
 
           const candleUpdate: CandlestickData = {
             time: (realtimeCandle.timestamp / 1000) as CandlestickData['time'],
@@ -368,65 +368,21 @@ export default function ChartRenderer({
     // 미니 모드: 영역 차트 (그라데이션 채우기)
     // 일반 모드: 캔들스틱 차트
     if (mini) {
-      // 다이버전스 신선도 기반 색상 결정
-      let colorType: ChartColorType = 'gray';
-      let trendColor: string = CHART_COLORS.LINE_NEUTRAL;
-      let trendColorSolid: string = COLORS.NEUTRAL;
-      let trendColorLight: string = SIGNAL_STYLES.wait.rgbLight;
-      let trendColorFade: string = SIGNAL_STYLES.wait.rgbFade;
+      // 글로우 점 색상 - 무채색 통일
+      setChartColor('gray');
 
-      // 다이버전스 신호에서 가장 최근의 유효한 다이버전스 찾기
-      if (divergenceSignals && divergenceSignals.length > 0) {
-        // end phase이면서 confirmed이고 필터링되지 않은 것만
-        const validDivergences = divergenceSignals.filter(
-          (sig) => sig.phase === 'end' && sig.confirmed && !sig.isFiltered
-        );
-
-        if (validDivergences.length > 0) {
-          // 가장 최근 다이버전스 (타임스탬프 기준)
-          const latestDiv = validDivergences.reduce((latest, current) =>
-            current.timestamp > latest.timestamp ? current : latest
-          );
-
-          // 만료 시간 계산
-          const expiryCandles = DIVERGENCE_EXPIRY_CANDLES[timeframe] || 24;
-          const expiryMs = expiryCandles * timeframeToMs(timeframe);
-
-          // 신선도 계산
-          const freshness = calculateDivergenceFreshness(latestDiv.timestamp, expiryMs);
-
-          // 신선도가 0보다 크면 (아직 만료되지 않음) 색상 적용
-          if (freshness > 0) {
-            const freshnessColors = getDivergenceFreshnessColors(
-              latestDiv.direction as 'bullish' | 'bearish',
-              freshness,
-              latestDiv.type as 'rsi' | 'obv' | 'cvd' | 'oi'
-            );
-
-            colorType = freshnessColors.chartColorType;
-            trendColor = freshnessColors.lineColor;
-            trendColorSolid = freshnessColors.solidColor;
-            trendColorLight = freshnessColors.lightColor;
-            trendColorFade = freshnessColors.fadeColor;
-          }
-        }
-      }
-
-      // 글로우 점 색상 업데이트
-      setChartColor(colorType);
-
-      // 영역 시리즈 추가 (하단 그라데이션 채우기)
+      // 영역 시리즈 추가 (무채색 - 다이버전스 라인 강조용)
       const areaSeries = chart.addSeries(
         AreaSeries,
         {
-          lineColor: trendColor,
+          lineColor: CHART_COLORS.MINI_LINE,
           lineWidth: 1,
-          topColor: trendColorLight, // 상단 그라데이션
-          bottomColor: trendColorFade, // 하단 그라데이션 (거의 투명)
+          topColor: CHART_COLORS.MINI_TOP,
+          bottomColor: CHART_COLORS.MINI_BOTTOM,
           crosshairMarkerVisible: true,
           crosshairMarkerRadius: 4,
           crosshairMarkerBorderColor: COLORS.WHITE,
-          crosshairMarkerBackgroundColor: trendColorSolid, // 불투명 마커
+          crosshairMarkerBackgroundColor: COLORS.NEUTRAL,
           lastValueVisible: true,
           priceLineVisible: false,
         },
@@ -442,16 +398,16 @@ export default function ChartRenderer({
       areaSeries.setData(lineData);
       candlestickSeriesRef.current = areaSeries;
     } else {
-      // 캔들스틱 시리즈 추가 (메인 패널 - paneIndex: 0)
+      // 캔들스틱 시리즈 추가 (메인 패널 - paneIndex: 0) - 무채색
       const candlestickSeries = chart.addSeries(
         CandlestickSeries,
         {
-          upColor: rgba(COLORS.LONG, CANDLE_OPACITY),
-          downColor: rgba(COLORS.SHORT, CANDLE_OPACITY),
-          borderUpColor: rgba(COLORS.LONG, CANDLE_OPACITY),
-          borderDownColor: rgba(COLORS.SHORT, CANDLE_OPACITY),
-          wickUpColor: rgba(COLORS.LONG, CANDLE_OPACITY),
-          wickDownColor: rgba(COLORS.SHORT, CANDLE_OPACITY),
+          upColor: rgba(GRAY_UP, CANDLE_OPACITY),
+          downColor: rgba(GRAY_DOWN, CANDLE_OPACITY),
+          borderUpColor: rgba(GRAY_UP, CANDLE_OPACITY),
+          borderDownColor: rgba(GRAY_DOWN, CANDLE_OPACITY),
+          wickUpColor: rgba(GRAY_UP, CANDLE_OPACITY),
+          wickDownColor: rgba(GRAY_DOWN, CANDLE_OPACITY),
         },
         0,
       );
@@ -466,9 +422,9 @@ export default function ChartRenderer({
 
         return {
           ...candle,
-          color: rgba(isUp ? COLORS.LONG : COLORS.SHORT, opacity),
-          borderColor: rgba(isUp ? COLORS.LONG : COLORS.SHORT, opacity),
-          wickColor: rgba(isUp ? COLORS.LONG : COLORS.SHORT, opacity),
+          color: rgba(isUp ? GRAY_UP : GRAY_DOWN, opacity),
+          borderColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, opacity),
+          wickColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, opacity),
         };
       });
 

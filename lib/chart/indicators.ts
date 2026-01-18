@@ -756,15 +756,14 @@ export function addDivergenceLines(
     }
   });
 
-  // 수집된 다이버전스 마커를 그룹화하여 캔들스틱 시리즈에 추가
+  // 수집된 다이버전스 마커를 캔들스틱 시리즈에 추가 (각 라벨은 고유 색상 유지)
   if (divergenceMarkers.length > 0) {
-    // 같은 시점(±5분) + 같은 방향의 마커들을 그룹화
+    // 같은 시점(±5분) + 같은 방향의 마커들을 그룹화하되, 각 라벨의 색상 유지
     const MARKER_GROUP_THRESHOLD = 300; // 5분 (초 단위)
     const groupedMarkersMap = new Map<string, {
       time: Time;
       position: 'aboveBar' | 'belowBar';
-      labels: string[];
-      color: string;
+      labels: Array<{ text: string; color: string }>;
       direction: string;
     }>();
 
@@ -775,35 +774,39 @@ export function addDivergenceLines(
 
       if (groupedMarkersMap.has(key)) {
         const group = groupedMarkersMap.get(key)!;
-        if (!group.labels.includes(m.text || '')) {
-          group.labels.push(m.text || '');
-        }
-        // 필터링 안 된 마커의 색상 우선
-        if (!m._isFiltered) {
-          group.color = m.color;
+        // 중복 라벨 체크
+        if (!group.labels.some(l => l.text === m.text)) {
+          group.labels.push({ text: m.text || '', color: m.color });
         }
       } else {
         groupedMarkersMap.set(key, {
           time: m.time,
           position: m.position as 'aboveBar' | 'belowBar',
-          labels: [m.text || ''],
-          color: m.color,
+          labels: [{ text: m.text || '', color: m.color }],
           direction: m._direction,
         });
       }
     }
 
-    // 그룹화된 마커를 최종 마커 배열로 변환
+    // 그룹화된 마커를 개별 마커로 변환 (각 라벨이 고유 색상 유지)
     const finalMarkers: SeriesMarker<Time>[] = [];
     for (const group of groupedMarkersMap.values()) {
-      // 라벨들을 줄바꿈으로 연결 (스택 효과)
-      const stackedText = group.labels.join('\n');
-      finalMarkers.push({
-        time: group.time,
-        position: group.position,
-        color: group.color,
-        shape: 'text',
-        text: stackedText,
+      // 각 라벨을 개별 마커로 생성 (세로로 쌓이도록 공백 추가)
+      group.labels.forEach((labelInfo, index) => {
+        // 위치 조정을 위해 공백 추가 (belowBar는 아래서 위로, aboveBar는 위에서 아래로)
+        const padding = group.position === 'belowBar'
+          ? '\n'.repeat(group.labels.length - 1 - index)
+          : '\n'.repeat(index);
+
+        finalMarkers.push({
+          time: group.time,
+          position: group.position,
+          color: labelInfo.color,
+          shape: 'text',
+          text: group.position === 'belowBar'
+            ? padding + labelInfo.text
+            : labelInfo.text + padding,
+        });
       });
     }
 
