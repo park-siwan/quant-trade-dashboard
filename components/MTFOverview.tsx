@@ -153,7 +153,7 @@ const DirectionStrengthDisplay = ({
   return <span className={`text-xs font-bold ${color}`}>{arrows}</span>;
 };
 
-// 다이버전스 표시 (타입 + 시간 + 만료 여부)
+// 다이버전스 표시 (타입 + 시간 + 만료/필터링 여부)
 const DivergenceDisplay = ({ divergence, timeframe }: {
   divergence: MTFTimeframeData['divergence'];
   timeframe: string;
@@ -166,6 +166,7 @@ const DivergenceDisplay = ({ divergence, timeframe }: {
   const isBullish = divergence.direction === 'bullish';
   const typeLabel = divergence.type.toUpperCase();
   const isExpired = divergence.isExpired;
+  const isFiltered = divergence.isFiltered;
 
   // 캔들 수로 시간 계산
   const candleIntervalMin = (CANDLE_INTERVALS_SEC[timeframe] || 300) / 60;
@@ -188,6 +189,18 @@ const DivergenceDisplay = ({ divergence, timeframe }: {
           {isBullish ? '↑' : '↓'} {typeLabel}
         </span>
         <span className="text-[10px] px-1 py-0.5 bg-gray-700 text-gray-400 rounded">만료 {timeAgo}</span>
+      </div>
+    );
+  }
+
+  // 필터링된 경우 회색 + 필터링 배지
+  if (isFiltered) {
+    return (
+      <div className="flex flex-col items-start">
+        <span className="text-xs font-semibold text-gray-500">
+          {isBullish ? '↑' : '↓'} {typeLabel}
+        </span>
+        <span className="text-[10px] px-1 py-0.5 bg-gray-700 text-gray-400 rounded">필터링 {timeAgo}</span>
       </div>
     );
   }
@@ -408,9 +421,9 @@ const TimeframeRow = ({
   data: MTFTimeframeData;
   onRefresh: () => void;
 }) => {
-  // 신호 표시 (확정된 다이버전스만)
+  // 신호 표시 (확정 + 유효한 다이버전스만, 필터링된 것 제외)
   const getSignalIndicator = () => {
-    if (data.divergence && data.divergence.confirmed && !data.divergence.isExpired) {
+    if (data.divergence && data.divergence.confirmed && !data.divergence.isExpired && !data.divergence.isFiltered) {
       const isBullish = data.divergence.direction === 'bullish';
       return (
         <span className={`text-[10px] font-bold ${isBullish ? 'text-green-400' : 'text-red-400'}`}>
@@ -551,8 +564,10 @@ export default function MTFOverview({
     const oiBullish = data.timeframes.filter(tf => tf.oiDirection === 'bullish').length;
     const oiBearish = data.timeframes.filter(tf => tf.oiDirection === 'bearish').length;
 
-    // 다이버전스 정보
-    const activeDivergences = data.timeframes.filter(tf => tf.divergence && !tf.divergence.isExpired);
+    // 다이버전스 정보 (유효한 것만 = 만료 안 됨 + 필터링 안 됨)
+    const activeDivergences = data.timeframes.filter(
+      tf => tf.divergence && !tf.divergence.isExpired && !tf.divergence.isFiltered
+    );
     const bullishDivs = activeDivergences.filter(tf => tf.divergence?.direction === 'bullish');
     const bearishDivs = activeDivergences.filter(tf => tf.divergence?.direction === 'bearish');
 

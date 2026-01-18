@@ -17,7 +17,6 @@ import {
   getSecondsUntilClose,
 } from '@/lib/timeframe';
 import {
-  shouldFilterDivergence,
   DIVERGENCE_EXPIRY_CANDLES,
   DIVERGENCE_TYPE_PRIORITY,
 } from '@/lib/divergence';
@@ -223,12 +222,11 @@ const analyzeOi = (oi: (number | null)[] | undefined): {
   return { direction, strength, change };
 };
 
-// 모든 다이버전스 추출 (우선순위 정렬, 공통 정책 사용)
+// 모든 다이버전스 추출 (우선순위 정렬)
 const getAllDivergences = (
   signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number; confirmed?: boolean; isFiltered?: boolean }> | undefined,
   totalCandles: number,
-  timeframe: string,
-  rsiData?: number[] // RSI 데이터 (필터링 계산용 - 백엔드 isFiltered 없을 때만)
+  timeframe: string
 ): DivergenceInfo[] => {
   if (!signals?.length) return [];
 
@@ -242,13 +240,8 @@ const getAllDivergences = (
     const isExpired = candlesAgo > expiryCandles;
     const direction = signal.direction as 'bullish' | 'bearish';
 
-    // 백엔드에서 isFiltered가 오면 그것을 사용 (ADX 기반 등)
-    // 없으면 RSI 기반으로 계산 (폴백)
-    let isFiltered = signal.isFiltered;
-    if (isFiltered === undefined) {
-      const rsiAtSignal = rsiData && signal.index !== undefined ? rsiData[signal.index] : null;
-      isFiltered = shouldFilterDivergence(direction, rsiAtSignal);
-    }
+    // 백엔드에서 isFiltered 값 사용 (폴백 없음)
+    const isFiltered = signal.isFiltered ?? false;
 
     return {
       type: signal.type as 'rsi' | 'obv' | 'cvd' | 'oi',
@@ -278,10 +271,9 @@ const getAllDivergences = (
 const getLatestDivergence = (
   signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number; isFiltered?: boolean }> | undefined,
   totalCandles: number,
-  timeframe: string,
-  rsiData?: number[]
+  timeframe: string
 ): DivergenceInfo | null => {
-  const all = getAllDivergences(signals, totalCandles, timeframe, rsiData);
+  const all = getAllDivergences(signals, totalCandles, timeframe);
   return all.length > 0 ? all[0] : null;
 };
 
@@ -316,14 +308,13 @@ const processBackendData = (tf: BackendTimeframeData): RawTimeframeData | null =
   const cvdAnalysis = analyzeCvd(cvd);
   const oiAnalysis = analyzeOi(oi);
 
-  // 모든 다이버전스 추출 (우선순위 정렬, RSI 필터링 적용)
+  // 모든 다이버전스 추출 (우선순위 정렬, 백엔드 isFiltered 사용)
   const divergences = getAllDivergences(
     tf.signals?.divergence,
     candles.length,
-    tf.timeframe,
-    rsiArray // RSI 데이터로 필터링
+    tf.timeframe
   );
-  // 대표 다이버전스 (첫 번째 - 필터링 안된 것 우선)
+  // 대표 다이버전스 (첫 번째)
   const divergence = divergences.length > 0 ? divergences[0] : null;
 
   const adx = tf.adx?.currentAdx ?? null;
