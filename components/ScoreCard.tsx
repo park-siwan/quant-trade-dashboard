@@ -20,14 +20,13 @@ interface ScoreCardProps {
   fearGreedIndex?: number;
 }
 
-// 6개 카테고리 라벨 + 아이콘
-const categoryConfig: { key: string; name: string; max: number; icon: React.ElementType }[] = [
-  { key: 'trendAlignment', name: '추세', max: 20, icon: TrendingUp },
-  { key: 'divergence', name: '다이버전스', max: 20, icon: Activity },
-  { key: 'momentum', name: '모멘텀', max: 15, icon: Zap },
-  { key: 'volume', name: '거래량', max: 15, icon: BarChart3 },
-  { key: 'levels', name: '지지/저항', max: 15, icon: Layers },
-  { key: 'sentiment', name: '시장심리', max: 15, icon: ArrowUpDown },
+// 5개 카테고리 라벨 + 아이콘 (다이버전스는 동적 max)
+const categoryConfig: { key: string; name: string; icon: React.ElementType }[] = [
+  { key: 'divergence', name: '다이버전스', icon: Activity },
+  { key: 'momentum', name: '모멘텀', icon: Zap },
+  { key: 'volume', name: '거래량', icon: BarChart3 },
+  { key: 'levels', name: '지지/저항', icon: Layers },
+  { key: 'sentiment', name: '시장심리', icon: ArrowUpDown },
 ];
 
 export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlocks, poc, vah, val, fearGreedIndex }: ScoreCardProps) {
@@ -72,7 +71,7 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
   };
 
   const getScoreData = (score: SignalScore, key: string) => {
-    return score[key as keyof SignalScore] as { score: number; details: string[] };
+    return score[key as keyof SignalScore] as { score: number; maxScore: number; details: string[] };
   };
 
   return (
@@ -99,7 +98,6 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
         <div className="flex-shrink-0 w-[140px]">
           <RadarScoreChart
             longScores={{
-              trendAlignment: longScore.trendAlignment.score,
               divergence: longScore.divergence.score,
               momentum: longScore.momentum.score,
               volume: longScore.volume.score,
@@ -107,7 +105,6 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
               sentiment: longScore.sentiment.score,
             }}
             shortScores={{
-              trendAlignment: shortScore.trendAlignment.score,
               divergence: shortScore.divergence.score,
               momentum: shortScore.momentum.score,
               volume: shortScore.volume.score,
@@ -123,20 +120,28 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
           {/* 총점 헤더 */}
           <div className="flex items-center gap-4 mb-2 pb-2 border-b border-white/10">
             <div className="flex-1" />
-            <div className={`flex items-center gap-1 ${betterDirection === 'long' ? 'text-green-400' : 'text-green-400/60'}`}>
-              <TrendingUp className="w-3 h-3" />
-              <span className="text-lg font-bold font-mono">
-                <AnimatedNumber value={longScore.total} />
-              </span>
-              <span className="text-[10px] text-gray-500">/100</span>
-            </div>
-            <div className={`flex items-center gap-1 ${betterDirection === 'short' ? 'text-red-400' : 'text-red-400/60'}`}>
-              <TrendingDown className="w-3 h-3" />
-              <span className="text-lg font-bold font-mono">
-                <AnimatedNumber value={shortScore.total} />
-              </span>
-              <span className="text-[10px] text-gray-500">/100</span>
-            </div>
+            {(() => {
+              // 공통 분모 (둘 중 큰 값 사용)
+              const commonMax = Math.max(longScore.maxTotal, shortScore.maxTotal);
+              return (
+                <>
+                  <div className={`flex items-center gap-1 ${betterDirection === 'long' ? 'text-green-400' : 'text-green-400/60'}`}>
+                    <TrendingUp className="w-3 h-3" />
+                    <span className="text-lg font-bold font-mono">
+                      <AnimatedNumber value={longScore.total} />
+                    </span>
+                    <span className="text-[10px] text-gray-500">/{commonMax}</span>
+                  </div>
+                  <div className={`flex items-center gap-1 ${betterDirection === 'short' ? 'text-red-400' : 'text-red-400/60'}`}>
+                    <TrendingDown className="w-3 h-3" />
+                    <span className="text-lg font-bold font-mono">
+                      <AnimatedNumber value={shortScore.total} />
+                    </span>
+                    <span className="text-[10px] text-gray-500">/{commonMax}</span>
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           {/* 테이블 */}
@@ -150,12 +155,14 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
               </tr>
             </thead>
             <tbody>
-              {categoryConfig.map(({ key, name, max, icon: Icon }) => {
+              {categoryConfig.map(({ key, name, icon: Icon }) => {
                 const longData = getScoreData(longScore, key);
                 const shortData = getScoreData(shortScore, key);
                 const isExpanded = expandedRows.has(key);
                 const longBetter = longData.score > shortData.score;
                 const shortBetter = shortData.score > longData.score;
+                // maxScore는 score 데이터에서 가져옴 (다이버전스는 동적)
+                const maxScore = Math.max(longData.maxScore || 0, shortData.maxScore || 0);
 
                 return (
                   <tr
@@ -175,10 +182,10 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
                       </div>
                     </td>
                     <td className={`text-right font-mono py-1 ${longBetter ? 'text-green-400 font-bold' : 'text-green-400/60'}`}>
-                      {longData.score}/{max}
+                      {longData.score}/{maxScore}
                     </td>
                     <td className={`text-right font-mono py-1 ${shortBetter ? 'text-red-400 font-bold' : 'text-red-400/60'}`}>
-                      {shortData.score}/{max}
+                      {shortData.score}/{maxScore}
                     </td>
                     <td className="py-1 pl-2 text-gray-400 truncate max-w-[200px]">
                       {!isExpanded && (

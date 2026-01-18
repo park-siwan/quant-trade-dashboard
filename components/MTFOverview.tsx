@@ -6,7 +6,7 @@ import { MTFStatus, MTFStrength, MTFTimeframeData, MTFAction, MTFActionInfo, Ord
 import { TrendingUp, TrendingDown, Minus, RefreshCw, Clock, Activity, Zap, Target, BarChart3, ArrowUpDown, Layers, AlertTriangle } from 'lucide-react';
 import ScoreCard from './ScoreCard';
 import RecommendationCard from './RecommendationCard';
-import { calculateSignalScore, MarketStructureData } from '@/lib/scoring';
+import { calculateSignalScore, MarketStructureData, calculateTimeframeDivergencesScore } from '@/lib/scoring';
 import { generateRecommendation } from '@/lib/recommendation';
 import { useCoinglass } from '@/hooks/useCoinglass';
 import SignalChip from './SignalChip';
@@ -445,6 +445,42 @@ const TimeframeRow = ({
           {getSignalIndicator()}
         </div>
       </td>
+      {/* 다이버전스 점수 (여러 다이버전스 합산) */}
+      <td className="px-2 py-1.5 text-center">
+        {(() => {
+          // divergences 배열 사용, 없으면 단일 divergence를 배열로
+          const divergences = data.divergences && data.divergences.length > 0
+            ? data.divergences
+            : data.divergence ? [data.divergence] : [];
+
+          // 롱/숏 각각 계산
+          const bullishResult = calculateTimeframeDivergencesScore(data.timeframe, divergences, 'bullish');
+          const bearishResult = calculateTimeframeDivergencesScore(data.timeframe, divergences, 'bearish');
+
+          // 둘 다 없으면 0
+          if (bullishResult.totalScore === 0 && bearishResult.totalScore === 0) {
+            return <span className="text-xs font-mono text-gray-600">0</span>;
+          }
+
+          // 점수가 있는 방향 표시 (둘 다 있으면 모두 표시)
+          return (
+            <div className="flex flex-col items-center gap-0.5">
+              {bullishResult.totalScore > 0 && (
+                <span className="text-xs font-mono font-bold text-green-400">
+                  +{bullishResult.totalScore}
+                  {bullishResult.count > 1 && <span className="text-[9px] text-gray-500 ml-0.5">x{bullishResult.count}</span>}
+                </span>
+              )}
+              {bearishResult.totalScore > 0 && (
+                <span className="text-xs font-mono font-bold text-red-400">
+                  -{bearishResult.totalScore}
+                  {bearishResult.count > 1 && <span className="text-[9px] text-gray-500 ml-0.5">x{bearishResult.count}</span>}
+                </span>
+              )}
+            </div>
+          );
+        })()}
+      </td>
       {/* 신호 */}
       <td className="px-2 py-1.5">
         <ActionDisplay actionInfo={data.actionInfo} />
@@ -832,6 +868,10 @@ export default function MTFOverview({
           <thead>
             <tr className="border-b border-white/10">
               <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">시간</th>
+              <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 text-center relative group cursor-help">
+                점수
+                <span className="absolute hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1.5 bg-gray-800 text-gray-200 text-[10px] rounded whitespace-nowrap z-10">다이버전스 가중치 (시간 비례)</span>
+              </th>
               <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">신호</th>
               <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500">추세</th>
               <th className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 relative group cursor-help">

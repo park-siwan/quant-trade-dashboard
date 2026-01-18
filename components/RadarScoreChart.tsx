@@ -4,7 +4,6 @@ import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, Tool
 
 interface RadarScoreChartProps {
   longScores: {
-    trendAlignment: number;
     divergence: number;
     momentum: number;
     volume: number;
@@ -12,7 +11,6 @@ interface RadarScoreChartProps {
     sentiment: number;
   };
   shortScores: {
-    trendAlignment: number;
     divergence: number;
     momentum: number;
     volume: number;
@@ -35,43 +33,38 @@ const COLORS = {
 };
 
 export default function RadarScoreChart({ longScores, shortScores, size = 'normal' }: RadarScoreChartProps) {
-  // 6개 카테고리 데이터 (정규화: 0-100%)
-  // 대척점 배치: 추세↔다이버전스, 거래량↔지지/저항, 모멘텀↔시장심리
+  // 5개 카테고리 데이터 (정규화: 0-100%)
+  // 대척점 배치: 다이버전스, 모멘텀, 거래량, 지지/저항, 시장심리
+
+  // 다이버전스는 동적 max (둘 중 큰 값 또는 최소 400)
+  const divMax = Math.max(400, longScores.divergence, shortScores.divergence);
+
   const data = [
     {
-      category: '추세',
-      fullName: '추세 정렬',
-      long: Math.round((longScores.trendAlignment / 20) * 100),
-      short: Math.round((shortScores.trendAlignment / 20) * 100),
-      longRaw: longScores.trendAlignment,
-      shortRaw: shortScores.trendAlignment,
-      max: 20,
-    },
-    {
-      category: '거래량',
-      fullName: '거래량/CVD',
-      long: Math.round((longScores.volume / 15) * 100),
-      short: Math.round((shortScores.volume / 15) * 100),
-      longRaw: longScores.volume,
-      shortRaw: shortScores.volume,
-      max: 15,
+      category: '다이버전스',
+      fullName: '다이버전스',
+      long: Math.min(100, Math.round((longScores.divergence / divMax) * 100)),
+      short: Math.min(100, Math.round((shortScores.divergence / divMax) * 100)),
+      longRaw: longScores.divergence,
+      shortRaw: shortScores.divergence,
+      max: divMax,
     },
     {
       category: '모멘텀',
       fullName: '모멘텀/RSI',
-      long: Math.round((longScores.momentum / 15) * 100),
-      short: Math.round((shortScores.momentum / 15) * 100),
+      long: Math.round((longScores.momentum / 25) * 100),
+      short: Math.round((shortScores.momentum / 25) * 100),
       longRaw: longScores.momentum,
       shortRaw: shortScores.momentum,
-      max: 15,
+      max: 25,
     },
     {
-      category: '다이버전스',
-      fullName: '다이버전스',
-      long: Math.round((longScores.divergence / 20) * 100),
-      short: Math.round((shortScores.divergence / 20) * 100),
-      longRaw: longScores.divergence,
-      shortRaw: shortScores.divergence,
+      category: '거래량',
+      fullName: '거래량/CVD',
+      long: Math.round((longScores.volume / 20) * 100),
+      short: Math.round((shortScores.volume / 20) * 100),
+      longRaw: longScores.volume,
+      shortRaw: shortScores.volume,
       max: 20,
     },
     {

@@ -22,8 +22,8 @@ export interface SignalScore {
   total: number;
   maxTotal: number;
   confidence: 'highest' | 'high' | 'medium' | 'low' | 'skip';
-  // 5개 카테고리 (추세 점수 제거, 역추세 중심)
-  divergence: ScoreCategory;        // 다이버전스 (25점)
+  // 5개 카테고리 (추세 점수 제거, 역추세 중심) - 총 475점
+  divergence: ScoreCategory;        // 다이버전스 (400점)
   momentum: ScoreCategory;          // 모멘텀 + ADX필터 (25점)
   volume: ScoreCategory;            // 거래량 (CVD) (20점)
   levels: ScoreCategory;            // 지지/저항 (15점)
@@ -41,12 +41,67 @@ export interface SignalScore {
   externalFactors: ScoreCategory;
 }
 
-// 신선도 계수 (캔들 수 기준)
-const getFreshnessMultiplier = (candlesAgo: number, isExpired: boolean): number => {
-  if (isExpired) return 0;
-  if (candlesAgo <= 10) return 1.0;
-  if (candlesAgo <= 30) return 0.7;
-  return 0.3;
+// 신선도 계수 (30캔들 동안 100% → 10% 선형 감소)
+export const getFreshnessMultiplier = (candlesAgo: number): number => {
+  const maxCandles = 30;
+  return Math.max(0.1, 1 - (candlesAgo / maxCandles) * 0.9);
+};
+
+// 강도 배율 계산 (0-100 → 0.3-2.0x)
+// 약한 다이버전스(0-30): 0.3-0.7x, 중간(30-60): 0.7-1.2x, 강한(60-100): 1.2-2.0x
+export const getStrengthMultiplier = (strength: number | undefined): number => {
+  if (strength === undefined || strength === null) return 1.0; // 강도 정보 없으면 기본 1x
+  const clampedStrength = Math.max(0, Math.min(100, strength));
+  // 0 → 0.3, 50 → 1.0, 100 → 2.0 (선형 보간)
+  return 0.3 + (clampedStrength / 100) * 1.7;
+};
+
+// 단일 다이버전스 점수 계산 (강도 반영)
+export const calculateSingleDivergenceScore = (
+  timeframe: string,
+  divergence: { direction: string; candlesAgo: number; isExpired: boolean; isFiltered?: boolean; confirmed?: boolean; strength?: number } | null | undefined,
+  targetDirection?: 'bullish' | 'bearish'
+): { score: number; freshness: number; strengthMultiplier: number } => {
+  // 다이버전스 없거나 만료/필터링/미확정이면 0점
+  if (!divergence || divergence.isExpired || divergence.isFiltered || !divergence.confirmed) {
+    return { score: 0, freshness: 0, strengthMultiplier: 0 };
+  }
+
+  // 방향 체크 (지정된 경우)
+  if (targetDirection && divergence.direction !== targetDirection) {
+    return { score: 0, freshness: 0, strengthMultiplier: 0 };
+  }
+
+  const weight = TIMEFRAME_DIVERGENCE_WEIGHT[timeframe] || 2;
+  const freshness = getFreshnessMultiplier(divergence.candlesAgo);
+  const strengthMultiplier = getStrengthMultiplier(divergence.strength);
+  const score = Math.round(weight * freshness * strengthMultiplier);
+
+  return { score, freshness, strengthMultiplier };
+};
+
+// 타임프레임의 모든 다이버전스 점수 합산 (중앙집중화)
+export const calculateTimeframeDivergencesScore = (
+  timeframe: string,
+  divergences: Array<{ direction: string; candlesAgo: number; isExpired: boolean; isFiltered?: boolean; confirmed?: boolean; type?: string; strength?: number }> | null | undefined,
+  targetDirection?: 'bullish' | 'bearish'
+): { totalScore: number; count: number; details: Array<{ type: string; score: number; freshness: number; strength: number }> } => {
+  if (!divergences || divergences.length === 0) {
+    return { totalScore: 0, count: 0, details: [] };
+  }
+
+  let totalScore = 0;
+  const details: Array<{ type: string; score: number; freshness: number; strength: number }> = [];
+
+  divergences.forEach(div => {
+    const result = calculateSingleDivergenceScore(timeframe, div, targetDirection);
+    if (result.score > 0) {
+      totalScore += result.score;
+      details.push({ type: div.type || 'unknown', score: result.score, freshness: result.freshness, strength: div.strength ?? 50 });
+    }
+  });
+
+  return { totalScore, count: details.length, details };
 };
 
 // 가격이 레벨 근처인지 체크 (threshold: 기본 0.5%)
@@ -88,7 +143,7 @@ export const calculateTrendAlignmentScore = (
   direction: 'bullish' | 'bearish'
 ): ScoreCategory => {
   const details: string[] = [];
-  let score = 6; // 기본 점수
+  let score = 0;
 
   const timeframes = mtfData.timeframes;
   const h4 = timeframes.find(tf => tf.timeframe === '4h');
@@ -131,74 +186,70 @@ export const calculateTrendAlignmentScore = (
   // 저TF(5m, 15m)는 추세 점수에서 제외 (타이밍 점수에서 사용)
 
   return {
-    score: Math.max(2, Math.min(20, score)),
+    score: Math.max(0, Math.min(20, score)),
     maxScore: 20,
     details,
   };
 };
 
-// 1. 다이버전스 점수 (25점 만점) - 역추세 핵심 지표
+// 타임프레임별 다이버전스 가중치 (시간 비례)
+export const TIMEFRAME_DIVERGENCE_WEIGHT: Record<string, number> = {
+  '5m': 1,
+  '15m': 3,
+  '30m': 6,
+  '1h': 12,
+  '4h': 48,
+  '1d': 288,
+};
+
+// 1. 다이버전스 점수 (400점 만점) - 역추세 핵심 지표
+// 동일 타임프레임 내 여러 다이버전스 (OBV, CVD, RSI 등) 합산
 export const calculateDivergenceScore = (
   mtfData: MTFOverviewData,
   direction: 'bullish' | 'bearish'
 ): ScoreCategory => {
   const details: string[] = [];
-  let score = 5; // 기본 점수
+  let score = 0;
+  let totalValidCount = 0;
 
+  // 각 타임프레임의 모든 다이버전스 점수 합산 (divergences 배열 사용)
   mtfData.timeframes.forEach(tf => {
-    if (tf.divergence && tf.divergence.direction === direction) {
-      const multiplier = getFreshnessMultiplier(tf.divergence.candlesAgo, tf.divergence.isExpired);
+    // divergences 배열이 있으면 사용, 없으면 단일 divergence를 배열로 변환
+    const divergences = tf.divergences && tf.divergences.length > 0
+      ? tf.divergences
+      : tf.divergence ? [tf.divergence] : [];
 
-      if (multiplier > 0) {
-        let typeScore = 0;
-        switch (tf.divergence.type) {
-          case 'rsi':
-          case 'cvd':
-            typeScore = 5;
-            break;
-          case 'obv':
-          case 'oi':
-            typeScore = 4;
-            break;
-        }
-
-        const addedScore = typeScore * multiplier;
-        score += addedScore;
-        details.push(`${tf.timeframe} ${tf.divergence.type.toUpperCase()} +${addedScore.toFixed(1)} (신선도${multiplier})`);
-      }
+    const result = calculateTimeframeDivergencesScore(tf.timeframe, divergences, direction);
+    if (result.totalScore > 0) {
+      score += result.totalScore;
+      totalValidCount += result.count;
+      result.details.forEach(d => {
+        const freshnessPercent = Math.round(d.freshness * 100);
+        const strengthLabel = d.strength >= 70 ? '강' : d.strength >= 40 ? '중' : '약';
+        details.push(`${tf.timeframe} ${d.type?.toUpperCase()} +${d.score} (신선${freshnessPercent}% 강도${strengthLabel})`);
+      });
     }
   });
 
-  // 역방향 다이버전스 체크
-  const oppositeDirection = direction === 'bullish' ? 'bearish' : 'bullish';
-  const oppositeDivergences = mtfData.timeframes.filter(
-    tf => tf.divergence && tf.divergence.direction === oppositeDirection && !tf.divergence.isExpired
-  );
-  if (oppositeDivergences.length > 0) {
-    const penalty = oppositeDivergences.length * 3;
-    score -= penalty;
-    details.push(`역방향 ${oppositeDivergences.length}개 -${penalty}`);
-  }
+  // 역방향 패널티 제거됨 (ADX 필터로 대체)
 
   // 컨플루언스 보너스 (2개 이상 일치)
-  const validDivergences = mtfData.timeframes.filter(
-    tf => tf.divergence && tf.divergence.direction === direction && !tf.divergence.isExpired
-  );
-  if (validDivergences.length >= 3) {
+  if (totalValidCount >= 3) {
     score += 4;
     details.push(`강한 컨플루언스 +4`);
-  } else if (validDivergences.length >= 2) {
+  } else if (totalValidCount >= 2) {
     score += 2;
     details.push(`컨플루언스 +2`);
   }
 
-  if (validDivergences.length === 0) {
+  if (totalValidCount === 0) {
     details.push(`다이버전스 없음 ±0`);
   }
 
+  const finalScore = Math.max(0, Math.round(score));
   return {
-    score: Math.max(2, Math.min(25, Math.round(score))),
-    maxScore: 25,
+    score: finalScore,
+    maxScore: Math.max(400, finalScore), // 동적 최대값
     details,
   };
 };
@@ -210,7 +261,7 @@ export const calculateMomentumScore = (
   direction: 'bullish' | 'bearish'
 ): ScoreCategory => {
   const details: string[] = [];
-  let score = 8; // 기본 점수
+  let score = 0;
 
   const tf5m = mtfData.timeframes.find(tf => tf.timeframe === '5m');
   const tf15m = mtfData.timeframes.find(tf => tf.timeframe === '15m');
@@ -288,7 +339,7 @@ export const calculateMomentumScore = (
   }
 
   return {
-    score: Math.max(2, Math.min(25, score)),
+    score: Math.max(0, Math.min(25, score)),
     maxScore: 25,
     details,
   };
@@ -300,7 +351,7 @@ export const calculateVolumeScore = (
   direction: 'bullish' | 'bearish'
 ): ScoreCategory => {
   const details: string[] = [];
-  let score = 6; // 기본 점수
+  let score = 0;
 
   // CVD 방향 확인 (고TF 중심)
   const h4 = mtfData.timeframes.find(tf => tf.timeframe === '4h');
@@ -358,7 +409,7 @@ export const calculateVolumeScore = (
   }
 
   return {
-    score: Math.max(2, Math.min(20, score)),
+    score: Math.max(0, Math.min(20, score)),
     maxScore: 20,
     details,
   };
@@ -371,7 +422,7 @@ export const calculateLevelsScore = (
   marketData?: MarketStructureData
 ): ScoreCategory => {
   const details: string[] = [];
-  let score = 5; // 기본 점수
+  let score = 0;
 
   if (!marketData?.currentPrice) {
     details.push(`가격 정보 없음`);
@@ -455,7 +506,7 @@ export const calculateLevelsScore = (
   }
 
   return {
-    score: Math.max(2, Math.min(15, score)),
+    score: Math.max(0, Math.min(15, score)),
     maxScore: 15,
     details,
   };
@@ -469,7 +520,7 @@ export const calculateSentimentScore = (
   fearGreedIndex?: number
 ): ScoreCategory => {
   const details: string[] = [];
-  let score = 5; // 기본 점수
+  let score = 0;
 
   // 공포탐욕지수 (0-100, 50 중립)
   // 롱: 공포(낮은값)일때 유리, 숏: 탐욕(높은값)일때 유리
@@ -559,7 +610,7 @@ export const calculateSentimentScore = (
   }
 
   return {
-    score: Math.max(2, Math.min(15, score)),
+    score: Math.max(0, Math.min(15, score)),
     maxScore: 15,
     details,
   };
@@ -572,33 +623,33 @@ export const calculateExternalScore = (
   fundingRate?: number
 ) => calculateSentimentScore(mtfData, direction, fundingRate);
 
-// 신뢰도 계산
+// 신뢰도 계산 (475점 만점 기준)
 const getConfidence = (score: number): SignalScore['confidence'] => {
-  if (score >= 80) return 'highest';
-  if (score >= 65) return 'high';
-  if (score >= 50) return 'medium';
-  if (score >= 35) return 'low';
+  if (score >= 380) return 'highest';  // 80%
+  if (score >= 309) return 'high';     // 65%
+  if (score >= 238) return 'medium';   // 50%
+  if (score >= 166) return 'low';      // 35%
   return 'skip';
 };
 
-// 추천 계산
+// 추천 계산 (475점 만점 기준)
 const getRecommendation = (
   score: number,
   direction: 'bullish' | 'bearish'
 ): SignalScore['recommendation'] => {
-  if (score < 35) {
+  if (score < 166) {  // 35%
     return { action: 'wait', leverage: '-', seedRatio: '-' };
   }
 
   const action = direction === 'bullish' ? 'long' : 'short';
 
-  if (score >= 80) {
+  if (score >= 380) {  // 80%
     return { action, leverage: '10x~15x', seedRatio: '30~40%' };
   }
-  if (score >= 65) {
+  if (score >= 309) {  // 65%
     return { action, leverage: '7x~10x', seedRatio: '20~30%' };
   }
-  if (score >= 50) {
+  if (score >= 238) {  // 50%
     return { action, leverage: '3x~5x', seedRatio: '10~20%' };
   }
   return { action, leverage: '2x~3x', seedRatio: '5~10%' };
@@ -619,9 +670,9 @@ export const calculateSignalScore = (
   const levels = calculateLevelsScore(mtfData, direction, marketData);
   const sentiment = calculateSentimentScore(mtfData, direction, fundingRate, fearGreedIndex);
 
-  // 총점: 25 + 25 + 20 + 15 + 15 = 100
+  // 총점: 다이버전스(무제한) + 모멘텀(25) + 거래량(20) + 지지저항(15) + 심리(15)
   const total = divergence.score + momentum.score + volume.score + levels.score + sentiment.score;
-  const maxTotal = 100;
+  const maxTotal = divergence.maxScore + 25 + 20 + 15 + 15; // 동적 최대값
 
   // 레거시 호환용 빈 trendAlignment
   const trendAlignment: ScoreCategory = {

@@ -52,6 +52,7 @@ interface BackendTimeframeData {
       timestamp?: number;
       index?: number;
       confirmed?: boolean; // 피봇 확정 여부
+      strength?: number; // 다이버전스 강도 (0-100)
     }>;
   };
   cvdOi?: {
@@ -107,6 +108,7 @@ interface DivergenceInfo {
   isExpired: boolean;
   confirmed?: boolean; // 피봇 확정 여부 (캔들 종가 확정 후 true)
   isFiltered?: boolean; // RSI 필터링 여부 (알림 제외용)
+  strength?: number; // 다이버전스 강도 (0-100, 선분 길이/각도 기반)
 }
 
 interface RawTimeframeData {
@@ -224,7 +226,7 @@ const analyzeOi = (oi: (number | null)[] | undefined): {
 
 // 모든 다이버전스 추출 (우선순위 정렬)
 const getAllDivergences = (
-  signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number; confirmed?: boolean; isFiltered?: boolean }> | undefined,
+  signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number; confirmed?: boolean; isFiltered?: boolean; strength?: number }> | undefined,
   totalCandles: number,
   timeframe: string
 ): DivergenceInfo[] => {
@@ -251,6 +253,7 @@ const getAllDivergences = (
       isExpired,
       confirmed: signal.confirmed,
       isFiltered,
+      strength: signal.strength, // 다이버전스 강도 전달
     };
   });
 
