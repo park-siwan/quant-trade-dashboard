@@ -131,6 +131,27 @@ const COLORS_RGB = {
   gray: { r: 107, g: 114, b: 128 },  // #6b7280
 };
 
+// 지표별 + 방향별 다이버전스 색상
+// Bullish: 초록/파랑 계열, Bearish: 빨강/주황 계열
+export const DIVERGENCE_COLORS: Record<string, { bullish: RGB; bearish: RGB }> = {
+  rsi: {
+    bullish: { r: 34, g: 197, b: 94 },   // 초록 #22c55e
+    bearish: { r: 239, g: 68, b: 68 },   // 빨강 #ef4444
+  },
+  obv: {
+    bullish: { r: 20, g: 184, b: 166 },  // 청록 #14b8a6
+    bearish: { r: 249, g: 115, b: 22 },  // 주황 #f97316
+  },
+  cvd: {
+    bullish: { r: 59, g: 130, b: 246 },  // 파랑 #3b82f6
+    bearish: { r: 234, g: 179, b: 8 },   // 노랑 #eab308
+  },
+  oi: {
+    bullish: { r: 16, g: 185, b: 129 },  // 에메랄드 #10b981
+    bearish: { r: 236, g: 72, b: 153 },  // 분홍 #ec4899
+  },
+};
+
 // 두 RGB 색상을 보간 (0 = start, 1 = end)
 function lerpColor(start: RGB, end: RGB, t: number): RGB {
   return {
@@ -163,17 +184,22 @@ export interface FreshnessColors {
  * 다이버전스 신선도에 따른 색상 계산
  * @param direction 다이버전스 방향 ('bullish' | 'bearish')
  * @param freshness 신선도 (0~1, 1이 가장 신선함)
+ * @param indicatorType 지표 타입 ('rsi' | 'obv' | 'cvd' | 'oi') - 지표별 색상 구분
  * @returns 보간된 색상들
  */
 export function getDivergenceFreshnessColors(
   direction: 'bullish' | 'bearish',
-  freshness: number
+  freshness: number,
+  indicatorType?: 'rsi' | 'obv' | 'cvd' | 'oi'
 ): FreshnessColors {
   // freshness 클램핑 (0~1)
   const f = Math.max(0, Math.min(1, freshness));
 
-  // 기본 색상 선택
-  const baseColor = direction === 'bullish' ? COLORS_RGB.green : COLORS_RGB.red;
+  // 지표 타입에 따른 색상 선택 (없으면 기본 초록/빨강)
+  const colorSet = indicatorType ? DIVERGENCE_COLORS[indicatorType] : null;
+  const baseColor = colorSet
+    ? (direction === 'bullish' ? colorSet.bullish : colorSet.bearish)
+    : (direction === 'bullish' ? COLORS_RGB.green : COLORS_RGB.red);
   const grayColor = COLORS_RGB.gray;
 
   // 신선도가 낮을수록 회색에 가까워짐 (1 - f로 보간)

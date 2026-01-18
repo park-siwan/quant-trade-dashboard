@@ -399,7 +399,8 @@ export default function ChartRenderer({
           if (freshness > 0) {
             const freshnessColors = getDivergenceFreshnessColors(
               latestDiv.direction as 'bullish' | 'bearish',
-              freshness
+              freshness,
+              latestDiv.type as 'rsi' | 'obv' | 'cvd' | 'oi'
             );
 
             colorType = freshnessColors.chartColorType;

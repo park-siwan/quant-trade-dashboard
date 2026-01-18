@@ -16,7 +16,13 @@ import {
   ConsolidationZone,
 } from '@/lib/types/index';
 import { INDICATOR_COLORS } from '@/lib/colors';
+import { DIVERGENCE_COLORS } from '@/lib/signal';
 import { debug } from '@/lib/debug';
+
+// RGB 객체를 hex 문자열로 변환
+function rgbToHex(color: { r: number; g: number; b: number }): string {
+  return `#${color.r.toString(16).padStart(2, '0')}${color.g.toString(16).padStart(2, '0')}${color.b.toString(16).padStart(2, '0')}`;
+}
 
 // 중복 타임스탬프 제거 유틸리티 (lightweight-charts 요구사항)
 function dedupeByTime<T extends { time: Time }>(data: T[]): T[] {
@@ -451,9 +457,13 @@ export function addDivergenceLines(
       return;
     }
 
-    // 필터링된 신호는 회색, 정상 신호는 선명한 색상
+    // 필터링된 신호는 회색, 정상 신호는 지표별+방향별 색상
+    const indicatorType = pair.start.type as 'rsi' | 'obv' | 'cvd' | 'oi';
+    const colorSet = DIVERGENCE_COLORS[indicatorType];
     const color = pair.isFiltered
       ? INDICATOR_COLORS.DIV_FILTERED
+      : colorSet
+      ? rgbToHex(pair.direction === 'bullish' ? colorSet.bullish : colorSet.bearish)
       : pair.direction === 'bullish'
       ? INDICATOR_COLORS.DIV_BULLISH
       : INDICATOR_COLORS.DIV_BEARISH;
@@ -535,11 +545,8 @@ export function addDivergenceLines(
 
       // 다이버전스 끝점에 라벨 마커 추가 (나중에 그룹화)
       const label = typeLabels[pair.start.type] || pair.start.type.toUpperCase();
-      const markerColor = pair.isFiltered
-        ? '#9ca3af' // gray-400
-        : pair.direction === 'bullish'
-        ? '#a3e635' // lime-400 (라인과 동일)
-        : '#f87171'; // red-400 (라인과 동일)
+      // 마커 색상은 선 색상과 동일하게 (지표별+방향별)
+      const markerColor = pair.isFiltered ? '#9ca3af' : color;
 
       divergenceMarkers.push({
         time: (pair.end.timestamp / 1000) as Time,
