@@ -225,10 +225,10 @@ const analyzeOi = (oi: (number | null)[] | undefined): {
 
 // 모든 다이버전스 추출 (우선순위 정렬, 공통 정책 사용)
 const getAllDivergences = (
-  signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number; confirmed?: boolean }> | undefined,
+  signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number; confirmed?: boolean; isFiltered?: boolean }> | undefined,
   totalCandles: number,
   timeframe: string,
-  rsiData?: number[] // RSI 데이터 (필터링 계산용)
+  rsiData?: number[] // RSI 데이터 (필터링 계산용 - 백엔드 isFiltered 없을 때만)
 ): DivergenceInfo[] => {
   if (!signals?.length) return [];
 
@@ -240,11 +240,15 @@ const getAllDivergences = (
   const divergences = endSignals.map(signal => {
     const candlesAgo = signal.index !== undefined ? totalCandles - 1 - signal.index : 0;
     const isExpired = candlesAgo > expiryCandles;
-    const rsiAtSignal = rsiData && signal.index !== undefined ? rsiData[signal.index] : null;
     const direction = signal.direction as 'bullish' | 'bearish';
 
-    // 공통 정책으로 RSI 필터링 계산
-    const isFiltered = shouldFilterDivergence(direction, rsiAtSignal);
+    // 백엔드에서 isFiltered가 오면 그것을 사용 (ADX 기반 등)
+    // 없으면 RSI 기반으로 계산 (폴백)
+    let isFiltered = signal.isFiltered;
+    if (isFiltered === undefined) {
+      const rsiAtSignal = rsiData && signal.index !== undefined ? rsiData[signal.index] : null;
+      isFiltered = shouldFilterDivergence(direction, rsiAtSignal);
+    }
 
     return {
       type: signal.type as 'rsi' | 'obv' | 'cvd' | 'oi',
@@ -272,7 +276,7 @@ const getAllDivergences = (
 
 // 다이버전스 추출 (우선순위: RSI > CVD > OBV > OI) - 대표 1개
 const getLatestDivergence = (
-  signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number }> | undefined,
+  signals: Array<{ type: string; direction: string; phase: string; timestamp?: number; index?: number; isFiltered?: boolean }> | undefined,
   totalCandles: number,
   timeframe: string,
   rsiData?: number[]
