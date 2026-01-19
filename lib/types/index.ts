@@ -406,3 +406,22 @@ export interface MTFOverviewData {
   overallTrend: MTFStatus;
   alignmentScore: number; // 0~1, 모든 타임프레임이 같은 방향일수록 높음
 }
+
+// 지지/저항 영역 타입
+export type ZoneType = 'support' | 'resistance' | 'neutral';
+export type ZoneSource = 'VAL' | 'VAH' | 'OB_SUPPORT' | 'OB_RESISTANCE' | 'POC';
+
+export interface SupportResistanceZone {
+  id: string;
+  source: ZoneSource;
+  type: ZoneType;
+  priceTop: number;
+  priceBottom: number;
+  strength: number;  // 0-1
+}
+
+export interface BlendedZone extends SupportResistanceZone {
+  overlappingSources: ZoneSource[];
+  blendType: 'support' | 'resistance' | 'conflict';
+  finalColor: string;
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   createChart,
@@ -50,7 +50,12 @@ import {
   MarketStructureData,
   AdxData,
   MTFAction,
+  BlendedZone,
+  SupportResistanceZone,
 } from '@/lib/types/index';
+import { createZonesFromData, mergeOverlappingZones } from '@/lib/chart/zoneUtils';
+import SupportResistanceZones from './SupportResistanceZones';
+import ZoneLegend from './ZoneLegend';
 import ChartTooltip from './ChartTooltip';
 import MeasurementBox, { MeasureBoxData } from './MeasurementBox';
 import { CrossoverMarkers, SignalMarkers, CrossoverMarkerData, SignalMarkerData, SIGNAL_CONFIG } from './ChartMarkers';
@@ -166,6 +171,9 @@ export default function ChartRenderer({
 
   // Volume Profile 표시 토글 (useEffect보다 먼저 선언해야 함)
   const [showVolumeProfile, setShowVolumeProfile] = useState(true);
+
+  // 지지/저항 영역 라벨 표시 토글
+  const [showZoneLabels, setShowZoneLabels] = useState(true);
 
   // Visible range 상태 (차트에 보이는 캔들 범위)
   const [visibleRange, setVisibleRange] = useState<{ from: number; to: number } | null>(null);
@@ -575,16 +583,16 @@ export default function ChartRenderer({
     //   addCvdOiMarkers(candlestickSeries, marketSignals);
     // }
 
-    // Volume Profile 라인 (목표가, 상단저항, 하단지지) - Y축 라벨만, 가로선은 DOM으로 렌더링
+    // Volume Profile 라인 - Y축 라벨 숨김 (영역으로 표시됨)
     volumeProfileLinesRef.current = []; // 초기화
     if (volumeProfile && mainSeries) {
-      // 목표가 (POC) - 가장 많이 거래된 가격
+      // 목표가 (POC) - 가장 많이 거래된 가격 (Y축 라벨 숨김)
       const pocLine = mainSeries.createPriceLine({
         price: volumeProfile.poc,
         color: INDICATOR_COLORS.POC,
         lineWidth: 2,
         lineStyle: 0,
-        axisLabelVisible: showVolumeProfile,
+        axisLabelVisible: false, // Y축 라벨 숨김 (영역 라벨로 대체)
         title: 'POC',
         axisLabelColor: INDICATOR_COLORS.POC_LABEL,
         axisLabelTextColor: COLORS.BLACK,
@@ -592,13 +600,13 @@ export default function ChartRenderer({
       });
       volumeProfileLinesRef.current.push(pocLine);
 
-      // 상단 (VAH) - 빨간색 (숏)
+      // 상단 (VAH) - 빨간색 (숏) (Y축 라벨 숨김)
       const vahLine = mainSeries.createPriceLine({
         price: volumeProfile.vah,
         color: INDICATOR_COLORS.VAH,
         lineWidth: 1,
         lineStyle: 2,
-        axisLabelVisible: showVolumeProfile,
+        axisLabelVisible: false, // Y축 라벨 숨김 (영역 라벨로 대체)
         title: 'VAH',
         axisLabelColor: INDICATOR_COLORS.VAH_LABEL,
         axisLabelTextColor: COLORS.BLACK,
@@ -606,13 +614,13 @@ export default function ChartRenderer({
       });
       volumeProfileLinesRef.current.push(vahLine);
 
-      // 하단 (VAL) - 초록색 (롱)
+      // 하단 (VAL) - 초록색 (롱) (Y축 라벨 숨김)
       const valLine = mainSeries.createPriceLine({
         price: volumeProfile.val,
         color: INDICATOR_COLORS.VAL,
         lineWidth: 1,
         lineStyle: 2,
-        axisLabelVisible: showVolumeProfile,
+        axisLabelVisible: false, // Y축 라벨 숨김 (영역 라벨로 대체)
         title: 'VAL',
         axisLabelColor: INDICATOR_COLORS.VAL_LABEL,
         axisLabelTextColor: COLORS.BLACK,
@@ -621,14 +629,14 @@ export default function ChartRenderer({
       volumeProfileLinesRef.current.push(valLine);
     }
 
-    // VWAP 라인 표시 (기관 트레이딩 기준선) - Y축 라벨만, 가로선은 DOM으로 렌더링
+    // VWAP 라인 - Y축 라벨 숨김 (가로선은 DOM으로 렌더링)
     if (vwapAtrData && vwapAtrData.currentVwap > 0 && mainSeries) {
       mainSeries.createPriceLine({
         price: vwapAtrData.currentVwap,
         color: INDICATOR_COLORS.VWAP,
         lineWidth: 2,
         lineStyle: 0,
-        axisLabelVisible: true,
+        axisLabelVisible: false, // Y축 라벨 숨김
         title: '기관(VWAP)',
         axisLabelColor: INDICATOR_COLORS.VWAP_LABEL,
         axisLabelTextColor: COLORS.WHITE,
@@ -636,28 +644,28 @@ export default function ChartRenderer({
       });
     }
 
-    // ATR 기반 변동폭 라인 표시 - Y축 라벨만, 가로선은 DOM으로 렌더링
+    // ATR 기반 변동폭 라인 - Y축 라벨 숨김 (가로선은 DOM으로 렌더링)
     if (vwapAtrData?.suggestedStopLoss && mainSeries) {
-      // 하단 (현재가 - 2*ATR) = 롱 진입 유리 구간 (초록색)
+      // 하단 (현재가 - 2*ATR) = 롱 진입 유리 구간
       mainSeries.createPriceLine({
         price: vwapAtrData.suggestedStopLoss.long,
         color: INDICATOR_COLORS.ATR_LONG,
         lineWidth: 1,
         lineStyle: 2,
-        axisLabelVisible: true,
+        axisLabelVisible: false, // Y축 라벨 숨김
         title: '롱(ATR)↓',
         axisLabelColor: INDICATOR_COLORS.ATR_LONG_LABEL,
         axisLabelTextColor: COLORS.BLACK,
         lineVisible: false,
       });
 
-      // 상단 (현재가 + 2*ATR) = 숏 진입 유리 구간 (빨간색)
+      // 상단 (현재가 + 2*ATR) = 숏 진입 유리 구간
       mainSeries.createPriceLine({
         price: vwapAtrData.suggestedStopLoss.short,
         color: INDICATOR_COLORS.ATR_SHORT,
         lineWidth: 1,
         lineStyle: 2,
-        axisLabelVisible: true,
+        axisLabelVisible: false, // Y축 라벨 숨김
         title: '숏(ATR)↑',
         axisLabelColor: INDICATOR_COLORS.ATR_SHORT_LABEL,
         axisLabelTextColor: COLORS.BLACK,
@@ -665,7 +673,7 @@ export default function ChartRenderer({
       });
     }
 
-    // 오더블록 표시 (현재가 근처 최대 3개만) - Y축 라벨만, 가로선은 DOM으로 렌더링
+    // 오더블록 표시 - Y축 라벨 숨김 (영역으로 표시됨)
     if (orderBlockData?.activeBlocks && orderBlockData.activeBlocks.length > 0 && mainSeries) {
       const currentPrice = data[data.length - 1]?.close || 0;
 
@@ -682,7 +690,7 @@ export default function ChartRenderer({
           color: color,
           lineWidth: 2,
           lineStyle: 1,
-          axisLabelVisible: true,
+          axisLabelVisible: false, // Y축 라벨 숨김 (영역 라벨로 대체)
           title: isSupport ? 'OB지지' : 'OB저항',
           axisLabelColor: color,
           axisLabelTextColor: COLORS.BLACK,
@@ -1089,14 +1097,14 @@ export default function ChartRenderer({
     mini, // 미니 모드 변경 시 재렌더링
   ]);
 
-  // Volume Profile 라인 토글 (차트 재생성 없이 Y축 라벨만 숨김/표시)
+  // Volume Profile 라인 - Y축 라벨 항상 숨김 (영역 라벨로 대체됨)
   useEffect(() => {
     if (isChartDisposedRef.current) return;
     try {
       volumeProfileLinesRef.current.forEach((line) => {
         line.applyOptions({
           lineVisible: false, // 전체 가로선은 항상 숨김 (DOM으로 렌더링)
-          axisLabelVisible: showVolumeProfile,
+          axisLabelVisible: false, // Y축 라벨 항상 숨김 (영역 라벨로 대체)
         });
       });
     } catch {
@@ -1434,7 +1442,7 @@ export default function ChartRenderer({
       const lastX = chartRef.current!.timeScale().timeToCoordinate(lastCandle.time);
       if (lastX === null) return;
 
-      const startX = lastX + 10; // 마지막 캔들 오른쪽
+      const startX = lastX + 15; // 마지막 캔들 오른쪽
 
       // POC 라인
       if (volumeProfile && showVolumeProfile) {
@@ -1527,6 +1535,305 @@ export default function ChartRenderer({
     return () => cancelAnimationFrame(rafId);
   }, [mini, scaleUpdateTrigger, data, realtimeCandle]);
 
+  // 지지/저항 영역 계산 (useMemo)
+  // 원본 영역 (개별 렌더링용 - 투명도 겹침 효과)
+  const rawZones = useMemo(() => {
+    if (!volumeProfile && !orderBlockData) return [];
+    const currentPrice = data[data.length - 1]?.close || 0;
+    return createZonesFromData(volumeProfile, orderBlockData, currentPrice);
+  }, [volumeProfile, orderBlockData, data]);
+
+  // 병합된 영역 (라벨 표시용)
+  const blendedZones = useMemo(() => {
+    return mergeOverlappingZones(rawZones);
+  }, [rawZones]);
+
+  // 지지/저항 영역 렌더 데이터 계산
+  const [rawZoneRenderData, setRawZoneRenderData] = useState<Array<{
+    zone: SupportResistanceZone;
+    topY: number;
+    bottomY: number;
+    startX: number;
+  }>>([]);
+  const [blendedZoneRenderData, setBlendedZoneRenderData] = useState<Array<{
+    zone: BlendedZone;
+    topY: number;
+    bottomY: number;
+    startX: number;
+  }>>([]);
+
+  useEffect(() => {
+    if (!chartRef.current || !candlestickSeriesRef.current || data.length === 0) {
+      setRawZoneRenderData([]);
+      setBlendedZoneRenderData([]);
+      return;
+    }
+
+    const updateZoneCoords = () => {
+      if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
+
+      // 마지막 캔들의 X 좌표 (영역 시작점)
+      const lastCandle = data[data.length - 1];
+      const lastX = chartRef.current!.timeScale().timeToCoordinate(lastCandle.time);
+      if (lastX === null) return;
+
+      const startX = lastX + 15; // 마지막 캔들 오른쪽
+
+      // 개별 영역 좌표 계산 (박스 렌더링용) - POC 포함
+      const rawRenderData = rawZones.map((zone) => {
+        const topY = candlestickSeriesRef.current!.priceToCoordinate(zone.priceTop);
+        const bottomY = candlestickSeriesRef.current!.priceToCoordinate(zone.priceBottom);
+        return {
+          zone,
+          topY: topY ?? 0,
+          bottomY: bottomY ?? 0,
+          startX,
+        };
+      }).filter((item) => item.topY !== null && item.bottomY !== null);
+      setRawZoneRenderData(rawRenderData);
+
+      // 병합된 영역 좌표 계산 (라벨 표시용)
+      const blendedRenderData = blendedZones.map((zone) => {
+        const topY = candlestickSeriesRef.current!.priceToCoordinate(zone.priceTop);
+        const bottomY = candlestickSeriesRef.current!.priceToCoordinate(zone.priceBottom);
+        return {
+          zone,
+          topY: topY ?? 0,
+          bottomY: bottomY ?? 0,
+          startX,
+        };
+      }).filter((item) => item.topY !== null && item.bottomY !== null);
+      setBlendedZoneRenderData(blendedRenderData);
+    };
+
+    const rafId = requestAnimationFrame(updateZoneCoords);
+    return () => cancelAnimationFrame(rafId);
+  }, [scaleUpdateTrigger, rawZones, blendedZones, volumeProfile, data]);
+
+  // 다이버전스 라벨 렌더 데이터
+  const [divergenceLabelData, setDivergenceLabelData] = useState<Array<{
+    x: number;
+    y: number;
+    text: string;
+    color: string;
+    bgColor: string;
+    direction: 'bullish' | 'bearish';
+  }>>([]);
+
+  useEffect(() => {
+    if (!chartRef.current || !candlestickSeriesRef.current || !divergenceSignals || divergenceSignals.length === 0) {
+      setDivergenceLabelData([]);
+      return;
+    }
+
+    const updateDivergenceLabels = () => {
+      if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
+
+      const typeLabels: Record<string, string> = {
+        rsi: 'RSI',
+        obv: 'OBV',
+        cvd: 'CVD',
+        oi: 'OI',
+      };
+
+      // 임시 라벨 데이터 (병합 전)
+      const tempLabels: Array<{
+        x: number;
+        y: number;
+        type: string;
+        direction: 'bullish' | 'bearish';
+        freshness: number;
+        color: string;
+        isFiltered: boolean;
+      }> = [];
+
+      // 화면 범위 체크용
+      const chartWidth = chartContainerRef.current?.clientWidth || 800;
+
+      // start-end 쌍 찾기
+      for (let i = 0; i < divergenceSignals.length; i++) {
+        const signal = divergenceSignals[i];
+        if (signal.phase !== 'start') continue;
+
+        const endSignal = divergenceSignals.find(
+          (s, idx) =>
+            idx > i &&
+            s.phase === 'end' &&
+            s.type === signal.type &&
+            s.direction === signal.direction,
+        );
+
+        if (!endSignal) continue;
+
+        // start와 end 모두 좌표 계산
+        const startTime = (signal.timestamp / 1000) as Time;
+        const endTime = (endSignal.timestamp / 1000) as Time;
+        const startX = chartRef.current!.timeScale().timeToCoordinate(startTime);
+        const endX = chartRef.current!.timeScale().timeToCoordinate(endTime);
+        const y = endSignal.priceValue ? candlestickSeriesRef.current!.priceToCoordinate(endSignal.priceValue) : null;
+
+        if (startX === null || endX === null || y === null) continue;
+
+        // start와 end 모두 화면에 보이는 경우만 라벨 표시 (선이 완전히 보여야 함)
+        const isStartVisible = startX >= 0 && startX <= chartWidth - 80;
+        const isEndVisible = endX >= 0 && endX <= chartWidth - 80;
+        if (!isStartVisible || !isEndVisible) continue; // 하나라도 안 보이면 스킵
+
+        // 선분이 너무 짧으면 스킵 (육안으로 안 보임)
+        const lineLength = Math.abs(endX - startX);
+        if (lineLength < 10) continue; // 10px 미만이면 스킵
+
+        // 신선도 계산 (timeframe 기반 만료 시간)
+        const tf = timeframe || '15m';
+        const expiryCandles = DIVERGENCE_EXPIRY_CANDLES[tf] || 20;
+        const expiryMs = expiryCandles * timeframeToMs(tf);
+        const freshness = calculateDivergenceFreshness(endSignal.timestamp, expiryMs);
+
+        // 지표별 색상 가져오기
+        const freshnessColors = getDivergenceFreshnessColors(
+          signal.direction,
+          freshness,
+          signal.type as 'rsi' | 'obv' | 'cvd' | 'oi'
+        );
+
+        tempLabels.push({
+          x: endX,
+          y: y + (signal.direction === 'bullish' ? 15 : -15),
+          type: signal.type,
+          direction: signal.direction,
+          freshness,
+          color: freshnessColors.lineColor,
+          isFiltered: signal.isFiltered || endSignal.isFiltered || false,
+        });
+      }
+
+      // 위치가 가까운 라벨들 병합 (50px 이내)
+      const mergedLabels: Array<{
+        x: number;
+        y: number;
+        text: string;
+        color: string;
+        bgColor: string;
+        direction: 'bullish' | 'bearish';
+      }> = [];
+
+      const processed = new Set<number>();
+      const MERGE_THRESHOLD = 50; // px - 병합 범위 확대
+
+      for (let i = 0; i < tempLabels.length; i++) {
+        if (processed.has(i)) continue;
+
+        const current = tempLabels[i];
+        const group = [current];
+        processed.add(i);
+
+        // 같은 위치의 라벨 찾기
+        for (let j = i + 1; j < tempLabels.length; j++) {
+          if (processed.has(j)) continue;
+          const other = tempLabels[j];
+
+          // 같은 방향이고 위치가 가까우면 병합
+          if (
+            current.direction === other.direction &&
+            Math.abs(current.x - other.x) < MERGE_THRESHOLD &&
+            Math.abs(current.y - other.y) < MERGE_THRESHOLD
+          ) {
+            group.push(other);
+            processed.add(j);
+          }
+        }
+
+        // 그룹 라벨 생성
+        const types = [...new Set(group.map(g => g.type))].sort();
+        const arrow = current.direction === 'bullish' ? '↑' : '↓';
+        const text = types.map(t => typeLabels[t] || t.toUpperCase()).join('+') + arrow;
+
+        // 각 지표별 색상 수집 (중복 제거)
+        const uniqueColors = [...new Set(group.map(g => g.color))];
+        const avgX = group.reduce((sum, g) => sum + g.x, 0) / group.length;
+        const avgY = group.reduce((sum, g) => sum + g.y, 0) / group.length;
+
+        // 모든 항목이 필터링되었는지 확인
+        const allFiltered = group.every(g => g.isFiltered);
+
+        // 색상에서 투명도 적용 (hex to rgba)
+        const hexToRgba = (hex: string, alpha: number) => {
+          const r = parseInt(hex.slice(1, 3), 16);
+          const g = parseInt(hex.slice(3, 5), 16);
+          const b = parseInt(hex.slice(5, 7), 16);
+          return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        };
+
+        // 가장 신선한 항목의 신선도 사용
+        const freshestItem = group.reduce((a, b) => a.freshness > b.freshness ? a : b);
+        const opacity = allFiltered ? 0.6 : (0.5 + freshestItem.freshness * 0.5);
+
+        // 병합된 경우 그라데이션, 단일이면 단색
+        let bgColor: string;
+        if (allFiltered) {
+          bgColor = hexToRgba('#6b7280', opacity); // 필터링된 경우 회색
+        } else if (uniqueColors.length === 1) {
+          bgColor = hexToRgba(uniqueColors[0], opacity); // 단일 색상
+        } else {
+          // 여러 색상 그라데이션 (왼쪽에서 오른쪽으로)
+          const colorStops = uniqueColors.map((c, i) => {
+            const percent = (i / (uniqueColors.length - 1)) * 100;
+            return `${hexToRgba(c, opacity)} ${percent}%`;
+          }).join(', ');
+          bgColor = `linear-gradient(to right, ${colorStops})`;
+        }
+
+        mergedLabels.push({
+          x: avgX,
+          y: avgY,
+          text,
+          color: '#fff',
+          bgColor,
+          direction: current.direction,
+        });
+      }
+
+      // 겹치는 라벨들을 세로로 스택 (방향 무관하게 모든 겹침 해소)
+      const LABEL_HEIGHT = 16; // 라벨 높이 + 간격
+      const X_THRESHOLD = 80; // x 좌표가 이 범위 내면 겹침으로 판단 (넓게)
+      const Y_THRESHOLD = 14; // y 좌표가 이 범위 내면 겹침으로 판단
+
+      // x 좌표로 먼저 정렬, 같으면 y 좌표로 정렬
+      mergedLabels.sort((a, b) => {
+        if (Math.abs(a.x - b.x) < X_THRESHOLD) {
+          return a.y - b.y; // 같은 x 그룹이면 y로 정렬
+        }
+        return a.x - b.x;
+      });
+
+      // 여러 번 반복해서 겹침 해소
+      for (let iter = 0; iter < 20; iter++) {
+        let hasOverlap = false;
+
+        for (let i = 0; i < mergedLabels.length; i++) {
+          for (let j = i + 1; j < mergedLabels.length; j++) {
+            const a = mergedLabels[i];
+            const b = mergedLabels[j];
+
+            // x, y 모두 가까우면 겹침 (방향 무관)
+            if (Math.abs(a.x - b.x) < X_THRESHOLD && Math.abs(a.y - b.y) < Y_THRESHOLD) {
+              hasOverlap = true;
+              // b를 아래로 밀어냄 (a 바로 아래에 배치)
+              b.y = a.y + LABEL_HEIGHT;
+            }
+          }
+        }
+
+        if (!hasOverlap) break;
+      }
+
+      setDivergenceLabelData(mergedLabels);
+    };
+
+    const rafId = requestAnimationFrame(updateDivergenceLabels);
+    return () => cancelAnimationFrame(rafId);
+  }, [scaleUpdateTrigger, divergenceSignals, data, timeframe]);
+
   return (
     <div className='w-full' style={mini ? { height: '100%' } : undefined}>
 
@@ -1577,6 +1884,14 @@ export default function ChartRenderer({
             </>
           )}
         </div>
+        )}
+
+        {/* 지지/저항 영역 범례 (미니 모드에서 숨김) */}
+        {!mini && rawZoneRenderData.length > 0 && (
+          <ZoneLegend
+            showLabels={showZoneLabels}
+            onToggleLabels={() => setShowZoneLabels((prev) => !prev)}
+          />
         )}
 
         {/* 측정 박스 오버레이 (트레이딩뷰 스타일) */}
@@ -1685,6 +2000,31 @@ export default function ChartRenderer({
             );
           })}
 
+{/* 다이버전스 라벨 (선 끝점에 배경 박스) */}
+        {divergenceLabelData.map((label, index) => (
+          <span
+            key={`div-label-${index}`}
+            style={{
+              position: 'absolute',
+              left: `${label.x}px`,
+              top: `${label.y}px`,
+              transform: 'translate(-50%, -50%)',
+              fontSize: '9px',
+              fontWeight: 700,
+              color: label.color,
+              background: label.bgColor,
+              padding: '2px 5px',
+              borderRadius: '3px',
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+              zIndex: 15,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.5)',
+            }}
+          >
+            {label.text}
+          </span>
+        ))}
+
 {/* 가로선은 overflow-hidden 밖에서 렌더링 (아래에서 처리) */}
 
         {/* 오더북 DOM 스타일 (최신 캔들 우측, 세로 스택) - 임시 비활성화 */}
@@ -1778,8 +2118,16 @@ export default function ChartRenderer({
 
       </div>
 
-      {/* 가로선 DOM (overflow-hidden 밖에서 렌더링) - 우측 끝까지 */}
-      {priceLines.map((line, index) => (
+      {/* 지지/저항 영역 시각화 (색상 기반) - POC 포함 */}
+      <SupportResistanceZones
+        rawZones={rawZoneRenderData}
+        blendedZones={blendedZoneRenderData}
+        mini={mini}
+        showLabels={showZoneLabels}
+      />
+
+      {/* 가로선 DOM (overflow-hidden 밖에서 렌더링) - VWAP, ATR 등 */}
+      {priceLines.filter((line) => !['POC', 'VAH', 'VAL', 'OB지지', 'OB저항', '매수세', '매도세'].includes(line.label)).map((line, index) => (
         <div
           key={`price-line-${index}`}
           style={{

@@ -548,15 +548,8 @@ export function addDivergenceLines(
       // 마커 색상은 선 색상과 동일하게 (지표별+방향별)
       const markerColor = pair.isFiltered ? '#9ca3af' : color;
 
-      divergenceMarkers.push({
-        time: (pair.end.timestamp / 1000) as Time,
-        position: pair.direction === 'bullish' ? 'belowBar' : 'aboveBar', // 롱은 하단, 숏은 상단
-        color: markerColor,
-        shape: 'text' as const,
-        text: label,
-        _direction: pair.direction, // 그룹화용 임시 필드
-        _isFiltered: pair.isFiltered,
-      } as SeriesMarker<Time> & { _direction: string; _isFiltered: boolean });
+      // 다이버전스 라벨은 선 자체에 title로 표시 (마커 대신)
+      // divergenceMarkers는 더 이상 사용하지 않음 - 선 title로 대체
     }
 
     // 2. RSI 패널에 선 그리기
@@ -756,64 +749,8 @@ export function addDivergenceLines(
     }
   });
 
-  // 수집된 다이버전스 마커를 캔들스틱 시리즈에 추가 (각 라벨은 고유 색상 유지)
-  if (divergenceMarkers.length > 0) {
-    // 같은 시점(±5분) + 같은 방향의 마커들을 그룹화하되, 각 라벨의 색상 유지
-    const MARKER_GROUP_THRESHOLD = 300; // 5분 (초 단위)
-    const groupedMarkersMap = new Map<string, {
-      time: Time;
-      position: 'aboveBar' | 'belowBar';
-      labels: Array<{ text: string; color: string }>;
-      direction: string;
-    }>();
-
-    for (const marker of divergenceMarkers) {
-      const m = marker as SeriesMarker<Time> & { _direction: string; _isFiltered: boolean };
-      const timeKey = Math.floor((m.time as number) / MARKER_GROUP_THRESHOLD) * MARKER_GROUP_THRESHOLD;
-      const key = `${timeKey}_${m._direction}`;
-
-      if (groupedMarkersMap.has(key)) {
-        const group = groupedMarkersMap.get(key)!;
-        // 중복 라벨 체크
-        if (!group.labels.some(l => l.text === m.text)) {
-          group.labels.push({ text: m.text || '', color: m.color });
-        }
-      } else {
-        groupedMarkersMap.set(key, {
-          time: m.time,
-          position: m.position as 'aboveBar' | 'belowBar',
-          labels: [{ text: m.text || '', color: m.color }],
-          direction: m._direction,
-        });
-      }
-    }
-
-    // 그룹화된 마커를 개별 마커로 변환 (각 라벨이 고유 색상 유지)
-    const finalMarkers: SeriesMarker<Time>[] = [];
-    for (const group of groupedMarkersMap.values()) {
-      // 각 라벨을 개별 마커로 생성 (세로로 쌓이도록 공백 추가)
-      group.labels.forEach((labelInfo, index) => {
-        // 위치 조정을 위해 공백 추가 (belowBar는 아래서 위로, aboveBar는 위에서 아래로)
-        const padding = group.position === 'belowBar'
-          ? '\n'.repeat(group.labels.length - 1 - index)
-          : '\n'.repeat(index);
-
-        finalMarkers.push({
-          time: group.time,
-          position: group.position,
-          color: labelInfo.color,
-          shape: 'text',
-          text: group.position === 'belowBar'
-            ? padding + labelInfo.text
-            : labelInfo.text + padding,
-        });
-      });
-    }
-
-    // 시간순 정렬 (lightweight-charts 요구사항)
-    finalMarkers.sort((a, b) => (a.time as number) - (b.time as number));
-    createSeriesMarkers(candlestickSeries, finalMarkers);
-  }
+  // 다이버전스 마커 비활성화 - 선 자체로 다이버전스 표시
+  // 추후 DOM 오버레이로 라벨 추가 가능
 }
 
 /**

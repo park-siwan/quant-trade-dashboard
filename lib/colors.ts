@@ -150,6 +150,27 @@ export const INDICATOR_COLORS = {
   RESISTANCE: 'rgba(100, 100, 100, 0.6)',
 } as const;
 
+// 지지/저항 영역 색상
+export const ZONE_COLORS = {
+  SUPPORT: {
+    fill: 'rgba(34, 197, 94, 0.15)',      // 초록
+    fillStrong: 'rgba(34, 197, 94, 0.25)',
+    border: 'rgba(34, 197, 94, 0.4)',
+  },
+  RESISTANCE: {
+    fill: 'rgba(239, 68, 68, 0.15)',      // 빨강
+    fillStrong: 'rgba(239, 68, 68, 0.25)',
+    border: 'rgba(239, 68, 68, 0.4)',
+  },
+  CONFLICT: {
+    fill: 'rgba(234, 179, 8, 0.20)',      // 노랑 (혼조)
+    border: 'rgba(234, 179, 8, 0.5)',
+  },
+  POC: {
+    line: 'rgba(255, 255, 255, 0.5)',     // 흰색 점선
+  },
+} as const;
+
 // 마켓 신호 마커 색상
 export const MARKER_COLORS = {
   REAL_BULL: rgba(COLORS.BULLISH, 0.9),
