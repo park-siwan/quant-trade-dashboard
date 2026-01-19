@@ -1,13 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import ChartAdapter from '@/components/ChartAdapter';
 import MTFOverview from '@/components/MTFOverview';
-import AlertSnackbar, { AlertItem } from '@/components/AlertSnackbar';
-import { BarChart3, Table2, BookOpen, Bitcoin, Volume2, VolumeX } from 'lucide-react';
+import { BarChart3, Table2, BookOpen, Bitcoin } from 'lucide-react';
 import { useBTCPrice } from '@/hooks/useBTCPrice';
-import { useTradeAlert } from '@/hooks/useTradeAlert';
-import { useAlertHistory } from '@/hooks/useAlertHistory';
 import { AnimatedPrice } from '@/components/shared';
 
 type TabType = 'chart' | 'mtf' | 'glossary';
@@ -22,7 +19,6 @@ const TAB_STORAGE_KEY = 'active-tab';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>('mtf');
-  const [alertEnabled, setAlertEnabled] = useState(true);
   const [isTabLoaded, setIsTabLoaded] = useState(false);
   const btcPrice = useBTCPrice();
 
@@ -43,66 +39,6 @@ export default function Home() {
       localStorage.setItem(TAB_STORAGE_KEY, activeTab);
     }
   }, [activeTab, isTabLoaded]);
-  const alertHistory = useAlertHistory({ enabled: alertEnabled });
-
-  // 알림 발생 시 히스토리에 추가
-  const handleAlert = useCallback((event: {
-    type: 'entry' | 'strong_signal' | 'divergence';
-    direction: 'long' | 'short' | 'bullish' | 'bearish';
-    message: string;
-    timeframe?: string;
-    score?: number;
-    riskReward?: number;
-  }) => {
-    alertHistory.addAlert(event.type, event.direction, event.message, {
-      timeframe: event.timeframe,
-      score: event.score,
-      riskReward: event.riskReward,
-    });
-  }, [alertHistory]);
-
-  const tradeAlert = useTradeAlert({
-    enabled: alertEnabled,
-    onAlert: handleAlert,
-  });
-
-  // 5분 재알림 콜백 설정 - 가장 최근 읽지 않은 알림 재생
-  useEffect(() => {
-    alertHistory.setReminderCallback(() => {
-      const latest = alertHistory.latestUnread;
-      if (!latest || !tradeAlert.isUnlocked) return;
-
-      // 알림 타입에 따라 재생
-      if (latest.type === 'strong_signal') {
-        const dir = latest.direction === 'long' || latest.direction === 'bullish' ? 'long' : 'short';
-        tradeAlert.triggerStrongSignal(dir);
-      } else if (latest.type === 'entry' && latest.score !== undefined && latest.riskReward !== undefined) {
-        const dir = latest.direction as 'long' | 'short';
-        tradeAlert.triggerEntryAlert(dir, latest.score, latest.riskReward);
-      } else if (latest.type === 'divergence' && latest.timeframe) {
-        const tf = latest.timeframe as '5m' | '15m' | '1h' | '4h';
-        const dir = latest.direction as 'bullish' | 'bearish';
-        tradeAlert.triggerDivergenceAlert(tf, dir);
-      }
-    });
-  }, [alertHistory, tradeAlert]);
-
-  // 알림 재생 핸들러
-  const handleReplay = useCallback((alert: AlertItem) => {
-    if (!tradeAlert.isUnlocked || tradeAlert.isPlaying) return;
-
-    if (alert.type === 'strong_signal') {
-      const dir = alert.direction === 'long' || alert.direction === 'bullish' ? 'long' : 'short';
-      tradeAlert.triggerStrongSignal(dir);
-    } else if (alert.type === 'entry' && alert.score !== undefined && alert.riskReward !== undefined) {
-      const dir = alert.direction as 'long' | 'short';
-      tradeAlert.triggerEntryAlert(dir, alert.score, alert.riskReward);
-    } else if (alert.type === 'divergence' && alert.timeframe) {
-      const tf = alert.timeframe as '5m' | '15m' | '1h' | '4h';
-      const dir = alert.direction as 'bullish' | 'bearish';
-      tradeAlert.triggerDivergenceAlert(tf, dir);
-    }
-  }, [tradeAlert]);
 
   return (
     <div className='min-h-screen bg-[#0a0a0a] bg-pattern relative overflow-hidden'>
@@ -151,20 +87,6 @@ export default function Home() {
                 {tab.label}
               </button>
             ))}
-            {/* 구분선 */}
-            <div className='w-px h-6 bg-white/10 mx-2' />
-            {/* TTS 알림 토글 */}
-            <button
-              onClick={() => setAlertEnabled(!alertEnabled)}
-              className={`p-2 rounded-lg transition-all ${
-                alertEnabled
-                  ? 'text-blue-400 hover:bg-blue-500/20'
-                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-              }`}
-              title={alertEnabled ? '음성 알림 켜짐' : '음성 알림 꺼짐'}
-            >
-              {alertEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-            </button>
           </div>
         </div>
       </div>
@@ -207,7 +129,7 @@ export default function Home() {
 
         {/* MTF 탭 */}
         {activeTab === 'mtf' && (
-          <MTFOverview symbol='BTC/USDT' alertEnabled={alertEnabled} tradeAlert={tradeAlert} />
+          <MTFOverview symbol='BTC/USDT' />
         )}
 
         {/* 용어 설명 탭 */}
@@ -302,17 +224,6 @@ export default function Home() {
           </div>
         )}
       </div>
-
-      {/* 알림 스낵바 */}
-      <AlertSnackbar
-        alerts={alertHistory.alerts}
-        onDismiss={alertHistory.dismissAlert}
-        onDismissAll={alertHistory.dismissAllAlerts}
-        onMarkRead={alertHistory.markRead}
-        onMarkAllRead={alertHistory.markAllRead}
-        onReplay={handleReplay}
-        isPlaying={tradeAlert.isPlaying}
-      />
     </div>
   );
 }

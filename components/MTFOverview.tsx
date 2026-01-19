@@ -14,18 +14,6 @@ import { AnimatedValue, AnimatedCell } from '@/components/shared';
 import { directionText } from '@/lib/classnames';
 import { ANIMATION } from '@/lib/constants';
 
-// TradeAlert 훅 반환 타입
-interface TradeAlertReturn {
-  isPlaying: boolean;
-  isUnlocked: boolean;
-  checkScoreAlert: (longScore: any, shortScore: any, rr?: { long: number; short: number }) => void;
-  checkDivergenceAlert: (timeframe: string, divergence: any) => void;
-  triggerEntryAlert: (direction: 'long' | 'short', score: number, riskReward: number) => void;
-  triggerStrongSignal: (direction: 'long' | 'short') => void;
-  triggerDivergenceAlert: (timeframe: '5m' | '15m' | '1h' | '4h', direction: 'bullish' | 'bearish') => void;
-  stop: () => void;
-}
-
 interface MTFOverviewProps {
   symbol: string;
   currentPrice?: number;
@@ -34,9 +22,6 @@ interface MTFOverviewProps {
   val?: number;
   fundingRate?: number;
   orderBlocks?: OrderBlock[];
-  // TTS 알림 관련 props (page.tsx에서 전달)
-  alertEnabled?: boolean;
-  tradeAlert?: TradeAlertReturn;
 }
 
 // 상태별 아이콘 컴포넌트
@@ -553,8 +538,6 @@ export default function MTFOverview({
   val: propVal,
   fundingRate,
   orderBlocks: propOrderBlocks,
-  alertEnabled = false,
-  tradeAlert,
 }: MTFOverviewProps) {
   const { data, isLoading, isError, isConnected, refetch, refetchTimeframe, volumeProfile, orderBlocks: hookOrderBlocks } = useMTFSocket({ symbol });
 
@@ -674,31 +657,6 @@ export default function MTFOverview({
 
     return { longScore: long, shortScore: short, recommendation: rec };
   }, [data, derivedData, fundingRate, marketData, fearGreedIndex, poc, vah, val, orderBlocks]);
-
-  // TTS 알림 체크 (점수 변화 감지)
-  useEffect(() => {
-    if (!alertEnabled || !tradeAlert || !longScore || !shortScore) return;
-
-    // 손익비 계산
-    const rr = {
-      long: recommendation.long?.riskReward ?? 2,
-      short: recommendation.short?.riskReward ?? 2,
-    };
-
-    tradeAlert.checkScoreAlert(longScore, shortScore, rr);
-  }, [alertEnabled, tradeAlert, longScore, shortScore, recommendation]);
-
-  // TTS 알림 체크 (다이버전스 감지)
-  useEffect(() => {
-    if (!alertEnabled || !tradeAlert || !derivedData) return;
-
-    // 최근 다이버전스만 알림
-    derivedData.activeDivergences.forEach(tf => {
-      if (tf.divergence) {
-        tradeAlert.checkDivergenceAlert(tf.timeframe, tf.divergence);
-      }
-    });
-  }, [alertEnabled, tradeAlert, derivedData]);
 
   // 조건부 렌더링 (모든 Hook 호출 후)
   if (isLoading) {

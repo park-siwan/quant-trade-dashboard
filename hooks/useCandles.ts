@@ -46,11 +46,23 @@ export function useCandles({
 
   const queryKey = ['candles', symbol, timeframe, limit];
 
+  // 지표(ATR/VAH/VAL 등) 갱신을 위한 주기적 refetch 간격 (ms)
+  // WebSocket이 활성화되어도 지표는 API에서만 계산되므로 주기적 refetch 필요
+  const getIndicatorRefreshInterval = (tf: string): number => {
+    switch (tf) {
+      case '1d': return 5 * 60 * 1000;   // 1일봉: 5분마다
+      case '4h': return 3 * 60 * 1000;   // 4시간봉: 3분마다
+      case '1h': return 2 * 60 * 1000;   // 1시간봉: 2분마다
+      default: return 60 * 1000;         // 그 외: 1분마다
+    }
+  };
+
   const query = useQuery({
     queryKey,
     queryFn: () => fetchCandles({ symbol, timeframe, limit }),
-    refetchInterval: enableAutoRefresh && !enableWebSocket ? getRefreshInterval(timeframe) : false,
-    staleTime: 60_000,
+    // WebSocket 사용 시에도 지표 갱신을 위해 주기적 refetch 활성화
+    refetchInterval: enableAutoRefresh ? getIndicatorRefreshInterval(timeframe) : false,
+    staleTime: 30_000,
   });
 
   // refetch 함수를 ref로 저장
