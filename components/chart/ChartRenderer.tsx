@@ -887,7 +887,7 @@ export default function ChartRenderer({
                       divergenceInfos.push({
                         type: signal.type,
                         direction: 'bullish',
-                        analysis: `가격은 하락하는 반면 ${signal.type.toUpperCase()}는 상승하고 있습니다. 이는 매도 압력이 약해지고 있음을 나타내며, 곧 상승 반전할 가능성이 있습니다. 매수 진입을 고려할 수 있는 시점입니다.`,
+                        analysis: `가격은 하락하지만 ${signal.type.toUpperCase()}는 상승하고 있습니다. 매도 압력이 약해지고 있어 상승 반전 가능성이 있습니다. 매수 진입을 고려할 수 있는 시점입니다.`,
                         isFiltered,
                         startTime,
                         endTime,
@@ -896,7 +896,7 @@ export default function ChartRenderer({
                       divergenceInfos.push({
                         type: signal.type,
                         direction: 'bearish',
-                        analysis: `가격은 상승하는 반면 ${signal.type.toUpperCase()}는 하락하고 있습니다. 이는 매수 압력이 약해지고 있음을 의미하며, 하락 반전 가능성이 있습니다. 매도 또는 익절을 고려하세요.`,
+                        analysis: `가격은 상승하지만 ${signal.type.toUpperCase()}는 하락하고 있습니다. 매수 압력이 약해지고 있어 하락 반전 가능성이 있습니다. 매도 또는 익절을 고려하세요.`,
                         isFiltered,
                         startTime,
                         endTime,
@@ -1666,22 +1666,33 @@ export default function ChartRenderer({
         if (!endSignal) continue;
 
         // start와 end 모두 좌표 계산
-        const startTime = (signal.timestamp / 1000) as Time;
-        const endTime = (endSignal.timestamp / 1000) as Time;
+        const startTimeSec = signal.timestamp / 1000;
+        const endTimeSec = endSignal.timestamp / 1000;
+        const startTime = startTimeSec as Time;
+        const endTime = endTimeSec as Time;
+
+        // 캔들 데이터 존재 여부 확인 (선분이 실제로 그려지는지 검증)
+        // 타임프레임 기반 허용 범위 (캔들 1개 시간)
+        const tfSeconds = timeframeToMs(timeframe || '5m') / 1000;
+        const findCandle = (targetTime: number) => {
+          return data.find(c => Math.abs((c.time as number) - targetTime) <= tfSeconds);
+        };
+        const startCandle = findCandle(startTimeSec);
+        const endCandle = findCandle(endTimeSec);
+
+        // 끝 캔들은 필수, 시작 캔들은 없어도 OK (선분이 잘려도 표시)
+        if (!endCandle) continue;
+
         const startX = chartRef.current!.timeScale().timeToCoordinate(startTime);
         const endX = chartRef.current!.timeScale().timeToCoordinate(endTime);
         const y = endSignal.priceValue ? candlestickSeriesRef.current!.priceToCoordinate(endSignal.priceValue) : null;
 
-        if (startX === null || endX === null || y === null) continue;
+        // endX와 y 필수
+        if (endX === null || y === null) continue;
 
-        // start와 end 모두 화면에 보이는 경우만 라벨 표시 (선이 완전히 보여야 함)
-        const isStartVisible = startX >= 0 && startX <= chartWidth - 80;
+        // end가 화면에 보이는 경우 라벨 표시 (라벨은 end 위치에 표시됨)
         const isEndVisible = endX >= 0 && endX <= chartWidth - 80;
-        if (!isStartVisible || !isEndVisible) continue; // 하나라도 안 보이면 스킵
-
-        // 선분이 너무 짧으면 스킵 (육안으로 안 보임)
-        const lineLength = Math.abs(endX - startX);
-        if (lineLength < 10) continue; // 10px 미만이면 스킵
+        if (!isEndVisible) continue; // end가 안 보이면 스킵
 
         // 신선도 계산 (timeframe 기반 만료 시간)
         const tf = timeframe || '15m';
@@ -1695,6 +1706,18 @@ export default function ChartRenderer({
           freshness,
           signal.type as 'rsi' | 'obv' | 'cvd' | 'oi'
         );
+
+        // 중복 라벨 방지: 이 끝점이 다른 다이버전스의 시작점인지 확인
+        // 같은 지표, 같은 방향의 다른 다이버전스가 이 끝점을 시작점으로 사용하면 스킵
+        const isIntermediatePivot = divergenceSignals.some(
+          (s) =>
+            s.phase === 'start' &&
+            s.type === signal.type &&
+            s.direction === signal.direction &&
+            Math.abs(s.timestamp - endSignal.timestamp) < tfSeconds * 1000 // 같은 캔들 허용
+        );
+
+        if (isIntermediatePivot) continue; // 중간 피봇이면 라벨 스킵
 
         tempLabels.push({
           x: endX,
@@ -1733,8 +1756,10 @@ export default function ChartRenderer({
           const other = tempLabels[j];
 
           // 같은 방향이고 위치가 가까우면 병합
+          // 단, 필터링 상태가 같아야 함 (필터링된 것끼리, 안된 것끼리만 병합)
           if (
             current.direction === other.direction &&
+            current.isFiltered === other.isFiltered &&
             Math.abs(current.x - other.x) < MERGE_THRESHOLD &&
             Math.abs(current.y - other.y) < MERGE_THRESHOLD
           ) {
@@ -1787,7 +1812,7 @@ export default function ChartRenderer({
           x: avgX,
           y: avgY,
           text,
-          color: '#fff',
+          color: allFiltered ? '#9ca3af' : '#fff', // 필터링된 경우 회색 텍스트
           bgColor,
           direction: current.direction,
         });

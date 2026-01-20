@@ -421,22 +421,12 @@ export function addDivergenceLines(
     oi: 'OI',
   };
 
-  // 타입+방향별 최신 다이버전스만 표시 (너무 많은 라인 방지)
-  // 최신순 정렬 후 타입+방향별 1개씩만 유지
-  const sortedPairs = [...divergencePairs].sort((a, b) => b.end.timestamp - a.end.timestamp);
-  const seenKeys = new Set<string>();
-  const filteredPairs = sortedPairs.filter(pair => {
-    const key = `${pair.end.type}_${pair.direction}`;
-    if (seenKeys.has(key)) return false;
-    seenKeys.add(key);
-    return true;
-  });
-
+  // 모든 다이버전스 표시 (필터링 제거)
   // 같은 시점(±1캔들)에 여러 타입 다이버전스가 겹치는지 확인
   const COINCIDE_THRESHOLD = 300 * 1000; // 300초 = 5분 (1캔들)
-  const pairsWithCoincidence = filteredPairs.map(pair => {
+  const pairsWithCoincidence = divergencePairs.map(pair => {
     // 같은 방향, 필터링 안 된 다이버전스 중 시간이 근접한 것 카운트
-    const coincidingCount = filteredPairs.filter(other =>
+    const coincidingCount = divergencePairs.filter(other =>
       other !== pair &&
       other.direction === pair.direction &&
       !other.isFiltered &&
@@ -499,25 +489,72 @@ export function addDivergenceLines(
     const startCandle = findClosestCandle(startTimeSec);
     const endCandle = findClosestCandle(endTimeSec);
 
-    if (useClosePrice && startCandle?.close !== undefined && endCandle?.close !== undefined) {
+    // 시작 시간 조정: 시작점이 데이터 범위 밖이면 첫 번째 캔들로 클램핑 (선분 잘림 허용)
+    let actualStartTimeSec = startTimeSec;
+    let actualStartCandle = startCandle;
+    const firstCandleTime = candleData.length > 0 ? candleData[0].time : null;
+
+    // 시작 시간이 첫 번째 캔들보다 이전이면 첫 번째 캔들로 클램핑
+    const isClipped = firstCandleTime !== null && startTimeSec < firstCandleTime;
+    if (isClipped) {
+      actualStartCandle = candleData[0];
+      actualStartTimeSec = firstCandleTime;
+      console.log(`[Divergence] 선분 클리핑: ${pair.start.type} ${pair.direction}`, {
+        originalStart: startTimeSec,
+        clippedStart: actualStartTimeSec,
+        end: endTimeSec,
+      });
+    } else if (!startCandle && candleData.length > 0) {
+      // startCandle을 못 찾았으면 첫 번째 캔들 사용
+      actualStartCandle = candleData[0];
+      actualStartTimeSec = candleData[0].time;
+    }
+
+    if (useClosePrice && actualStartCandle?.close !== undefined && endCandle?.close !== undefined) {
       // 라인 차트: 종가 기준
-      startPrice = startCandle.close;
+      startPrice = actualStartCandle.close;
       endPrice = endCandle.close;
     } else if (pair.start.priceValue !== undefined && pair.end.priceValue !== undefined && !useClosePrice) {
       // 캔들 차트: 백엔드에서 전달된 정확한 가격 사용 (고점/저점)
-      startPrice = pair.start.priceValue;
+      // 시작점이 잘린 경우 보간 계산
+      if (isClipped) {
+        // 선형 보간으로 잘린 시작점 가격 계산
+        const ratio = (actualStartTimeSec - startTimeSec) / (endTimeSec - startTimeSec);
+        startPrice = pair.start.priceValue + ratio * (pair.end.priceValue - pair.start.priceValue);
+      } else {
+        startPrice = pair.start.priceValue;
+      }
       endPrice = pair.end.priceValue;
-    } else if (startCandle && endCandle) {
+    } else if (actualStartCandle && endCandle) {
       // 폴백: 캔들 데이터에서 고점/저점 찾기
       // bearish: 고점 연결, bullish: 저점 연결
       startPrice =
-        pair.direction === 'bearish' ? startCandle.high : startCandle.low;
+        pair.direction === 'bearish' ? actualStartCandle.high : actualStartCandle.low;
       endPrice =
         pair.direction === 'bearish' ? endCandle.high : endCandle.low;
-    } else {
-      debug.divergence(`⚠️ ${pair.start.type} 다이버전스 캔들 매칭 실패:`, {
+    } else if (pair.start.priceValue !== undefined && pair.end.priceValue !== undefined) {
+      // 최종 폴백: priceValue 직접 사용 (캔들 매칭 실패해도)
+      if (isClipped) {
+        const ratio = (actualStartTimeSec - startTimeSec) / (endTimeSec - startTimeSec);
+        startPrice = pair.start.priceValue + ratio * (pair.end.priceValue - pair.start.priceValue);
+      } else {
+        startPrice = pair.start.priceValue;
+      }
+      endPrice = pair.end.priceValue;
+      console.log(`[Divergence] 폴백 사용: ${pair.start.type} ${pair.direction}`, {
+        isClipped,
         startTimeSec,
         endTimeSec,
+        actualStartTimeSec,
+        firstCandleTime,
+        startPrice,
+        endPrice,
+      });
+    } else {
+      console.warn(`⚠️ ${pair.start.type} 다이버전스 가격 계산 실패:`, {
+        startTimeSec,
+        endTimeSec,
+        hasPriceValue: { start: pair.start.priceValue, end: pair.end.priceValue },
         candleDataRange: candleData.length > 0
           ? `${candleData[0].time} ~ ${candleData[candleData.length - 1].time}`
           : 'empty',
@@ -539,7 +576,7 @@ export function addDivergenceLines(
       ); // 메인 패널
 
       priceLineSeries.setData([
-        { time: (pair.start.timestamp / 1000) as Time, value: startPrice },
+        { time: actualStartTimeSec as Time, value: startPrice },
         { time: (pair.end.timestamp / 1000) as Time, value: endPrice },
       ]);
 
