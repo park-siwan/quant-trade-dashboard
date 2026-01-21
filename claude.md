@@ -3,7 +3,7 @@
 ## 프로젝트 구조 (별도 레포 2개, 로컬 동일 폴더)
 
 ```
-/Users/siwan/projects/quant/
+{프로젝트 루트}/quant/
 ├── quant-trade/              # 백엔드 (NestJS) - 별도 GitHub 레포
 │   ├── src/
 │   │   ├── exchange/         # 거래소 API (Bybit)
@@ -22,7 +22,22 @@
     └── port: 3000
 ```
 
-**중요:** 백엔드 수정 시 `/Users/siwan/projects/quant/quant-trade/` 경로 (별도 git 레포)
+### 환경별 경로
+| 환경 | 경로 |
+|-----|------|
+| Mac | `/Users/siwan/projects/quant/` |
+| Windows | `C:\Users\User\OneDrive\문서\projects\quant\` |
+
+**중요:** 백엔드 수정 시 `../quant-trade/` 경로 (별도 git 레포)
+
+## 패키지 매니저
+- **프론트엔드 (quant-trade-dashboard)**: pnpm
+- **백엔드 (quant-trade)**: pnpm
+
+```bash
+# 의존성 설치
+pnpm install
+```
 
 ## 프로젝트 개요
 BTC 트레이딩 대시보드 - Next.js 14 + TypeScript + lightweight-charts
