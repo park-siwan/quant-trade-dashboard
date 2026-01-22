@@ -262,6 +262,10 @@ export default function RealtimeChart() {
     if (candleSeriesRef.current) {
       try {
         candleSeriesRef.current.update(newCandle);
+        // 새 캔들이 추가될 때 차트를 최신 위치로 스크롤
+        if (chartRef.current) {
+          chartRef.current.timeScale().scrollToRealTime();
+        }
       } catch {
         // 차트가 이미 disposed된 경우 무시
       }
@@ -330,6 +334,7 @@ export default function RealtimeChart() {
         borderColor: '#3f3f46',
         timeVisible: true,
         rightOffset: 12,
+        shiftVisibleRangeOnNewBar: true,
       },
       localization: {
         timeFormatter: (time: number) => formatKST(time * 1000),
