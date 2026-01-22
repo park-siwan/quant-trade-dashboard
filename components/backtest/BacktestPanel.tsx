@@ -18,12 +18,14 @@ export default function BacktestPanel({ onRun, isLoading, externalParams }: Back
     rsiPeriod: 14,
     pivotLeftBars: 5,
     pivotRightBars: 3,
-    minDistance: 5,
-    maxDistance: 200,
+    minDistance: 15,  // 15봉 이상 거리 (너무 짧은 거리 방지)
+    maxDistance: 60,  // 60봉 이하 (5분봉 기준 5시간)
     takeProfitAtr: 2.0,
     stopLossAtr: 1.0,
     initialCapital: 1000,
     positionSizePercent: 100,
+    slippage: 0.0002,  // 0.02% 슬리피지
+    minDivergencePct: 20,  // 최소 20% 다이버전스 강도 (강한 신호만)
   });
 
   // 외부에서 파라미터가 변경되면 적용
@@ -232,6 +234,49 @@ export default function BacktestPanel({ onRun, isLoading, externalParams }: Back
             />
           </div>
         </div>
+      </div>
+
+      {/* 현실적 시뮬레이션 설정 */}
+      <div className="border-t border-zinc-700 pt-4">
+        <h3 className="text-sm font-medium text-zinc-300 mb-3">현실 반영 설정</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">
+              슬리피지 (%)
+              <span className="text-zinc-500 ml-1">체결 가격 차이</span>
+            </label>
+            <input
+              type="number"
+              value={(params.slippage || 0) * 100}
+              onChange={e => handleChange('slippage', parseFloat(e.target.value) / 100)}
+              min={0}
+              max={0.5}
+              step={0.01}
+              className="w-full bg-zinc-800 text-white px-3 py-2 rounded border border-zinc-700 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">
+              최소 다이버전스 강도 (%)
+              <span className="text-zinc-500 ml-1">약한 신호 필터</span>
+            </label>
+            <input
+              type="number"
+              value={params.minDivergencePct || 0}
+              onChange={e => handleChange('minDivergencePct', parseFloat(e.target.value))}
+              min={0}
+              max={100}
+              step={5}
+              className="w-full bg-zinc-800 text-white px-3 py-2 rounded border border-zinc-700 text-sm"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-zinc-500 mt-2">
+          * 슬리피지: 주문 체결 시 불리한 방향으로 가격 차이 발생 (기본 0.02%)
+          <br />
+          * 다이버전스 강도: 가격과 지표의 변화율 차이, 높을수록 강한 신호만 진입
+        </p>
       </div>
 
       {/* 실행 버튼 */}

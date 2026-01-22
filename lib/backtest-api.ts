@@ -14,6 +14,8 @@ export interface BacktestParams {
   stopLossAtr?: number;
   initialCapital?: number;
   positionSizePercent?: number;
+  slippage?: number;  // 슬리피지 (0.02% = 0.0002)
+  minDivergencePct?: number;  // 최소 다이버전스 강도 (%)
 }
 
 export interface TradeResult {
@@ -26,6 +28,7 @@ export interface TradeResult {
   pnlPercent: number;
   indicator: string;
   divergenceStrength: number;
+  exitReason?: 'TP' | 'SL';  // 청산 사유
 }
 
 export interface EquityPoint {
@@ -102,6 +105,7 @@ export interface OptimizeResultItem {
     max_distance: number;
     tp_atr: number;
     sl_atr: number;
+    min_div_pct?: number;  // 최소 다이버전스 강도 (%)
   };
   result: {
     totalTrades: number;
@@ -110,6 +114,7 @@ export interface OptimizeResultItem {
     profitFactor: number;
     maxDrawdown: number;
     sharpeRatio: number;
+    flipCount?: number;  // 갈아타기 횟수
   };
 }
 
@@ -203,6 +208,78 @@ export async function runOptimizationWithProgress(
   });
 }
 
+// 베이지안 최적화 파라미터
+export interface BayesianOptimizeParams extends OptimizeParams {
+  nTrials?: number;
+  usePriorResults?: boolean;
+}
+
+// 베이지안 최적화 결과
+export interface BayesianOptimizeResult extends OptimizeResult {
+  totalTrials: number;
+  elapsed: number;
+  method: 'bayesian';
+}
+
+/**
+ * 베이지안 최적화 (Optuna) 실행 - SSE 스트리밍
+ */
+export async function runBayesianOptimization(
+  params: BayesianOptimizeParams,
+  onProgress: (progress: OptimizeProgress) => void,
+): Promise<BayesianOptimizeResult> {
+  return new Promise((resolve, reject) => {
+    fetch(`${API_BASE}/backtest/optimize/bayesian`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    }).then(response => {
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        reject(new Error('No reader available'));
+        return;
+      }
+
+      let buffer = '';
+
+      const read = (): void => {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            return;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data: OptimizeProgress = JSON.parse(line.substring(6));
+                onProgress(data);
+
+                if (data.type === 'complete' && data.result) {
+                  resolve(data.result as BayesianOptimizeResult);
+                } else if (data.type === 'error') {
+                  reject(new Error(data.message || 'Bayesian optimization failed'));
+                }
+              } catch {
+                // ignore parse errors
+              }
+            }
+          }
+
+          read();
+        }).catch(reject);
+      };
+
+      read();
+    }).catch(reject);
+  });
+}
+
 // ============== 저장된 결과 관리 API ==============
 
 export interface SavedOptimizeResult {
@@ -213,6 +290,7 @@ export interface SavedOptimizeResult {
   candleCount: number;
   indicators: string;
   metric: string;
+  optimizeMethod: 'grid' | 'bayesian';
   rsiPeriod: number;
   pivotLeft: number;
   pivotRight: number;
@@ -220,12 +298,14 @@ export interface SavedOptimizeResult {
   maxDistance: number;
   tpAtr: number;
   slAtr: number;
+  minDivPct?: number;
   totalTrades: number;
   winRate: number;
   totalPnlPercent: number;
   profitFactor: number;
   maxDrawdown: number;
   sharpeRatio: number;
+  flipCount?: number;
   rank: number;
   note?: string;
 }
@@ -236,6 +316,7 @@ export interface SaveOptimizeRequest {
   candleCount: number;
   indicators: string[];
   metric: string;
+  optimizeMethod: 'grid' | 'bayesian';
   params: OptimizeResultItem['params'];
   result: OptimizeResultItem['result'];
   rank: number;
@@ -248,6 +329,7 @@ export interface SaveMultipleRequest {
   candleCount: number;
   indicators: string[];
   metric: string;
+  optimizeMethod: 'grid' | 'bayesian';
   results: OptimizeResultItem[];
 }
 
@@ -380,6 +462,154 @@ export async function updateResultNote(id: number, note: string): Promise<void> 
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ note }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Update failed');
+  }
+}
+
+// ============== 백테스트 결과 저장 API ==============
+
+export interface SavedBacktestSummary {
+  id: number;
+  createdAt: string;
+  name: string;
+  symbol: string;
+  timeframe: string;
+  candleCount: number;
+  startDate: string;
+  endDate: string;
+  rsiPeriod: number;
+  pivotLeft: number;
+  pivotRight: number;
+  minDistance: number;
+  maxDistance: number;
+  tpAtr: number;
+  slAtr: number;
+  initialCapital: number;
+  positionSizePercent: number;
+  indicators: string;
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+  totalPnl: number;
+  totalPnlPercent: number;
+  avgWin: number;
+  avgLoss: number;
+  profitFactor: number;
+  maxDrawdown: number;
+  maxDrawdownPercent: number;
+  sharpeRatio: number;
+  note?: string;
+}
+
+export interface SavedBacktestFull extends SavedBacktestSummary {
+  trades: TradeResult[];
+  equityCurve: EquityPoint[];
+}
+
+export interface SaveBacktestRequest {
+  name?: string;
+  symbol: string;
+  timeframe: string;
+  candleCount: number;
+  startDate: string;
+  endDate: string;
+  params: {
+    rsiPeriod: number;
+    pivotLeftBars: number;
+    pivotRightBars: number;
+    minDistance: number;
+    maxDistance: number;
+    takeProfitAtr: number;
+    stopLossAtr: number;
+    initialCapital: number;
+    positionSizePercent: number;
+    indicators: string[];
+  };
+  result: {
+    totalTrades: number;
+    winningTrades: number;
+    losingTrades: number;
+    winRate: number;
+    totalPnl: number;
+    totalPnlPercent: number;
+    avgWin: number;
+    avgLoss: number;
+    profitFactor: number;
+    maxDrawdown: number;
+    maxDrawdownPercent: number;
+    sharpeRatio: number;
+    trades: TradeResult[];
+    equityCurve: EquityPoint[];
+  };
+  note?: string;
+}
+
+/**
+ * 백테스트 결과 저장
+ */
+export async function saveBacktestResult(dto: SaveBacktestRequest): Promise<SavedBacktestSummary> {
+  const response = await fetch(`${API_BASE}/backtest/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Save failed');
+  }
+
+  return response.json();
+}
+
+/**
+ * 저장된 백테스트 목록 조회
+ */
+export async function getSavedBacktests(limit = 50, offset = 0): Promise<SavedBacktestSummary[]> {
+  const response = await fetch(
+    `${API_BASE}/backtest/saved?limit=${limit}&offset=${offset}`
+  );
+  return response.json();
+}
+
+/**
+ * 저장된 백테스트 상세 조회
+ */
+export async function getSavedBacktestById(id: number): Promise<SavedBacktestFull> {
+  const response = await fetch(`${API_BASE}/backtest/saved/${id}`);
+  if (!response.ok) {
+    throw new Error('Backtest not found');
+  }
+  return response.json();
+}
+
+/**
+ * 저장된 백테스트 삭제
+ */
+export async function deleteSavedBacktest(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/backtest/saved/${id}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Delete failed');
+  }
+}
+
+/**
+ * 백테스트 이름 변경
+ */
+export async function updateBacktestName(id: number, name: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/backtest/saved/${id}/name`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
   });
 
   if (!response.ok) {

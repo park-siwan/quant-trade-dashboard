@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { createChart, IChartApi, CandlestickData, CandlestickSeries } from 'lightweight-charts';
+import { createChart, IChartApi, CandlestickData, CandlestickSeries, SeriesMarker, Time, createSeriesMarkers } from 'lightweight-charts';
 import { BacktestResult, TradeResult } from '@/lib/backtest-api';
 
 interface BacktestChartProps {
@@ -45,46 +45,60 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
 
     chartRef.current = chart;
 
-    // 캔들 시리즈
+    // 캔들 시리즈 (무채색 - 마커 강조용)
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#22c55e',
-      downColor: '#ef4444',
-      borderUpColor: '#22c55e',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e',
-      wickDownColor: '#ef4444',
+      upColor: '#52525b',      // 상승: 진한 회색
+      downColor: '#3f3f46',    // 하락: 더 진한 회색
+      borderUpColor: '#71717a',
+      borderDownColor: '#52525b',
+      wickUpColor: '#71717a',
+      wickDownColor: '#52525b',
     });
 
     candleSeries.setData(candles);
     candleSeriesRef.current = candleSeries;
 
     // 거래 마커 추가
-    const markers = result.trades.flatMap(trade => {
-      const entryTime = new Date(trade.entryTime).getTime() / 1000;
-      const exitTime = new Date(trade.exitTime).getTime() / 1000;
-      const isWin = trade.pnl > 0;
+    // 롱: 초록 계열 / 숏: 빨강 계열
+    // 익절(TP): O / 손절(SL): X
+    const markers: SeriesMarker<Time>[] = result.trades.flatMap(trade => {
+      const entryTime = (new Date(trade.entryTime).getTime() / 1000) as Time;
+      const exitTime = (new Date(trade.exitTime).getTime() / 1000) as Time;
+      const isTP = trade.exitReason === 'TP';  // TP/SL 기준으로 판단
+      const isLong = trade.direction === 'long';
+
+      // 진입 색상: 롱=초록, 숏=빨강
+      const entryColor = isLong ? '#22c55e' : '#ef4444';
+
+      // 청산 색상: 롱=초록, 숏=빨강 (방향 기준)
+      // 청산 텍스트: 익절(TP)=O, 손절(SL)=X
+      const exitColor = isLong ? '#4ade80' : '#f87171';
+      const exitText = isTP ? 'O' : 'X';
 
       return [
         {
-          time: entryTime as any,
-          position: trade.direction === 'long' ? 'belowBar' : 'aboveBar',
-          color: trade.direction === 'long' ? '#22c55e' : '#ef4444',
-          shape: trade.direction === 'long' ? 'arrowUp' : 'arrowDown',
-          text: trade.direction === 'long' ? 'L' : 'S',
-        },
+          time: entryTime,
+          position: isLong ? 'belowBar' : 'aboveBar',
+          color: entryColor,
+          shape: isLong ? 'arrowUp' : 'arrowDown',
+          size: 0.7,
+        } as SeriesMarker<Time>,
         {
-          time: exitTime as any,
-          position: trade.direction === 'long' ? 'aboveBar' : 'belowBar',
-          color: isWin ? '#22c55e' : '#ef4444',
+          time: exitTime,
+          position: isLong ? 'aboveBar' : 'belowBar',
+          color: exitColor,
           shape: 'circle',
-          text: isWin ? 'TP' : 'SL',
-        },
+          text: exitText,
+          size: 0.5,
+        } as SeriesMarker<Time>,
       ];
     });
 
-    // v5에서는 setMarkers 대신 attachPrimitive 또는 createSeries와 markers 옵션 사용
-    // 임시로 타입 캐스팅으로 해결
-    (candleSeries as any).setMarkers?.(markers) || chart.timeScale().fitContent();
+    // 마커를 시간순으로 정렬 (v5 요구사항)
+    markers.sort((a, b) => (a.time as number) - (b.time as number));
+
+    // v5에서 마커 설정 - createSeriesMarkers 사용
+    const seriesMarkers = createSeriesMarkers(candleSeries, markers);
 
     // 리사이즈 핸들러
     const handleResize = () => {
@@ -119,18 +133,24 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
     <div className="bg-zinc-900 p-4 rounded-lg">
       <h2 className="text-lg font-semibold text-white mb-4">거래 차트</h2>
       <div ref={containerRef} className="w-full" />
-      <div className="mt-2 flex gap-4 text-xs text-zinc-400">
+      <div className="mt-2 flex flex-wrap gap-4 text-xs text-zinc-400">
         <span className="flex items-center gap-1">
-          <span className="text-green-400">▲</span> 롱 진입
+          <span style={{ color: '#22c55e' }}>▲</span> 롱 진입
         </span>
         <span className="flex items-center gap-1">
-          <span className="text-red-400">▼</span> 숏 진입
+          <span style={{ color: '#ef4444' }}>▼</span> 숏 진입
         </span>
         <span className="flex items-center gap-1">
-          <span className="text-green-400">●</span> TP 청산
+          <span style={{ color: '#4ade80', fontWeight: 'bold' }}>O</span> 롱 TP
         </span>
         <span className="flex items-center gap-1">
-          <span className="text-red-400">●</span> SL 청산
+          <span style={{ color: '#4ade80', fontWeight: 'bold' }}>X</span> 롱 SL
+        </span>
+        <span className="flex items-center gap-1">
+          <span style={{ color: '#f87171', fontWeight: 'bold' }}>O</span> 숏 TP
+        </span>
+        <span className="flex items-center gap-1">
+          <span style={{ color: '#f87171', fontWeight: 'bold' }}>X</span> 숏 SL
         </span>
       </div>
     </div>

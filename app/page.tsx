@@ -8,12 +8,13 @@ import { BarChart3, Table2, BookOpen, Bitcoin, FlaskConical } from 'lucide-react
 import { useBTCPrice } from '@/hooks/useBTCPrice';
 import { AnimatedPrice } from '@/components/shared';
 
-type TabType = 'chart' | 'mtf' | 'glossary';
+type TabType = 'chart' | 'mtf' | 'glossary' | 'strategy';
 
-const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
+const tabs: { id: TabType; label: string; icon: React.ReactNode; href?: string }[] = [
   { id: 'mtf', label: '분석', icon: <Table2 className="w-4 h-4" /> },
   { id: 'chart', label: '차트', icon: <BarChart3 className="w-4 h-4" /> },
   { id: 'glossary', label: '용어', icon: <BookOpen className="w-4 h-4" /> },
+  { id: 'strategy', label: '전략', icon: <FlaskConical className="w-4 h-4" />, href: '/strategy' },
 ];
 
 const TAB_STORAGE_KEY = 'active-tab';
@@ -72,29 +73,33 @@ export default function Home() {
               <span className='text-lg font-mono text-gray-500 animate-pulse'>$---,---</span>
             )}
           </div>
-          {/* 탭 메뉴 + 알림 버튼 - 우측 */}
+          {/* 탭 메뉴 - 우측 */}
           <div className='flex items-center gap-1'>
             {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-white/10 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                {tab.icon}
-                {tab.label}
-              </button>
+              tab.href ? (
+                <Link
+                  key={tab.id}
+                  href={tab.href}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-400 hover:text-white hover:bg-white/5 cursor-default"
+                >
+                  {tab.icon}
+                  {tab.label}
+                </Link>
+              ) : (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-default ${
+                    activeTab === tab.id
+                      ? 'bg-white/10 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              )
             ))}
-            <Link
-              href="/backtest"
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-400 hover:text-white hover:bg-white/5 ml-2 border-l border-white/10 pl-4"
-            >
-              <FlaskConical className="w-4 h-4" />
-              백테스트
-            </Link>
           </div>
         </div>
       </div>
