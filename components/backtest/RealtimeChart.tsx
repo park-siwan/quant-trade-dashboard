@@ -413,7 +413,16 @@ export default function RealtimeChart() {
     };
 
     window.addEventListener('resize', handleResize);
-    chart.timeScale().fitContent();
+
+    // 차트를 최신 캔들 위치로 스크롤
+    chart.timeScale().scrollToRealTime();
+
+    // fitContent 후에도 최신 위치 유지
+    setTimeout(() => {
+      if (chartRef.current) {
+        chartRef.current.timeScale().scrollToRealTime();
+      }
+    }, 100);
 
     return () => {
       window.removeEventListener('resize', handleResize);
