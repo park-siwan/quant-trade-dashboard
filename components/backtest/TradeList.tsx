@@ -10,7 +10,9 @@ interface TradeListProps {
 
 export default function TradeList({ trades, onTradeClick, selectedTrade }: TradeListProps) {
   const formatTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString('ko-KR', {
+    // UTC로 해석하여 한국 시간으로 표시
+    const utcDateStr = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z';
+    return new Date(utcDateStr).toLocaleString('ko-KR', {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',

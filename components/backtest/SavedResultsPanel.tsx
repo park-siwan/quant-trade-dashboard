@@ -20,6 +20,7 @@ interface SavedResultsPanelProps {
     takeProfitAtr: number;
     stopLossAtr: number;
     minDivergencePct?: number;
+    indicators?: string[];
   }) => void;
   onViewResult?: (params: {
     rsiPeriod: number;
@@ -30,6 +31,7 @@ interface SavedResultsPanelProps {
     takeProfitAtr: number;
     stopLossAtr: number;
     minDivergencePct?: number;
+    indicators?: string[];
   }) => void;
 }
 
@@ -89,6 +91,8 @@ const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProp
   };
 
   const handleApply = (item: SavedOptimizeResult) => {
+    // indicators는 쉼표 구분 문자열로 저장됨 (예: "rsi,obv,cvd")
+    const indicators = item.indicators ? item.indicators.split(',').filter(Boolean) : ['rsi'];
     const params = {
       rsiPeriod: item.rsiPeriod,
       pivotLeftBars: item.pivotLeft,
@@ -98,11 +102,14 @@ const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProp
       takeProfitAtr: item.tpAtr,
       stopLossAtr: item.slAtr,
       minDivergencePct: item.minDivPct,
+      indicators,
     };
     onApplyParams(params);
   };
 
   const handleViewChart = (item: SavedOptimizeResult) => {
+    // indicators는 쉼표 구분 문자열로 저장됨 (예: "rsi,obv,cvd")
+    const indicators = item.indicators ? item.indicators.split(',').filter(Boolean) : ['rsi'];
     const params = {
       rsiPeriod: item.rsiPeriod,
       pivotLeftBars: item.pivotLeft,
@@ -112,6 +119,7 @@ const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProp
       takeProfitAtr: item.tpAtr,
       stopLossAtr: item.slAtr,
       minDivergencePct: item.minDivPct,
+      indicators,
     };
     onApplyParams(params);
     onViewResult?.(params);

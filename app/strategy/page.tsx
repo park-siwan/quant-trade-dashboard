@@ -24,6 +24,7 @@ export default function StrategyPage() {
     takeProfitAtr: number;
     stopLossAtr: number;
     minDivergencePct?: number;
+    indicators?: string[];
   } | null>(null);
   const savedResultsRef = useRef<SavedResultsPanelRef>(null);
 
@@ -59,7 +60,8 @@ export default function StrategyPage() {
     setSelectedTrade(null);
 
     try {
-      // 백테스트 실행
+      // 백테스트 실행 - 저장된 결과의 인디케이터를 사용하거나, 없으면 RSI만 사용
+      const indicators = params.indicators || ['rsi'];
       const result = await runBacktest({
         symbol: 'BTC/USDT',
         timeframe: '5m',
@@ -74,7 +76,7 @@ export default function StrategyPage() {
         minDivergencePct: params.minDivergencePct,
         initialCapital: 1000,
         positionSizePercent: 100,
-        indicators: ['rsi', 'obv', 'cvd', 'oi'],
+        indicators,
       });
       setBacktestResult(result);
 
@@ -136,6 +138,7 @@ export default function StrategyPage() {
                 Dist: {appliedParams.minDistance}-{appliedParams.maxDistance} |
                 TP/SL: {appliedParams.takeProfitAtr}/{appliedParams.stopLossAtr}
                 {appliedParams.minDivergencePct !== undefined && ` | Div: ${appliedParams.minDivergencePct}%`}
+                {appliedParams.indicators && ` | 지표: ${appliedParams.indicators.join(', ').toUpperCase()}`}
               </span>
             </div>
             <button

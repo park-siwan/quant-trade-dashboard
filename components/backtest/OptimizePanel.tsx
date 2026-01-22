@@ -23,6 +23,7 @@ interface OptimizePanelProps {
     takeProfitAtr: number;
     stopLossAtr: number;
     minDivergencePct?: number;
+    indicators?: string[];
   }) => void;
   onSaveSuccess?: () => void;
 }
@@ -100,6 +101,7 @@ export default function OptimizePanel({ onApplyParams, onSaveSuccess }: Optimize
       takeProfitAtr: item.params.tp_atr,
       stopLossAtr: item.params.sl_atr,
       minDivergencePct: item.params.min_div_pct,
+      indicators: params.indicators,  // 현재 선택된 인디케이터 전달
     });
   };
 
