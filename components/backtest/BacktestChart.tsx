@@ -100,10 +100,9 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
         markers.push({
           time,
           position: isLong ? 'belowBar' : 'aboveBar',
-          color: isLong ? '#22c55e' : '#ef4444',  // 롱: 녹색, 숏: 빨강
-          shape: 'text',
-          text: '🛡️',  // 방패 (수수료 보호)
-          size: 0.4,
+          color: isLong ? '#a1a1aa' : '#52525b',  // 롱: zinc-400 연한 회색, 숏: zinc-600 진한 회색
+          shape: isLong ? 'arrowUp' : 'arrowDown',
+          size: 1.5,  // 캔들에 파묻히지 않도록 크기 키움
         } as SeriesMarker<Time>);
 
         // 맵에 저장 (툴팁용)
@@ -126,14 +125,13 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
       // 수수료로 인한 손실: 가격은 유리했지만 PnL은 마이너스
       const feeLoss = priceWasFavorable && !isProfit;
 
-      // 진입 마커: 롱=아래(로켓), 숏=위(비구름)
+      // 진입 마커: 롱=아래(위 화살표), 숏=위(아래 화살표)
       markers.push({
         time: entryTime,
         position: isLong ? 'belowBar' : 'aboveBar',
-        color: '#ffffff',  // 이모티콘은 자체 색상 사용
-        shape: 'text',
-        text: isLong ? '🚀' : '🌧',
-        size: 0.5,
+        color: isLong ? '#22c55e' : '#ef4444',  // 롱: 초록, 숏: 빨강
+        shape: isLong ? 'arrowUp' : 'arrowDown',
+        size: 1.5,
       } as SeriesMarker<Time>);
 
       // 청산 마커: 청산가가 진입가보다 높으면 위, 낮으면 아래
@@ -141,7 +139,7 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
       let exitText: string;
       if (isProfit) {
         exitColor = '#ffffff';  // 이모티콘 자체 색상 사용
-        exitText = '💰';
+        exitText = '🪙';
       } else if (feeLoss) {
         exitColor = '#eab308';  // 수수료 손실: 노랑
         exitText = '⚡';
@@ -317,8 +315,8 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
             }}
           >
             <div className="font-semibold mb-2">
-              <span className={hoveredSkipped.direction === 'long' ? 'text-green-400' : 'text-red-400'}>
-                {hoveredSkipped.direction === 'long' ? '🛡️ 롱' : '🛡️ 숏'}
+              <span className={hoveredSkipped.direction === 'long' ? 'text-zinc-400' : 'text-zinc-600'}>
+                {hoveredSkipped.direction === 'long' ? '▲ 롱' : '▼ 숏'}
               </span>
               <span className="ml-2 text-yellow-400">수수료 보호</span>
             </div>
@@ -339,13 +337,13 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
       </div>
       <div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-400">
         <span className="flex items-center gap-1">
-          <span className="text-[10px]">🚀</span> 롱
+          <span className="text-green-400 text-[10px]">↑</span> 롱
         </span>
         <span className="flex items-center gap-1">
-          <span className="text-[10px]">🌧</span> 숏
+          <span className="text-red-400 text-[10px]">↓</span> 숏
         </span>
         <span className="flex items-center gap-1">
-          <span className="text-[10px]">💰</span> 익절
+          <span className="text-[10px]">🪙</span> 익절
         </span>
         <span className="flex items-center gap-1">
           <span className="text-[10px]">💸</span> 손절
@@ -354,7 +352,7 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
           <span className="text-yellow-400 text-[10px]">⚡</span> 수수료 손실
         </span>
         <span className="flex items-center gap-1">
-          <span className="text-green-400 text-[10px]">🛡️</span>/<span className="text-red-400 text-[10px]">🛡️</span> 수수료 보호
+          <span className="text-zinc-400 text-[10px]">↑</span>/<span className="text-zinc-600 text-[10px]">↓</span> 수수료 보호
         </span>
       </div>
     </div>
