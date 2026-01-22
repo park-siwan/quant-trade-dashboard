@@ -22,22 +22,33 @@ interface SavedResultsPanelProps {
     minDivergencePct?: number;
     indicators?: string[];
   }) => void;
+  autoSelectFirst?: boolean; // 첫 번째 결과 자동 선택
 }
 
 export interface SavedResultsPanelRef {
   refresh: () => void;
+  getTopResult: () => SavedOptimizeResult | null;
 }
 
-const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProps>(({ onViewResult }, ref) => {
+const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProps>(({ onViewResult, autoSelectFirst = false }, ref) => {
   const [results, setResults] = useState<SavedOptimizeResult[]>([]);
   const [stats, setStats] = useState<OptimizeStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'recent' | 'top-sharpe' | 'top-profit'>('top-sharpe');
+  const [hasAutoSelected, setHasAutoSelected] = useState(false);
 
   useEffect(() => {
     loadResults();
     loadStats();
   }, [viewMode]);
+
+  // 자동 선택 (첫 로드 시 한 번만)
+  useEffect(() => {
+    if (autoSelectFirst && !hasAutoSelected && results.length > 0 && !isLoading) {
+      setHasAutoSelected(true);
+      handleRowClick(results[0]);
+    }
+  }, [results, autoSelectFirst, hasAutoSelected, isLoading]);
 
   // 외부에서 refresh 호출 가능하도록 노출
   useImperativeHandle(ref, () => ({
@@ -45,6 +56,7 @@ const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProp
       loadResults();
       loadStats();
     },
+    getTopResult: () => results.length > 0 ? results[0] : null,
   }));
 
   const loadResults = async () => {

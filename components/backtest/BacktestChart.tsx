@@ -46,7 +46,7 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
     // 차트 생성
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
-      height: 400,
+      height: 500,
       layout: {
         background: { color: '#18181b' },
         textColor: '#a1a1aa',

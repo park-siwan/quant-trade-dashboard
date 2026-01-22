@@ -38,7 +38,9 @@ export default function TradeList({ trades, onTradeClick, selectedTrade }: Trade
             </tr>
           </thead>
           <tbody>
-            {trades.map((trade, index) => {
+            {[...trades].sort((a, b) =>
+              new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime()
+            ).map((trade, index) => {
               const isSelected = selectedTrade?.entryTime === trade.entryTime;
               const isWin = trade.pnl > 0;
 

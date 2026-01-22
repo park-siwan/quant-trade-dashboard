@@ -105,6 +105,17 @@ export interface LongShortRatioData {
   timestamp: number;
 }
 
+// 실시간 다이버전스 신호 타입
+export interface RealtimeDivergenceData {
+  type: 'rsi';
+  direction: 'bullish' | 'bearish';
+  timestamp: number;
+  price: number;
+  rsiValue: number;
+  strength: number;
+  timeframe: string;
+}
+
 interface SocketContextValue {
   socket: Socket | null;
   isConnected: boolean;
@@ -118,6 +129,8 @@ interface SocketContextValue {
   fundingRateData: FundingRateData | null;
   coinglassData: CoinglassData | null;
   longShortRatioData: LongShortRatioData | null;
+  divergenceData: RealtimeDivergenceData | null;
+  divergenceHistory: RealtimeDivergenceData[];
   subscribeKline: (timeframe: string) => void;
   subscribeMtf: (symbol: string) => void;
 }
@@ -135,6 +148,8 @@ const SocketContext = createContext<SocketContextValue>({
   fundingRateData: null,
   coinglassData: null,
   longShortRatioData: null,
+  divergenceData: null,
+  divergenceHistory: [],
   subscribeKline: () => {},
   subscribeMtf: () => {},
 });
@@ -152,6 +167,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [fundingRateData, setFundingRateData] = useState<FundingRateData | null>(null);
   const [coinglassData, setCoinglassData] = useState<CoinglassData | null>(null);
   const [longShortRatioData, setLongShortRatioData] = useState<LongShortRatioData | null>(null);
+  const [divergenceData, setDivergenceData] = useState<RealtimeDivergenceData | null>(null);
+  const [divergenceHistory, setDivergenceHistory] = useState<RealtimeDivergenceData[]>([]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -220,6 +237,19 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setLongShortRatioData(data);
     });
 
+    // 실시간 다이버전스 신호
+    socket.on('data:divergence', (data: RealtimeDivergenceData) => {
+      setDivergenceData(data);
+      // 히스토리에 추가 (최대 50개 유지)
+      setDivergenceHistory(prev => {
+        const newHistory = [...prev, data];
+        if (newHistory.length > 50) {
+          return newHistory.slice(-50);
+        }
+        return newHistory;
+      });
+    });
+
     socket.on('connect_error', () => {
       // Connection error - socket.io will automatically retry
     });
@@ -257,6 +287,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         fundingRateData,
         coinglassData,
         longShortRatioData,
+        divergenceData,
+        divergenceHistory,
         subscribeKline,
         subscribeMtf,
       }}
