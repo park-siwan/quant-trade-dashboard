@@ -62,6 +62,85 @@ export default function RealtimeChart() {
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const tradeMapRef = useRef<Map<number, { trade?: TradeResult; skipped?: SkippedSignal; type: 'entry' | 'exit' | 'skipped' }>>(new Map());
 
+  // 알림 관련 상태
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const lastSignalIdRef = useRef<string | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  // 소리 알림 함수 (Web Audio API)
+  const playAlertSound = (direction: 'bullish' | 'bearish') => {
+    if (!soundEnabled) return;
+
+    try {
+      // AudioContext 생성 (브라우저 정책상 사용자 인터랙션 후에만 가능)
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioContextRef.current;
+
+      // 오실레이터 생성
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      // 방향에 따라 다른 소리 (롱: 높은 음, 숏: 낮은 음)
+      if (direction === 'bullish') {
+        // 롱 신호: 상승하는 밝은 소리
+        oscillator.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+        oscillator.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1); // E5
+        oscillator.frequency.setValueAtTime(783.99, ctx.currentTime + 0.2); // G5
+      } else {
+        // 숏 신호: 하강하는 낮은 소리
+        oscillator.frequency.setValueAtTime(392.00, ctx.currentTime); // G4
+        oscillator.frequency.setValueAtTime(329.63, ctx.currentTime + 0.1); // E4
+        oscillator.frequency.setValueAtTime(261.63, ctx.currentTime + 0.2); // C4
+      }
+
+      oscillator.type = 'sine';
+      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.4);
+    } catch (err) {
+      console.error('Failed to play alert sound:', err);
+    }
+  };
+
+  // 실시간 다이버전스 신호 알림
+  useEffect(() => {
+    if (!divergenceData) return;
+
+    // 고유 신호 ID 생성 (시간 + 방향)
+    const signalId = `${divergenceData.timestamp}-${divergenceData.direction}`;
+
+    // 이미 알림한 신호면 스킵
+    if (lastSignalIdRef.current === signalId) return;
+
+    lastSignalIdRef.current = signalId;
+    playAlertSound(divergenceData.direction);
+
+    // 브라우저 알림도 표시 (권한 있을 경우)
+    if (Notification.permission === 'granted') {
+      new Notification(
+        divergenceData.direction === 'bullish' ? '🚀 롱 신호 발생!' : '🌧 숏 신호 발생!',
+        {
+          body: `가격: $${divergenceData.price.toLocaleString()} | RSI: ${divergenceData.rsiValue.toFixed(1)}`,
+          icon: '/favicon.ico',
+        }
+      );
+    }
+  }, [divergenceData, soundEnabled]);
+
+  // 브라우저 알림 권한 요청
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
   // 상위 전략 목록 로드
   useEffect(() => {
     const loadStrategies = async () => {
@@ -482,6 +561,29 @@ export default function RealtimeChart() {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* 알림 토글 */}
+          <button
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
+              soundEnabled
+                ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30'
+                : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
+            }`}
+            title={soundEnabled ? '알림 끄기' : '알림 켜기'}
+          >
+            {soundEnabled ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+            )}
+            <span>{soundEnabled ? '알림 ON' : '알림 OFF'}</span>
+          </button>
+
           {/* 타임프레임 선택 */}
           <div className="flex gap-1 bg-zinc-800 p-1 rounded">
             {['1m', '5m', '15m', '1h'].map(tf => (
