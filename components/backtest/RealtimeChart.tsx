@@ -9,9 +9,10 @@ import {
   SeriesMarker,
   Time,
   createSeriesMarkers,
+  LineStyle,
 } from 'lightweight-charts';
 import { useSocket, RealtimeDivergenceData } from '@/contexts/SocketContext';
-import { getTopSavedResults, SavedOptimizeResult, runBacktest, TradeResult, SkippedSignal, OpenPosition } from '@/lib/backtest-api';
+import { getTopSavedResults, SavedOptimizeResult, runBacktest, TradeResult, SkippedSignal, OpenPosition, BacktestResult } from '@/lib/backtest-api';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -51,6 +52,7 @@ export default function RealtimeChart() {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<any>(null);
+  const priceLinesRef = useRef<any[]>([]); // TP/SL/Entry price lines
   const isChartDisposedRef = useRef(false);
   const { isConnected, kline, ticker, divergenceData, divergenceHistory, subscribeKline } = useSocket();
 
@@ -63,6 +65,7 @@ export default function RealtimeChart() {
   const [backtestTrades, setBacktestTrades] = useState<TradeResult[]>([]);
   const [skippedSignals, setSkippedSignals] = useState<SkippedSignal[]>([]);
   const [openPosition, setOpenPosition] = useState<OpenPosition | null>(null);
+  const [backtestStats, setBacktestStats] = useState<BacktestResult | null>(null);
 
   // 툴팁 관련 상태
   const [hoveredTrade, setHoveredTrade] = useState<TradeResult | null>(null);
@@ -213,7 +216,7 @@ export default function RealtimeChart() {
     }
   };
 
-  // 실시간 다이버전스 신호 알림
+  // 실시간 다이버전스 신호 알림 + 백테스트 재실행
   useEffect(() => {
     if (!divergenceData) return;
 
@@ -232,6 +235,12 @@ export default function RealtimeChart() {
     const title = divergenceData.direction === 'bullish' ? '🚀 롱 신호 발생!' : '🌧 숏 신호 발생!';
     const body = `가격: $${divergenceData.price.toLocaleString()} | RSI: ${divergenceData.rsiValue.toFixed(1)}`;
     showNotification(title, body);
+
+    // 새 신호 발생 시 백테스트 재실행하여 openPosition 업데이트
+    if (selectedStrategy) {
+      console.log('[Signal] New divergence signal, refreshing backtest...');
+      loadBacktestTrades(selectedStrategy);
+    }
   }, [divergenceData, soundEnabled]);
 
   // 브라우저 알림 권한 요청
@@ -295,6 +304,11 @@ export default function RealtimeChart() {
       );
 
       console.log(`[Exit Alert] ${direction.toUpperCase()} ${exitType.toUpperCase()} @ $${currentPrice}`);
+
+      // TP/SL 도달 후 백테스트 재실행하여 포지션 상태 갱신
+      if (selectedStrategy) {
+        setTimeout(() => loadBacktestTrades(selectedStrategy), 1000);
+      }
     }
   }, [ticker?.price, openPosition, soundEnabled]);
 
@@ -346,6 +360,7 @@ export default function RealtimeChart() {
       setBacktestTrades(result.trades);
       setSkippedSignals(result.skippedSignals || []);
       setOpenPosition(result.openPosition || null);
+      setBacktestStats(result);
       console.log('[Backtest] Open position:', result.openPosition);
     } catch (err) {
       console.error('Failed to load backtest trades:', err);
@@ -499,7 +514,7 @@ export default function RealtimeChart() {
       timeScale: {
         borderColor: '#3f3f46',
         timeVisible: true,
-        rightOffset: 12,
+        rightOffset: 20,  // TP/SL 레이블 공간 (적당히)
         shiftVisibleRangeOnNewBar: true,
       },
       localization: {
@@ -568,23 +583,15 @@ export default function RealtimeChart() {
 
     window.addEventListener('resize', handleResize);
 
-    // 마지막 캔들 기준으로 visible range 설정 (렌더링 완료 후)
+    // 마지막 캔들 기준으로 스크롤 (rightOffset이 적용됨)
     const lastCandleTime = candles[candles.length - 1].time as number;
-    const timeframeSeconds = timeframe === '1m' ? 60 : timeframe === '5m' ? 300 : timeframe === '15m' ? 900 : 3600;
-    const visibleBars = 100; // 화면에 보일 캔들 수
-    const fromTime = lastCandleTime - (visibleBars * timeframeSeconds);
-
     console.log('[Chart] Last candle time:', new Date(lastCandleTime * 1000).toLocaleString('ko-KR'));
-    console.log('[Chart] Setting visible range from:', new Date(fromTime * 1000).toLocaleString('ko-KR'));
 
-    // 차트 렌더링 완료 후 visible range 설정
+    // scrollToRealTime()을 사용하면 rightOffset이 적용됨
     requestAnimationFrame(() => {
       if (chartRef.current) {
-        chartRef.current.timeScale().setVisibleRange({
-          from: fromTime as Time,
-          to: (lastCandleTime + timeframeSeconds * 10) as Time,
-        });
-        console.log('[Chart] Visible range set successfully');
+        chartRef.current.timeScale().scrollToRealTime();
+        console.log('[Chart] Scrolled to realtime with rightOffset');
       }
     });
 
@@ -598,6 +605,7 @@ export default function RealtimeChart() {
       }
       chartRef.current = null;
       candleSeriesRef.current = null;
+      priceLinesRef.current = [];
     };
   }, [timeframe, chartKey]);
 
@@ -660,7 +668,7 @@ export default function RealtimeChart() {
       });
     }
 
-    // 스킵된 신호 마커 (parseTradeTime 사용)
+    // 스킵된 신호 마커 (수수료 보호) - 롱/숏 구분
     if (skippedSignals.length > 0) {
       skippedSignals.forEach((signal) => {
         const signalTime = parseTradeTime(signal.time);
@@ -669,10 +677,10 @@ export default function RealtimeChart() {
           markers.push({
             time: signalTime as Time,
             position: isLong ? 'belowBar' : 'aboveBar',
-            color: '#6b7280',
+            color: isLong ? '#22c55e' : '#ef4444',  // 롱: 녹색, 숏: 빨강
             shape: 'text',
-            text: '⏸️',
-            size: 0.5,
+            text: isLong ? '🛡️' : '🛡️',  // 방패 (보호)
+            size: 0.4,
           } as SeriesMarker<Time>);
           tradeMap.set(signalTime, { skipped: signal, type: 'skipped' });
         }
@@ -723,6 +731,57 @@ export default function RealtimeChart() {
 
     tradeMapRef.current = tradeMap;
   }, [backtestTrades, skippedSignals, divergenceHistory, openPosition, candles.length]);
+
+  // TP/SL/Entry 가로선 업데이트 (Price Line 사용 - 캔들 위에 표시)
+  useEffect(() => {
+    if (!candleSeriesRef.current || isChartDisposedRef.current) return;
+
+    const candleSeries = candleSeriesRef.current;
+
+    // 기존 price lines 제거
+    priceLinesRef.current.forEach(line => {
+      try { candleSeries.removePriceLine(line); } catch {}
+    });
+    priceLinesRef.current = [];
+
+    // openPosition이 있을 때만 라인 그리기
+    if (openPosition) {
+      // Entry 라인 (노란색 실선)
+      const entryLine = candleSeries.createPriceLine({
+        price: openPosition.entryPrice,
+        color: '#fbbf24',
+        lineWidth: 1,
+        lineStyle: LineStyle.Solid,
+        axisLabelVisible: true,
+        title: '진입',
+      });
+      priceLinesRef.current.push(entryLine);
+
+      // TP 라인 (녹색 실선)
+      const tpLine = candleSeries.createPriceLine({
+        price: openPosition.tp,
+        color: '#22c55e',
+        lineWidth: 1,
+        lineStyle: LineStyle.Solid,
+        axisLabelVisible: true,
+        title: 'TP',
+      });
+      priceLinesRef.current.push(tpLine);
+
+      // SL 라인 (빨간색 실선)
+      const slLine = candleSeries.createPriceLine({
+        price: openPosition.sl,
+        color: '#ef4444',
+        lineWidth: 1,
+        lineStyle: LineStyle.Solid,
+        axisLabelVisible: true,
+        title: 'SL',
+      });
+      priceLinesRef.current.push(slLine);
+
+      console.log(`[Lines] Entry: $${openPosition.entryPrice}, TP: $${openPosition.tp}, SL: $${openPosition.sl}`);
+    }
+  }, [openPosition]);
 
   return (
     <div className="bg-zinc-900 p-4 rounded-lg">
@@ -823,6 +882,48 @@ export default function RealtimeChart() {
         </div>
       </div>
 
+      {/* 백테스트 통계 카드 */}
+      {backtestStats && (
+        <div className="grid grid-cols-6 gap-2 mb-3">
+          <div className="bg-zinc-800 rounded p-2 text-center">
+            <div className="text-zinc-500 text-[10px]">총 수익</div>
+            <div className={`text-sm font-bold ${backtestStats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {backtestStats.totalPnlPercent >= 0 ? '+' : ''}{backtestStats.totalPnlPercent.toFixed(1)}%
+            </div>
+          </div>
+          <div className="bg-zinc-800 rounded p-2 text-center">
+            <div className="text-zinc-500 text-[10px]">안정성 (Sharpe)</div>
+            <div className={`text-sm font-bold ${backtestStats.sharpeRatio >= 1 ? 'text-green-400' : backtestStats.sharpeRatio >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+              {backtestStats.sharpeRatio.toFixed(2)}
+            </div>
+          </div>
+          <div className="bg-zinc-800 rounded p-2 text-center">
+            <div className="text-zinc-500 text-[10px]">승률</div>
+            <div className={`text-sm font-bold ${backtestStats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+              {backtestStats.winRate.toFixed(0)}%
+            </div>
+          </div>
+          <div className="bg-zinc-800 rounded p-2 text-center">
+            <div className="text-zinc-500 text-[10px]">수익/손실 (PF)</div>
+            <div className={`text-sm font-bold ${backtestStats.profitFactor >= 1.5 ? 'text-green-400' : backtestStats.profitFactor >= 1 ? 'text-yellow-400' : 'text-red-400'}`}>
+              {backtestStats.profitFactor.toFixed(2)}
+            </div>
+          </div>
+          <div className="bg-zinc-800 rounded p-2 text-center">
+            <div className="text-zinc-500 text-[10px]">최대손실 (MDD)</div>
+            <div className="text-red-400 text-sm font-bold">
+              -{backtestStats.maxDrawdownPercent.toFixed(1)}%
+            </div>
+          </div>
+          <div className="bg-zinc-800 rounded p-2 text-center">
+            <div className="text-zinc-500 text-[10px]">총 거래</div>
+            <div className="text-zinc-300 text-sm font-bold">
+              {backtestStats.totalTrades}회
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 차트 헤더: 가격 + 타임프레임 */}
       <div className="flex justify-between items-center mb-3">
         <div className="flex items-center gap-3">
@@ -906,10 +1007,12 @@ export default function RealtimeChart() {
               </div>
             </div>
           )}
-          {/* 스킵된 신호 툴팁 */}
+          {/* 수수료 보호 신호 툴팁 */}
           {hoveredSkipped && tooltipPos && (
             <div
-              className="absolute z-50 bg-zinc-800 border border-gray-500 rounded-lg p-3 text-xs shadow-lg pointer-events-none"
+              className={`absolute z-50 bg-zinc-800 border rounded-lg p-3 text-xs shadow-lg pointer-events-none ${
+                hoveredSkipped.direction === 'long' ? 'border-green-600' : 'border-red-600'
+              }`}
               style={{
                 left: Math.min(tooltipPos.x + 10, (containerRef.current?.clientWidth || 400) - 200),
                 top: Math.max(tooltipPos.y - 80, 10),
@@ -917,21 +1020,20 @@ export default function RealtimeChart() {
             >
               <div className="font-semibold mb-2">
                 <span className={hoveredSkipped.direction === 'long' ? 'text-green-400' : 'text-red-400'}>
-                  {hoveredSkipped.direction.toUpperCase()}
+                  {hoveredSkipped.direction === 'long' ? '🛡️ 롱' : '🛡️ 숏'}
                 </span>
-                <span className="ml-2 text-gray-400">⏸️ 스킵</span>
+                <span className="ml-2 text-yellow-400">수수료 보호</span>
               </div>
               <div className="space-y-1 text-zinc-300">
                 <div>시간: {formatKST(new Date(hoveredSkipped.time).getTime())}</div>
                 <div>가격: ${hoveredSkipped.price.toFixed(2)}</div>
-                <div className="text-gray-400">
-                  사유: ATR 범위 내 수수료 손실 우려
+                <div className="text-zinc-400 text-[10px] mt-1">
+                  수수료가 기대수익 초과하여 진입 보류
                 </div>
-                <div className="text-yellow-400">
-                  기대 수익: {hoveredSkipped.expectedReturn.toFixed(2)}%
-                </div>
-                <div className="text-red-400">
-                  예상 비용: {hoveredSkipped.totalCost.toFixed(2)}%
+                <div className="mt-1 pt-1 border-t border-zinc-700">
+                  <span className="text-yellow-400">기대: {hoveredSkipped.expectedReturn.toFixed(2)}%</span>
+                  <span className="text-zinc-500 mx-1">vs</span>
+                  <span className="text-red-400">비용: {hoveredSkipped.totalCost.toFixed(2)}%</span>
                 </div>
               </div>
             </div>
@@ -999,7 +1101,7 @@ export default function RealtimeChart() {
           <span className="text-[10px]">💸</span> 손실 청산
         </span>
         <span className="flex items-center gap-1">
-          <span className="text-[10px]">⏸️</span> 스킵 (수수료)
+          <span className="text-green-400 text-[10px]">🛡️</span>/<span className="text-red-400 text-[10px]">🛡️</span> 수수료 보호
         </span>
         <span className="flex items-center gap-1">
           <span className="text-[10px]">🟢</span> 롱 진행중
@@ -1015,7 +1117,7 @@ export default function RealtimeChart() {
         )}
       </div>
 
-      {/* 열린 포지션 정보 */}
+      {/* 열린 포지션 정보 - 실시간 가격으로 PnL 계산 */}
       {openPosition && (
         <div className="mt-3 p-3 bg-zinc-800 rounded-lg border border-yellow-500/50">
           <div className="flex items-center justify-between">
@@ -1026,14 +1128,34 @@ export default function RealtimeChart() {
               <span className="text-zinc-400 text-sm">
                 @ ${openPosition.entryPrice.toFixed(2)}
               </span>
+              {ticker && (
+                <span className="text-zinc-500 text-xs">
+                  → ${ticker.price.toLocaleString()}
+                </span>
+              )}
             </div>
             <div className="text-right">
-              <div className={`text-sm font-medium ${openPosition.unrealizedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {openPosition.unrealizedPnl >= 0 ? '+' : ''}{openPosition.unrealizedPnl.toFixed(2)} ({openPosition.unrealizedPnlPercent.toFixed(2)}%)
-              </div>
-              <div className="text-xs text-zinc-500">
-                TP: ${openPosition.tp.toFixed(2)} | SL: ${openPosition.sl.toFixed(2)}
-              </div>
+              {(() => {
+                // 실시간 가격으로 PnL 계산
+                const currentPrice = ticker?.price || openPosition.currentPrice;
+                const isLong = openPosition.direction === 'long';
+                const pnlPercent = isLong
+                  ? ((currentPrice - openPosition.entryPrice) / openPosition.entryPrice) * 100
+                  : ((openPosition.entryPrice - currentPrice) / openPosition.entryPrice) * 100;
+                const pnl = (pnlPercent / 100) * openPosition.size * openPosition.entryPrice;
+                const isProfit = pnl >= 0;
+
+                return (
+                  <>
+                    <div className={`text-sm font-medium ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                      {isProfit ? '+' : ''}{pnl.toFixed(2)} ({pnlPercent.toFixed(2)}%)
+                    </div>
+                    <div className="text-xs text-zinc-500">
+                      TP: ${openPosition.tp.toFixed(2)} | SL: ${openPosition.sl.toFixed(2)}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>

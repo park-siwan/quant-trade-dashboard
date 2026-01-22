@@ -91,7 +91,7 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
     // 거래 시간 -> timestamp 맵 (툴팁용)
     const tradeMap = new Map<number, { trade: TradeResult; type: 'entry' | 'exit'; feeLoss?: boolean; skipped?: SkippedSignal }>();
 
-    // 스킵된 신호 마커 추가
+    // 수수료 보호 신호 마커 추가 (롱/숏 구분)
     if (result.skippedSignals && result.skippedSignals.length > 0) {
       result.skippedSignals.forEach(skipped => {
         const time = parseTradeTime(skipped.time) as Time;
@@ -100,10 +100,10 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
         markers.push({
           time,
           position: isLong ? 'belowBar' : 'aboveBar',
-          color: isLong ? '#166534' : '#991b1b',  // 어두운 녹색/빨강 (롱/숏 구분)
+          color: isLong ? '#22c55e' : '#ef4444',  // 롱: 녹색, 숏: 빨강
           shape: 'text',
-          text: '⊘',
-          size: 0.3,
+          text: '🛡️',  // 방패 (수수료 보호)
+          size: 0.4,
         } as SeriesMarker<Time>);
 
         // 맵에 저장 (툴팁용)
@@ -305,10 +305,12 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
             </div>
           </div>
         )}
-        {/* 스킵된 신호 툴팁 */}
+        {/* 수수료 보호 신호 툴팁 */}
         {hoveredSkipped && tooltipPos && (
           <div
-            className="absolute z-50 bg-zinc-800 border border-gray-500 rounded-lg p-3 text-xs shadow-lg pointer-events-none"
+            className={`absolute z-50 bg-zinc-800 border rounded-lg p-3 text-xs shadow-lg pointer-events-none ${
+              hoveredSkipped.direction === 'long' ? 'border-green-600' : 'border-red-600'
+            }`}
             style={{
               left: Math.min(tooltipPos.x + 10, (containerRef.current?.clientWidth || 400) - 200),
               top: Math.max(tooltipPos.y - 80, 10),
@@ -316,21 +318,20 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
           >
             <div className="font-semibold mb-2">
               <span className={hoveredSkipped.direction === 'long' ? 'text-green-400' : 'text-red-400'}>
-                {hoveredSkipped.direction.toUpperCase()}
+                {hoveredSkipped.direction === 'long' ? '🛡️ 롱' : '🛡️ 숏'}
               </span>
-              <span className="ml-2 text-gray-400">진입 자제</span>
+              <span className="ml-2 text-yellow-400">수수료 보호</span>
             </div>
             <div className="space-y-1 text-zinc-300">
               <div>시간: {formatKST(parseTradeTime(hoveredSkipped.time))}</div>
               <div>가격: ${hoveredSkipped.price.toFixed(2)}</div>
-              <div className="text-gray-400">
-                기대수익: {hoveredSkipped.expectedReturn.toFixed(3)}%
+              <div className="text-zinc-400 text-[10px] mt-1">
+                수수료가 기대수익 초과하여 진입 보류
               </div>
-              <div className="text-gray-400">
-                비용: {hoveredSkipped.totalCost.toFixed(3)}%
-              </div>
-              <div className="text-gray-500 text-[10px] mt-1">
-                수수료+슬리피지를 커버 못해 진입 안함
+              <div className="mt-1 pt-1 border-t border-zinc-700">
+                <span className="text-yellow-400">기대: {hoveredSkipped.expectedReturn.toFixed(2)}%</span>
+                <span className="text-zinc-500 mx-1">vs</span>
+                <span className="text-red-400">비용: {hoveredSkipped.totalCost.toFixed(2)}%</span>
               </div>
             </div>
           </div>
@@ -347,13 +348,13 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
           <span className="text-[10px]">💰</span> 익절
         </span>
         <span className="flex items-center gap-1">
-          <span className="text-[10px]">🗡</span> 손절
+          <span className="text-[10px]">💸</span> 손절
         </span>
         <span className="flex items-center gap-1">
-          <span className="text-yellow-400 text-[10px]">⚡</span> 수수료
+          <span className="text-yellow-400 text-[10px]">⚡</span> 수수료 손실
         </span>
         <span className="flex items-center gap-1">
-          <span className="text-green-800 text-[10px]">⊘</span>/<span className="text-red-800 text-[10px]">⊘</span> 자제
+          <span className="text-green-400 text-[10px]">🛡️</span>/<span className="text-red-400 text-[10px]">🛡️</span> 수수료 보호
         </span>
       </div>
     </div>
