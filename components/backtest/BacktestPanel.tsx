@@ -1,29 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BacktestParams } from '@/lib/backtest-api';
 
 interface BacktestPanelProps {
   onRun: (params: BacktestParams) => void;
   isLoading: boolean;
+  externalParams?: Partial<BacktestParams> | null;
 }
 
-export default function BacktestPanel({ onRun, isLoading }: BacktestPanelProps) {
+export default function BacktestPanel({ onRun, isLoading, externalParams }: BacktestPanelProps) {
   const [params, setParams] = useState<BacktestParams>({
     symbol: 'BTC/USDT',
-    timeframe: '1h',
-    candleCount: 500,
-    indicators: ['rsi'],
+    timeframe: '5m',
+    candleCount: 5000,
+    indicators: ['rsi', 'obv', 'cvd', 'oi'],
     rsiPeriod: 14,
     pivotLeftBars: 5,
-    pivotRightBars: 2,
+    pivotRightBars: 3,
     minDistance: 5,
-    maxDistance: 60,
+    maxDistance: 200,
     takeProfitAtr: 2.0,
     stopLossAtr: 1.0,
-    initialCapital: 10000,
-    positionSizePercent: 10,
+    initialCapital: 1000,
+    positionSizePercent: 100,
   });
+
+  // 외부에서 파라미터가 변경되면 적용
+  useEffect(() => {
+    if (externalParams) {
+      setParams(prev => ({ ...prev, ...externalParams }));
+    }
+  }, [externalParams]);
 
   const handleChange = (key: keyof BacktestParams, value: number | string | string[]) => {
     setParams(prev => ({ ...prev, [key]: value }));
@@ -80,9 +88,45 @@ export default function BacktestPanel({ onRun, isLoading }: BacktestPanelProps) 
         </div>
       </div>
 
+      {/* 지표 선택 */}
+      <div className="border-t border-zinc-700 pt-4">
+        <h3 className="text-sm font-medium text-zinc-300 mb-3">다이버전스 지표 선택</h3>
+        <div className="flex flex-wrap gap-3">
+          {['rsi', 'obv', 'cvd', 'oi'].map(indicator => (
+            <label key={indicator} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={params.indicators?.includes(indicator) || false}
+                onChange={e => {
+                  const current = params.indicators || [];
+                  if (e.target.checked) {
+                    handleChange('indicators', [...current, indicator]);
+                  } else {
+                    handleChange('indicators', current.filter(i => i !== indicator));
+                  }
+                }}
+                className="w-4 h-4 accent-blue-500"
+              />
+              <span className="text-sm text-zinc-300 uppercase">{indicator}</span>
+              <span className="text-xs text-zinc-500">
+                {indicator === 'rsi' && '(RSI)'}
+                {indicator === 'obv' && '(On Balance Volume)'}
+                {indicator === 'cvd' && '(Volume Delta)'}
+                {indicator === 'oi' && '(Open Interest)'}
+              </span>
+            </label>
+          ))}
+        </div>
+        {params.indicators?.includes('oi') && (
+          <p className="text-xs text-yellow-500 mt-2">
+            * OI 데이터는 Binance에서 최대 30일만 제공됩니다
+          </p>
+        )}
+      </div>
+
       {/* RSI 설정 */}
       <div className="border-t border-zinc-700 pt-4">
-        <h3 className="text-sm font-medium text-zinc-300 mb-3">RSI 다이버전스 설정</h3>
+        <h3 className="text-sm font-medium text-zinc-300 mb-3">다이버전스 파라미터</h3>
         <div className="grid grid-cols-4 gap-4">
           <div>
             <label className="block text-xs text-zinc-400 mb-1">RSI 기간</label>

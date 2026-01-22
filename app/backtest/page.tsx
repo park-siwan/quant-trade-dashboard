@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CandlestickData } from 'lightweight-charts';
 import { runBacktest, checkBacktestHealth, BacktestParams, BacktestResult } from '@/lib/backtest-api';
@@ -14,6 +15,7 @@ import { TradeResult } from '@/lib/backtest-api';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export default function BacktestPage() {
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [candles, setCandles] = useState<CandlestickData[]>([]);
@@ -21,6 +23,7 @@ export default function BacktestPage() {
   const [error, setError] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<{ valid: boolean; message: string } | null>(null);
   const [lastParams, setLastParams] = useState<BacktestParams | null>(null);
+  const [externalParams, setExternalParams] = useState<Partial<BacktestParams> | null>(null);
 
   // Python 환경 체크
   useEffect(() => {
@@ -28,6 +31,29 @@ export default function BacktestPage() {
       setHealthStatus({ valid: false, message: 'API 연결 실패' });
     });
   }, []);
+
+  // URL 파라미터에서 최적화 결과 읽기
+  useEffect(() => {
+    const rsi = searchParams.get('rsi');
+    const pl = searchParams.get('pl');
+    const pr = searchParams.get('pr');
+    const mind = searchParams.get('mind');
+    const maxd = searchParams.get('maxd');
+    const tp = searchParams.get('tp');
+    const sl = searchParams.get('sl');
+
+    if (rsi && pl && pr && mind && maxd && tp && sl) {
+      setExternalParams({
+        rsiPeriod: parseInt(rsi),
+        pivotLeftBars: parseInt(pl),
+        pivotRightBars: parseInt(pr),
+        minDistance: parseInt(mind),
+        maxDistance: parseInt(maxd),
+        takeProfitAtr: parseFloat(tp),
+        stopLossAtr: parseFloat(sl),
+      });
+    }
+  }, [searchParams]);
 
   const handleRunBacktest = async (params: BacktestParams) => {
     setIsLoading(true);
@@ -77,6 +103,12 @@ export default function BacktestPage() {
               {healthStatus.valid ? 'Python Ready' : healthStatus.message}
             </div>
           )}
+          <Link
+            href="/optimize"
+            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            파라미터 최적화
+          </Link>
           <Link href="/" className="text-zinc-400 hover:text-white transition-colors">
             ← 대시보드로
           </Link>
@@ -85,8 +117,12 @@ export default function BacktestPage() {
 
       <div className="grid grid-cols-12 gap-6">
         {/* 왼쪽: 설정 패널 */}
-        <div className="col-span-4">
-          <BacktestPanel onRun={handleRunBacktest} isLoading={isLoading} />
+        <div className="col-span-4 space-y-4">
+          <BacktestPanel
+            onRun={handleRunBacktest}
+            isLoading={isLoading}
+            externalParams={externalParams}
+          />
 
           {/* 에러 메시지 */}
           {error && (

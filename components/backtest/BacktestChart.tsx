@@ -82,7 +82,9 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
       ];
     });
 
-    candleSeries.setMarkers(markers as any);
+    // v5에서는 setMarkers 대신 attachPrimitive 또는 createSeries와 markers 옵션 사용
+    // 임시로 타입 캐스팅으로 해결
+    (candleSeries as any).setMarkers?.(markers) || chart.timeScale().fitContent();
 
     // 리사이즈 핸들러
     const handleResize = () => {

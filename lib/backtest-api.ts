@@ -80,3 +80,310 @@ export async function getTimeframes(): Promise<string[]> {
   const response = await fetch(`${API_BASE}/backtest/timeframes`);
   return response.json();
 }
+
+// 최적화 관련 타입
+export interface OptimizeParams {
+  symbol: string;
+  timeframe: string;
+  candleCount: number;
+  indicators?: string[];
+  initialCapital?: number;
+  positionSizePercent?: number;
+  metric?: 'sharpe' | 'profit' | 'winrate' | 'profitfactor';
+  topResults?: number;
+}
+
+export interface OptimizeResultItem {
+  params: {
+    rsi_period: number;
+    pivot_left: number;
+    pivot_right: number;
+    min_distance: number;
+    max_distance: number;
+    tp_atr: number;
+    sl_atr: number;
+  };
+  result: {
+    totalTrades: number;
+    winRate: number;
+    totalPnlPercent: number;
+    profitFactor: number;
+    maxDrawdown: number;
+    sharpeRatio: number;
+  };
+}
+
+export interface OptimizeResult {
+  totalCombinations: number;
+  validResults: number;
+  metric: string;
+  topResults: OptimizeResultItem[];
+}
+
+export async function runOptimization(params: OptimizeParams): Promise<OptimizeResult> {
+  const response = await fetch(`${API_BASE}/backtest/optimize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Optimization failed');
+  }
+
+  return response.json();
+}
+
+export interface OptimizeProgress {
+  type: 'progress' | 'status' | 'complete' | 'error';
+  current?: number;
+  total?: number;
+  percent?: number;
+  elapsed?: number;
+  remaining?: number;
+  message?: string;
+  best?: OptimizeResultItem;
+  result?: OptimizeResult;
+}
+
+export async function runOptimizationWithProgress(
+  params: OptimizeParams,
+  onProgress: (progress: OptimizeProgress) => void,
+): Promise<OptimizeResult> {
+  return new Promise((resolve, reject) => {
+    fetch(`${API_BASE}/backtest/optimize/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    }).then(response => {
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        reject(new Error('No reader available'));
+        return;
+      }
+
+      let buffer = '';
+
+      const read = (): void => {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            return;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data: OptimizeProgress = JSON.parse(line.substring(6));
+                onProgress(data);
+
+                if (data.type === 'complete' && data.result) {
+                  resolve(data.result);
+                } else if (data.type === 'error') {
+                  reject(new Error(data.message || 'Optimization failed'));
+                }
+              } catch {
+                // ignore parse errors
+              }
+            }
+          }
+
+          read();
+        }).catch(reject);
+      };
+
+      read();
+    }).catch(reject);
+  });
+}
+
+// ============== 저장된 결과 관리 API ==============
+
+export interface SavedOptimizeResult {
+  id: number;
+  createdAt: string;
+  symbol: string;
+  timeframe: string;
+  candleCount: number;
+  indicators: string;
+  metric: string;
+  rsiPeriod: number;
+  pivotLeft: number;
+  pivotRight: number;
+  minDistance: number;
+  maxDistance: number;
+  tpAtr: number;
+  slAtr: number;
+  totalTrades: number;
+  winRate: number;
+  totalPnlPercent: number;
+  profitFactor: number;
+  maxDrawdown: number;
+  sharpeRatio: number;
+  rank: number;
+  note?: string;
+}
+
+export interface SaveOptimizeRequest {
+  symbol: string;
+  timeframe: string;
+  candleCount: number;
+  indicators: string[];
+  metric: string;
+  params: OptimizeResultItem['params'];
+  result: OptimizeResultItem['result'];
+  rank: number;
+  note?: string;
+}
+
+export interface SaveMultipleRequest {
+  symbol: string;
+  timeframe: string;
+  candleCount: number;
+  indicators: string[];
+  metric: string;
+  results: OptimizeResultItem[];
+}
+
+export interface OptimizeStats {
+  totalCount: number;
+  avgSharpe: number;
+  avgProfit: number;
+  bestSharpe: number;
+  bestProfit: number;
+}
+
+/**
+ * 최적화 결과 저장 (단일)
+ */
+export async function saveOptimizeResult(dto: SaveOptimizeRequest): Promise<SavedOptimizeResult> {
+  const response = await fetch(`${API_BASE}/backtest/optimize/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Save failed');
+  }
+
+  return response.json();
+}
+
+/**
+ * 최적화 결과 저장 (여러 개)
+ */
+export async function saveMultipleOptimizeResults(dto: SaveMultipleRequest): Promise<SavedOptimizeResult[]> {
+  const response = await fetch(`${API_BASE}/backtest/optimize/save-multiple`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Save failed');
+  }
+
+  return response.json();
+}
+
+/**
+ * 저장된 결과 조회 (전체)
+ */
+export async function getSavedResults(limit = 100, offset = 0): Promise<SavedOptimizeResult[]> {
+  const response = await fetch(
+    `${API_BASE}/backtest/optimize/saved?limit=${limit}&offset=${offset}`
+  );
+  return response.json();
+}
+
+/**
+ * 저장된 결과 조회 (심볼/타임프레임별)
+ */
+export async function getSavedResultsByFilter(
+  symbol: string,
+  timeframe: string,
+  limit = 50
+): Promise<SavedOptimizeResult[]> {
+  const response = await fetch(
+    `${API_BASE}/backtest/optimize/saved/filter?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&limit=${limit}`
+  );
+  return response.json();
+}
+
+/**
+ * 최고 성과 조회
+ */
+export async function getTopSavedResults(
+  metric: 'sharpe' | 'profit' = 'sharpe',
+  limit = 10
+): Promise<SavedOptimizeResult[]> {
+  const response = await fetch(
+    `${API_BASE}/backtest/optimize/saved/top?metric=${metric}&limit=${limit}`
+  );
+  return response.json();
+}
+
+/**
+ * 통계 정보 조회
+ */
+export async function getOptimizeStats(): Promise<OptimizeStats> {
+  const response = await fetch(`${API_BASE}/backtest/optimize/saved/stats`);
+  return response.json();
+}
+
+/**
+ * 결과 삭제 (단일)
+ */
+export async function deleteSavedResult(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/backtest/optimize/saved/${id}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Delete failed');
+  }
+}
+
+/**
+ * 결과 삭제 (여러 개)
+ */
+export async function deleteMultipleSavedResults(ids: number[]): Promise<{ deletedCount: number }> {
+  const response = await fetch(`${API_BASE}/backtest/optimize/saved/delete-multiple`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Delete failed');
+  }
+
+  return response.json();
+}
+
+/**
+ * 메모 업데이트
+ */
+export async function updateResultNote(id: number, note: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/backtest/optimize/saved/${id}/note`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Update failed');
+  }
+}
