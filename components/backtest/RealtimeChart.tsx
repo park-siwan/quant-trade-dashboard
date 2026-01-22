@@ -62,6 +62,7 @@ export default function RealtimeChart() {
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const tradeMapRef = useRef<Map<number, { trade?: TradeResult; skipped?: SkippedSignal; type: 'entry' | 'exit' | 'skipped' }>>(new Map());
   const initialCandlesLoadedRef = useRef(false);
+  const [chartKey, setChartKey] = useState(0); // 차트 재생성 트리거
 
   // 알림 관련 상태
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -234,6 +235,8 @@ export default function RealtimeChart() {
           }));
           setCandles(formattedCandles);
           initialCandlesLoadedRef.current = true;
+          // 차트 재생성 트리거
+          setChartKey(prev => prev + 1);
         }
       } catch (err) {
         console.error('Failed to load candles:', err);
@@ -414,7 +417,7 @@ export default function RealtimeChart() {
       chartRef.current = null;
       candleSeriesRef.current = null;
     };
-  }, [timeframe, isLoading]);
+  }, [timeframe, chartKey]);
 
   // 마커 업데이트 (백테스트 결과, 스킵 신호, 다이버전스 신호 변경 시)
   useEffect(() => {
