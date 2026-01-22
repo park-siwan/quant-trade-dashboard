@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createChart, IChartApi, CandlestickData, CandlestickSeries, SeriesMarker, Time, createSeriesMarkers } from 'lightweight-charts';
-import { BacktestResult, TradeResult } from '@/lib/backtest-api';
+import { BacktestResult, TradeResult, SkippedSignal } from '@/lib/backtest-api';
 
 interface BacktestChartProps {
   result: BacktestResult;
@@ -11,10 +11,34 @@ interface BacktestChartProps {
   selectedTrade?: TradeResult | null;
 }
 
+// 거래 시간 문자열을 UTC timestamp(초)로 변환
+const parseTradeTime = (timeStr: string): number => {
+  // 백테스트 API에서 오는 시간은 UTC (Z 없이)
+  // 캔들 데이터도 UTC
+  const utcStr = timeStr.endsWith('Z') ? timeStr : timeStr + 'Z';
+  return new Date(utcStr).getTime() / 1000;
+};
+
+// KST 시간 포맷 (YYYY-MM-DD HH:mm)
+const formatKST = (utcTimestamp: number): string => {
+  const date = new Date(utcTimestamp * 1000);
+  return date.toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+};
+
 export default function BacktestChart({ result, candles, onTradeClick, selectedTrade }: BacktestChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<any>(null);
+  const [hoveredTrade, setHoveredTrade] = useState<TradeResult | null>(null);
+  const [hoveredSkipped, setHoveredSkipped] = useState<SkippedSignal | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || candles.length === 0) return;
@@ -41,6 +65,9 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
         borderColor: '#3f3f46',
         timeVisible: true,
       },
+      localization: {
+        timeFormatter: (time: number) => formatKST(time),
+      },
     });
 
     chartRef.current = chart;
@@ -61,43 +88,120 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
     // 마커 생성: 실제 가격 위치에 표시
     const markers: SeriesMarker<Time>[] = [];
 
+    // 거래 시간 -> timestamp 맵 (툴팁용)
+    const tradeMap = new Map<number, { trade: TradeResult; type: 'entry' | 'exit'; feeLoss?: boolean; skipped?: SkippedSignal }>();
+
+    // 스킵된 신호 마커 추가
+    if (result.skippedSignals && result.skippedSignals.length > 0) {
+      result.skippedSignals.forEach(skipped => {
+        const time = parseTradeTime(skipped.time) as Time;
+        const isLong = skipped.direction === 'long';
+
+        markers.push({
+          time,
+          position: isLong ? 'belowBar' : 'aboveBar',
+          color: isLong ? '#166534' : '#991b1b',  // 어두운 녹색/빨강 (롱/숏 구분)
+          shape: 'text',
+          text: '⊘',
+          size: 0.3,
+        } as SeriesMarker<Time>);
+
+        // 맵에 저장 (툴팁용)
+        tradeMap.set(time as number, { trade: null as any, type: 'entry', skipped });
+      });
+    }
+
     result.trades.forEach(trade => {
-      // 거래 시간이 UTC가 아닌 경우 'Z'를 붙여서 UTC로 변환
-      const entryTimeStr = trade.entryTime.endsWith('Z') ? trade.entryTime : trade.entryTime + 'Z';
-      const exitTimeStr = trade.exitTime.endsWith('Z') ? trade.exitTime : trade.exitTime + 'Z';
-      const entryTime = (new Date(entryTimeStr).getTime() / 1000) as Time;
-      const exitTime = (new Date(exitTimeStr).getTime() / 1000) as Time;
+      const entryTime = parseTradeTime(trade.entryTime) as Time;
+      const exitTime = parseTradeTime(trade.exitTime) as Time;
       const isLong = trade.direction === 'long';
       const isProfit = trade.pnl > 0;
 
       // 청산가가 진입가보다 높은지 (차트상 위치 결정용)
       const exitHigherThanEntry = trade.exitPrice > trade.entryPrice;
 
-      // 진입 마커: 롱=아래, 숏=위
+      // 가격 방향상 유리했는지 (수수료 제외)
+      const priceWasFavorable = isLong ? exitHigherThanEntry : !exitHigherThanEntry;
+
+      // 수수료로 인한 손실: 가격은 유리했지만 PnL은 마이너스
+      const feeLoss = priceWasFavorable && !isProfit;
+
+      // 진입 마커: 롱=아래(로켓), 숏=위(비구름)
       markers.push({
         time: entryTime,
         position: isLong ? 'belowBar' : 'aboveBar',
-        color: isLong ? '#22c55e' : '#ef4444',
-        shape: 'circle',
-        text: isLong ? 'L' : 'S',
-        size: 1,
+        color: '#ffffff',  // 이모티콘은 자체 색상 사용
+        shape: 'text',
+        text: isLong ? '🚀' : '🌧',
+        size: 0.5,
       } as SeriesMarker<Time>);
 
       // 청산 마커: 청산가가 진입가보다 높으면 위, 낮으면 아래
-      // 색상: 실제 PnL 기준 (초록=익절, 빨강=손절)
+      let exitColor: string;
+      let exitText: string;
+      if (isProfit) {
+        exitColor = '#ffffff';  // 이모티콘 자체 색상 사용
+        exitText = '💰';
+      } else if (feeLoss) {
+        exitColor = '#eab308';  // 수수료 손실: 노랑
+        exitText = '⚡';
+      } else {
+        exitColor = '#ffffff';  // 이모티콘 자체 색상 사용
+        exitText = '🗡';
+      }
+
       markers.push({
         time: exitTime,
         position: exitHigherThanEntry ? 'aboveBar' : 'belowBar',
-        color: isProfit ? '#22c55e' : '#ef4444',
-        shape: 'square',
-        text: isProfit ? '✓' : '✕',
-        size: 1,
+        color: exitColor,
+        shape: 'text',
+        text: exitText,
+        size: 0.5,
       } as SeriesMarker<Time>);
+
+      // 맵에 저장 (수수료 손실 여부 포함)
+      tradeMap.set(entryTime as number, { trade, type: 'entry', feeLoss });
+      tradeMap.set(exitTime as number, { trade, type: 'exit', feeLoss });
     });
 
     // 마커를 시간순으로 정렬
     markers.sort((a, b) => (a.time as number) - (b.time as number));
     createSeriesMarkers(candleSeries, markers);
+
+    // 크로스헤어 이동 시 거래 정보 표시
+    chart.subscribeCrosshairMove((param) => {
+      if (!param.time || !param.point) {
+        setHoveredTrade(null);
+        setHoveredSkipped(null);
+        setTooltipPos(null);
+        return;
+      }
+
+      const time = param.time as number;
+      // 시간 근처의 거래 찾기 (5분 = 300초 범위)
+      let found: { trade: TradeResult; type: 'entry' | 'exit'; skipped?: SkippedSignal } | null = null;
+      for (const [t, data] of tradeMap) {
+        if (Math.abs(t - time) < 300) {
+          found = data;
+          break;
+        }
+      }
+
+      if (found) {
+        if (found.skipped) {
+          setHoveredSkipped(found.skipped);
+          setHoveredTrade(null);
+        } else {
+          setHoveredTrade(found.trade);
+          setHoveredSkipped(null);
+        }
+        setTooltipPos({ x: param.point.x, y: param.point.y });
+      } else {
+        setHoveredTrade(null);
+        setHoveredSkipped(null);
+        setTooltipPos(null);
+      }
+    });
 
     // 리사이즈 핸들러
     const handleResize = () => {
@@ -130,10 +234,23 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
   const longTrades = result.trades.filter(t => t.direction === 'long');
   const shortTrades = result.trades.filter(t => t.direction === 'short');
   const profitTrades = result.trades.filter(t => t.pnl > 0);
-  const lossTrades = result.trades.filter(t => t.pnl <= 0);
+
+  // 수수료 손실 계산: 가격은 유리했지만 PnL은 마이너스
+  const feeLossTrades = result.trades.filter(t => {
+    const isLong = t.direction === 'long';
+    const exitHigher = t.exitPrice > t.entryPrice;
+    const priceWasFavorable = isLong ? exitHigher : !exitHigher;
+    return priceWasFavorable && t.pnl <= 0;
+  });
+  const realLossTrades = result.trades.filter(t => {
+    const isLong = t.direction === 'long';
+    const exitHigher = t.exitPrice > t.entryPrice;
+    const priceWasFavorable = isLong ? exitHigher : !exitHigher;
+    return !priceWasFavorable && t.pnl <= 0;
+  });
 
   return (
-    <div className="bg-zinc-900 p-4 rounded-lg">
+    <div className="bg-zinc-900 p-4 rounded-lg relative">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-semibold text-white">거래 차트</h2>
         <div className="flex gap-4 text-xs">
@@ -143,26 +260,100 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
           </span>
           <span className="text-zinc-400">
             익절 <span className="text-green-400">{profitTrades.length}</span> |
-            손절 <span className="text-red-400">{lossTrades.length}</span>
+            손절 <span className="text-red-400">{realLossTrades.length}</span> |
+            수수료 <span className="text-yellow-400">{feeLossTrades.length}</span> |
+            스킵 <span className="text-gray-400">{result.skippedSignals?.length || 0}</span>
           </span>
         </div>
       </div>
-      <div ref={containerRef} className="w-full" />
-      <div className="mt-3 flex flex-wrap gap-6 text-xs text-zinc-400">
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-green-500 flex items-center justify-center text-[8px] text-white font-bold">L</span> 롱 진입
+      <div ref={containerRef} className="w-full relative">
+        {/* 거래 툴팁 */}
+        {hoveredTrade && tooltipPos && (
+          <div
+            className="absolute z-50 bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-xs shadow-lg pointer-events-none"
+            style={{
+              left: Math.min(tooltipPos.x + 10, (containerRef.current?.clientWidth || 400) - 200),
+              top: Math.max(tooltipPos.y - 80, 10),
+            }}
+          >
+            <div className="font-semibold mb-2">
+              <span className={hoveredTrade.direction === 'long' ? 'text-green-400' : 'text-red-400'}>
+                {hoveredTrade.direction.toUpperCase()}
+              </span>
+              {(() => {
+                const isLong = hoveredTrade.direction === 'long';
+                const exitHigher = hoveredTrade.exitPrice > hoveredTrade.entryPrice;
+                const priceWasFavorable = isLong ? exitHigher : !exitHigher;
+                const isFeeLoss = priceWasFavorable && hoveredTrade.pnl <= 0;
+                if (hoveredTrade.pnl > 0) {
+                  return <span className="ml-2 text-green-400">익절</span>;
+                } else if (isFeeLoss) {
+                  return <span className="ml-2 text-yellow-400">수수료 손실</span>;
+                } else {
+                  return <span className="ml-2 text-red-400">손절</span>;
+                }
+              })()}
+            </div>
+            <div className="space-y-1 text-zinc-300">
+              <div>진입: {formatKST(parseTradeTime(hoveredTrade.entryTime))}</div>
+              <div>청산: {formatKST(parseTradeTime(hoveredTrade.exitTime))}</div>
+              <div>진입가: ${hoveredTrade.entryPrice.toFixed(2)}</div>
+              <div>청산가: ${hoveredTrade.exitPrice.toFixed(2)}</div>
+              <div className={hoveredTrade.pnl > 0 ? 'text-green-400' : 'text-red-400'}>
+                PnL: {hoveredTrade.pnl > 0 ? '+' : ''}{hoveredTrade.pnl.toFixed(2)}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* 스킵된 신호 툴팁 */}
+        {hoveredSkipped && tooltipPos && (
+          <div
+            className="absolute z-50 bg-zinc-800 border border-gray-500 rounded-lg p-3 text-xs shadow-lg pointer-events-none"
+            style={{
+              left: Math.min(tooltipPos.x + 10, (containerRef.current?.clientWidth || 400) - 200),
+              top: Math.max(tooltipPos.y - 80, 10),
+            }}
+          >
+            <div className="font-semibold mb-2">
+              <span className={hoveredSkipped.direction === 'long' ? 'text-green-400' : 'text-red-400'}>
+                {hoveredSkipped.direction.toUpperCase()}
+              </span>
+              <span className="ml-2 text-gray-400">진입 자제</span>
+            </div>
+            <div className="space-y-1 text-zinc-300">
+              <div>시간: {formatKST(parseTradeTime(hoveredSkipped.time))}</div>
+              <div>가격: ${hoveredSkipped.price.toFixed(2)}</div>
+              <div className="text-gray-400">
+                기대수익: {hoveredSkipped.expectedReturn.toFixed(3)}%
+              </div>
+              <div className="text-gray-400">
+                비용: {hoveredSkipped.totalCost.toFixed(3)}%
+              </div>
+              <div className="text-gray-500 text-[10px] mt-1">
+                수수료+슬리피지를 커버 못해 진입 안함
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-400">
+        <span className="flex items-center gap-1">
+          <span className="text-[10px]">🚀</span> 롱
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-red-500 flex items-center justify-center text-[8px] text-white font-bold">S</span> 숏 진입
+        <span className="flex items-center gap-1">
+          <span className="text-[10px]">🌧</span> 숏
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="text-green-400 font-bold">✓</span> 익절
+        <span className="flex items-center gap-1">
+          <span className="text-[10px]">💰</span> 익절
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="text-red-400 font-bold">✕</span> 손절
+        <span className="flex items-center gap-1">
+          <span className="text-[10px]">🗡</span> 손절
         </span>
-        <span className="text-zinc-500 italic">
-          (위=가격상승, 아래=가격하락)
+        <span className="flex items-center gap-1">
+          <span className="text-yellow-400 text-[10px]">⚡</span> 수수료
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="text-green-800 text-[10px]">⊘</span>/<span className="text-red-800 text-[10px]">⊘</span> 자제
         </span>
       </div>
     </div>

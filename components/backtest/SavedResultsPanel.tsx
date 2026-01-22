@@ -11,18 +11,7 @@ import {
 } from '@/lib/backtest-api';
 
 interface SavedResultsPanelProps {
-  onApplyParams: (params: {
-    rsiPeriod: number;
-    pivotLeftBars: number;
-    pivotRightBars: number;
-    minDistance: number;
-    maxDistance: number;
-    takeProfitAtr: number;
-    stopLossAtr: number;
-    minDivergencePct?: number;
-    indicators?: string[];
-  }) => void;
-  onViewResult?: (params: {
+  onViewResult: (params: {
     rsiPeriod: number;
     pivotLeftBars: number;
     pivotRightBars: number;
@@ -39,12 +28,11 @@ export interface SavedResultsPanelRef {
   refresh: () => void;
 }
 
-const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProps>(({ onApplyParams, onViewResult }, ref) => {
+const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProps>(({ onViewResult }, ref) => {
   const [results, setResults] = useState<SavedOptimizeResult[]>([]);
   const [stats, setStats] = useState<OptimizeStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [viewMode, setViewMode] = useState<'recent' | 'top-sharpe' | 'top-profit'>('recent');
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [viewMode, setViewMode] = useState<'recent' | 'top-sharpe' | 'top-profit'>('top-sharpe');
 
   useEffect(() => {
     loadResults();
@@ -90,7 +78,7 @@ const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProp
     }
   };
 
-  const handleApply = (item: SavedOptimizeResult) => {
+  const handleRowClick = (item: SavedOptimizeResult) => {
     // indicators는 쉼표 구분 문자열로 저장됨 (예: "rsi,obv,cvd")
     const indicators = item.indicators ? item.indicators.split(',').filter(Boolean) : ['rsi'];
     const params = {
@@ -104,25 +92,7 @@ const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProp
       minDivergencePct: item.minDivPct,
       indicators,
     };
-    onApplyParams(params);
-  };
-
-  const handleViewChart = (item: SavedOptimizeResult) => {
-    // indicators는 쉼표 구분 문자열로 저장됨 (예: "rsi,obv,cvd")
-    const indicators = item.indicators ? item.indicators.split(',').filter(Boolean) : ['rsi'];
-    const params = {
-      rsiPeriod: item.rsiPeriod,
-      pivotLeftBars: item.pivotLeft,
-      pivotRightBars: item.pivotRight,
-      minDistance: item.minDistance,
-      maxDistance: item.maxDistance,
-      takeProfitAtr: item.tpAtr,
-      stopLossAtr: item.slAtr,
-      minDivergencePct: item.minDivPct,
-      indicators,
-    };
-    onApplyParams(params);
-    onViewResult?.(params);
+    onViewResult(params);
   };
 
   const handleDelete = async (id: number) => {
@@ -136,30 +106,17 @@ const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProp
     }
   };
 
-  const toggleSelect = (id: number) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedIds(newSelected);
-  };
-
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('ko-KR', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    return `${m}/${d}`;
   };
 
   return (
     <div className="bg-zinc-900 p-4 rounded-lg space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">저장된 최적화 결과</h2>
+        <h2 className="text-lg font-semibold text-white">최적화 결과</h2>
         <button
           onClick={loadResults}
           disabled={isLoading}
@@ -236,37 +193,45 @@ const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProp
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="text-zinc-400 border-b border-zinc-700 text-xs">
-                <th className="text-left py-2 px-1">날짜</th>
-                <th className="text-center py-2 px-1">방식</th>
-                <th className="text-left py-2 px-1">조건</th>
-                <th className="text-center py-2 px-1">RSI</th>
-                <th className="text-center py-2 px-1">Pivot</th>
-                <th className="text-center py-2 px-1">Dist</th>
-                <th className="text-center py-2 px-1">TP/SL</th>
-                <th className="text-center py-2 px-1" title="최소 다이버전스 강도">Div</th>
-                <th className="text-right py-2 px-1">거래</th>
-                <th className="text-right py-2 px-1" title="갈아타기 횟수">플립</th>
-                <th className="text-right py-2 px-1">승률</th>
-                <th className="text-right py-2 px-1">수익률</th>
-                <th className="text-right py-2 px-1">MDD</th>
-                <th className="text-right py-2 px-1">Sharpe</th>
-                <th className="text-center py-2 px-1">액션</th>
+              <tr className="text-zinc-400 border-b border-zinc-700">
+                <th className="text-right py-1 px-1">승률</th>
+                <th className="text-right py-1 px-1">수익</th>
+                <th className="text-right py-1 px-1">MDD</th>
+                <th className="text-right py-1 px-1">SR</th>
+                <th className="text-center py-1 px-1">방식</th>
+                <th className="text-center py-1 px-1">RSI</th>
+                <th className="text-center py-1 px-1">Pvt</th>
+                <th className="text-center py-1 px-1">Dist</th>
+                <th className="text-center py-1 px-1">TP/SL</th>
+                <th className="text-center py-1 px-1">Div</th>
+                <th className="text-right py-1 px-1">거래</th>
+                <th className="text-center py-1 px-1">날짜</th>
+                <th className="text-center py-1 px-1"></th>
               </tr>
             </thead>
             <tbody>
               {results.map((item) => (
                 <tr
                   key={item.id}
-                  className="border-b border-zinc-800 hover:bg-zinc-800/50"
+                  onClick={() => handleRowClick(item)}
+                  className="border-b border-zinc-800 hover:bg-zinc-800/50 cursor-pointer"
                 >
-                  <td className="py-2 px-2 text-zinc-500 text-xs">
-                    {formatDate(item.createdAt)}
+                  <td className="py-1 px-1 text-right">{item.winRate.toFixed(0)}%</td>
+                  <td className={`py-1 px-1 text-right font-medium ${
+                    item.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {item.totalPnlPercent >= 0 ? '+' : ''}{item.totalPnlPercent.toFixed(0)}%
                   </td>
-                  <td className="py-2 px-2 text-center">
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                  <td className="py-1 px-1 text-right text-red-400">
+                    {item.maxDrawdown.toFixed(1)}%
+                  </td>
+                  <td className="py-1 px-1 text-right font-medium text-blue-400">
+                    {item.sharpeRatio.toFixed(1)}
+                  </td>
+                  <td className="py-1 px-1 text-center">
+                    <span className={`px-1 py-0.5 rounded ${
                       item.optimizeMethod === 'bayesian'
                         ? 'bg-purple-900/50 text-purple-300'
                         : 'bg-blue-900/50 text-blue-300'
@@ -274,64 +239,34 @@ const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProp
                       {item.optimizeMethod === 'bayesian' ? 'B' : 'G'}
                     </span>
                   </td>
-                  <td className="py-2 px-2 text-xs">
-                    <span className="text-zinc-400">{item.symbol}</span>
-                    <span className="text-zinc-600 mx-1">|</span>
-                    <span className="text-zinc-400">{item.timeframe}</span>
-                  </td>
-                  <td className="py-2 px-2">{item.rsiPeriod}</td>
-                  <td className="py-2 px-2 text-xs">
+                  <td className="py-1 px-1 text-center">{item.rsiPeriod}</td>
+                  <td className="py-1 px-1 text-center">
                     {item.pivotLeft}/{item.pivotRight}
                   </td>
-                  <td className="py-2 px-2 text-xs">
+                  <td className="py-1 px-1 text-center">
                     {item.minDistance}-{item.maxDistance}
                   </td>
-                  <td className="py-2 px-2 text-xs">
+                  <td className="py-1 px-1 text-center">
                     {item.tpAtr}/{item.slAtr}
                   </td>
-                  <td className="py-2 px-2 text-center text-xs text-zinc-400">
-                    {item.minDivPct != null ? `${item.minDivPct}%` : '-'}
+                  <td className="py-1 px-1 text-center text-zinc-400">
+                    {item.minDivPct != null ? `${item.minDivPct}` : '-'}
                   </td>
-                  <td className="py-2 px-2 text-right">{item.totalTrades}</td>
-                  <td className="py-2 px-2 text-right text-xs text-zinc-400">
-                    {item.flipCount ?? '-'}
+                  <td className="py-1 px-1 text-right">{item.totalTrades}</td>
+                  <td className="py-1 px-1 text-center text-zinc-500">
+                    {formatDate(item.createdAt)}
                   </td>
-                  <td className="py-2 px-2 text-right">{item.winRate.toFixed(1)}%</td>
-                  <td className={`py-2 px-2 text-right font-medium ${
-                    item.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {item.totalPnlPercent >= 0 ? '+' : ''}{item.totalPnlPercent.toFixed(1)}%
-                  </td>
-                  <td className="py-2 px-2 text-right text-red-400">
-                    {item.maxDrawdown.toFixed(1)}%
-                  </td>
-                  <td className="py-2 px-2 text-right font-medium text-blue-400">
-                    {item.sharpeRatio.toFixed(2)}
-                  </td>
-                  <td className="py-2 px-2 text-center">
-                    <div className="flex gap-1 justify-center">
-                      <button
-                        onClick={() => handleViewChart(item)}
-                        className="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded"
-                        title="차트 & 거래내역 보기"
-                      >
-                        보기
-                      </button>
-                      <button
-                        onClick={() => handleApply(item)}
-                        className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded"
-                        title="파라미터 선택"
-                      >
-                        선택
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        className="text-xs bg-zinc-700 hover:bg-red-600 text-zinc-300 hover:text-white px-2 py-1 rounded"
-                        title="삭제"
-                      >
-                        X
-                      </button>
-                    </div>
+                  <td className="py-1 px-1 text-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(item.id);
+                      }}
+                      className="bg-zinc-700 hover:bg-red-600 text-zinc-300 hover:text-white px-1.5 py-0.5 rounded"
+                      title="삭제"
+                    >
+                      ✕
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -15,17 +15,6 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export default function StrategyPage() {
   const [healthStatus, setHealthStatus] = useState<{ valid: boolean; message: string } | null>(null);
-  const [appliedParams, setAppliedParams] = useState<{
-    rsiPeriod: number;
-    pivotLeftBars: number;
-    pivotRightBars: number;
-    minDistance: number;
-    maxDistance: number;
-    takeProfitAtr: number;
-    stopLossAtr: number;
-    minDivergencePct?: number;
-    indicators?: string[];
-  } | null>(null);
   const savedResultsRef = useRef<SavedResultsPanelRef>(null);
 
   // 결과 시각화를 위한 상태
@@ -41,19 +30,23 @@ export default function StrategyPage() {
     });
   }, []);
 
-  const handleApplyParams = (params: typeof appliedParams) => {
-    setAppliedParams(params);
-  };
-
   const handleSaveSuccess = () => {
     // 저장 성공 시 SavedResultsPanel 새로고침
     savedResultsRef.current?.refresh();
   };
 
   // 파라미터로 백테스트 실행 및 결과 시각화
-  const handleViewResult = async (paramsOverride?: typeof appliedParams) => {
-    const params = paramsOverride || appliedParams;
-    if (!params) return;
+  const handleViewResult = async (params: {
+    rsiPeriod: number;
+    pivotLeftBars: number;
+    pivotRightBars: number;
+    minDistance: number;
+    maxDistance: number;
+    takeProfitAtr: number;
+    stopLossAtr: number;
+    minDivergencePct?: number;
+    indicators?: string[];
+  }) => {
 
     setIsLoadingResult(true);
     setResultError(null);
@@ -126,113 +119,72 @@ export default function StrategyPage() {
         </div>
       </div>
 
-      {/* 적용된 파라미터 알림 */}
-      {appliedParams && (
-        <div className="mb-6 bg-blue-900/30 border border-blue-700 p-4 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-blue-400 font-medium">파라미터가 선택되었습니다</span>
-              <span className="text-zinc-400 text-sm ml-4">
-                RSI: {appliedParams.rsiPeriod} |
-                Pivot: {appliedParams.pivotLeftBars}/{appliedParams.pivotRightBars} |
-                Dist: {appliedParams.minDistance}-{appliedParams.maxDistance} |
-                TP/SL: {appliedParams.takeProfitAtr}/{appliedParams.stopLossAtr}
-                {appliedParams.minDivergencePct !== undefined && ` | Div: ${appliedParams.minDivergencePct}%`}
-                {appliedParams.indicators && ` | 지표: ${appliedParams.indicators.join(', ').toUpperCase()}`}
-              </span>
-            </div>
-            <button
-              onClick={() => handleViewResult()}
-              disabled={isLoadingResult}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-            >
-              {isLoadingResult ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  로딩 중...
-                </>
-              ) : (
-                '차트 & 거래내역 보기'
-              )}
-            </button>
-          </div>
+      {/* 메인 컨텐츠 - 2열 레이아웃 (좌: 최적화+저장결과, 우: 백테스트결과) */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* 좌측: 저장된 결과 + 최적화 실행 패널 */}
+        <div className="space-y-6">
+          <SavedResultsPanel
+            ref={savedResultsRef}
+            onViewResult={handleViewResult}
+          />
+          <OptimizePanel onSaveSuccess={handleSaveSuccess} />
         </div>
-      )}
 
-      {/* 에러 메시지 */}
-      {resultError && (
-        <div className="mb-6 bg-red-900/30 border border-red-700 p-4 rounded-lg text-red-400">
-          {resultError}
-        </div>
-      )}
-
-      {/* 결과 시각화 (선택된 파라미터로 실행 후) */}
-      {backtestResult && (
-        <div className="mb-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">백테스트 결과</h2>
-            <button
-              onClick={() => {
-                setBacktestResult(null);
-                setCandles([]);
-                setSelectedTrade(null);
-              }}
-              className="text-xs text-zinc-400 hover:text-white"
-            >
-              결과 닫기 ✕
-            </button>
-          </div>
-
-          {/* 통계 */}
-          <BacktestStats result={backtestResult} />
-
-          {/* 차트 */}
-          {candles.length > 0 ? (
-            <BacktestChart
-              result={backtestResult}
-              candles={candles}
-              onTradeClick={setSelectedTrade}
-              selectedTrade={selectedTrade}
-            />
-          ) : (
-            <div className="bg-zinc-900 p-4 rounded-lg">
-              <h2 className="text-lg font-semibold text-white mb-2">거래 차트</h2>
-              <p className="text-zinc-400 text-sm">캔들 데이터 로딩 중...</p>
+        {/* 우측: 백테스트 결과 */}
+        <div className="space-y-6">
+          {/* 로딩 상태 */}
+          {isLoadingResult && (
+            <div className="bg-zinc-900 p-4 rounded-lg flex items-center justify-center gap-2">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+              <span className="text-zinc-400">백테스트 실행 중...</span>
             </div>
           )}
 
-          {/* 자산 곡선 */}
-          <EquityCurve
-            data={backtestResult.equityCurve}
-            initialCapital={1000}
-          />
+          {/* 에러 메시지 */}
+          {resultError && (
+            <div className="bg-red-900/30 border border-red-700 p-4 rounded-lg text-red-400">
+              {resultError}
+            </div>
+          )}
 
-          {/* 거래 목록 */}
-          <TradeList
-            trades={backtestResult.trades}
-            onTradeClick={setSelectedTrade}
-            selectedTrade={selectedTrade}
-          />
-        </div>
-      )}
+          {/* 백테스트 결과 */}
+          {backtestResult ? (
+            <div className="space-y-4">
+              {/* 통계 */}
+              <BacktestStats result={backtestResult} />
 
-      {/* 메인 컨텐츠 - 2열 레이아웃 */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* 최적화 실행 패널 */}
-        <div>
-          <OptimizePanel onApplyParams={handleApplyParams} onSaveSuccess={handleSaveSuccess} />
-        </div>
+              {/* 차트 */}
+              {candles.length > 0 ? (
+                <BacktestChart
+                  result={backtestResult}
+                  candles={candles}
+                  onTradeClick={setSelectedTrade}
+                  selectedTrade={selectedTrade}
+                />
+              ) : (
+                <div className="bg-zinc-900 p-4 rounded-lg">
+                  <p className="text-zinc-400 text-sm">캔들 데이터 로딩 중...</p>
+                </div>
+              )}
 
-        {/* 저장된 결과 패널 */}
-        <div>
-          <SavedResultsPanel
-            ref={savedResultsRef}
-            onApplyParams={handleApplyParams}
-            onViewResult={(params) => {
-              setAppliedParams(params);
-              handleViewResult(params);
-            }}
-          />
+              {/* 자산 곡선 & 거래 목록 */}
+              <div className="grid grid-cols-1 gap-4">
+                <EquityCurve
+                  data={backtestResult.equityCurve}
+                  initialCapital={1000}
+                />
+                <TradeList
+                  trades={backtestResult.trades}
+                  onTradeClick={setSelectedTrade}
+                  selectedTrade={selectedTrade}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="bg-zinc-900 p-8 rounded-lg text-center text-zinc-500">
+              <p>저장된 결과를 클릭하면 백테스트 결과가 표시됩니다.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

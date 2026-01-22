@@ -23,7 +23,29 @@ export default function BacktestStats({ result }: BacktestStatsProps) {
         </span>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
+        {/* 수익률 - 강조 */}
+        <div className="bg-zinc-800 p-3 rounded border border-zinc-700">
+          <div className="text-xs text-zinc-400 mb-1">수익률</div>
+          <div className={`text-xl font-bold ${result.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {result.totalPnlPercent >= 0 ? '+' : ''}{result.totalPnlPercent.toFixed(1)}%
+          </div>
+          <div className="text-xs text-zinc-500">
+            ${result.totalPnl >= 0 ? '+' : ''}{result.totalPnl.toFixed(0)}
+          </div>
+        </div>
+
+        {/* 샤프 비율 */}
+        <div className="bg-zinc-800 p-3 rounded">
+          <div className="text-xs text-zinc-400 mb-1">Sharpe</div>
+          <div className={`text-2xl font-bold ${result.sharpeRatio >= 2 ? 'text-green-400' : result.sharpeRatio >= 1 ? 'text-yellow-400' : 'text-red-400'}`}>
+            {result.sharpeRatio.toFixed(2)}
+          </div>
+          <div className="text-xs text-zinc-500">
+            PF: {result.profitFactor.toFixed(2)}
+          </div>
+        </div>
+
         {/* 승률 */}
         <div className="bg-zinc-800 p-3 rounded">
           <div className="text-xs text-zinc-400 mb-1">승률</div>
@@ -35,36 +57,27 @@ export default function BacktestStats({ result }: BacktestStatsProps) {
           </div>
         </div>
 
-        {/* 총 수익 */}
-        <div className="bg-zinc-800 p-3 rounded">
-          <div className="text-xs text-zinc-400 mb-1">총 수익</div>
-          <div className={`text-2xl font-bold ${result.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            ${result.totalPnl.toFixed(0)}
-          </div>
-          <div className="text-xs text-zinc-500">
-            {result.totalPnlPercent >= 0 ? '+' : ''}{result.totalPnlPercent.toFixed(2)}%
-          </div>
-        </div>
-
-        {/* Profit Factor */}
-        <div className="bg-zinc-800 p-3 rounded">
-          <div className="text-xs text-zinc-400 mb-1">Profit Factor</div>
-          <div className={`text-2xl font-bold ${result.profitFactor >= 1.5 ? 'text-green-400' : result.profitFactor >= 1 ? 'text-yellow-400' : 'text-red-400'}`}>
-            {result.profitFactor.toFixed(2)}
-          </div>
-          <div className="text-xs text-zinc-500">
-            W${result.avgWin.toFixed(0)} / L${result.avgLoss.toFixed(0)}
-          </div>
-        </div>
-
         {/* Max Drawdown */}
         <div className="bg-zinc-800 p-3 rounded">
-          <div className="text-xs text-zinc-400 mb-1">Max Drawdown</div>
+          <div className="text-xs text-zinc-400 mb-1">MDD</div>
           <div className={`text-2xl font-bold ${result.maxDrawdownPercent <= 5 ? 'text-green-400' : result.maxDrawdownPercent <= 10 ? 'text-yellow-400' : 'text-red-400'}`}>
-            {result.maxDrawdownPercent.toFixed(2)}%
+            {result.maxDrawdownPercent.toFixed(1)}%
           </div>
           <div className="text-xs text-zinc-500">
-            Sharpe: {result.sharpeRatio.toFixed(2)}
+            최대 손실폭
+          </div>
+        </div>
+
+        {/* 평균 손익 */}
+        <div className="bg-zinc-800 p-3 rounded">
+          <div className="text-xs text-zinc-400 mb-1">평균 손익</div>
+          <div className="text-lg font-bold">
+            <span className="text-green-400">${result.avgWin.toFixed(0)}</span>
+            <span className="text-zinc-500 mx-1">/</span>
+            <span className="text-red-400">${result.avgLoss.toFixed(0)}</span>
+          </div>
+          <div className="text-xs text-zinc-500">
+            {result.totalTrades}회 거래
           </div>
         </div>
       </div>

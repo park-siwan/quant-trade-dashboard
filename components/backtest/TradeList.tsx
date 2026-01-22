@@ -10,14 +10,15 @@ interface TradeListProps {
 
 export default function TradeList({ trades, onTradeClick, selectedTrade }: TradeListProps) {
   const formatTime = (dateStr: string) => {
-    // UTC로 해석하여 한국 시간으로 표시
+    // UTC로 해석하여 한국 시간으로 표시 (YYYY-MM-DD HH:mm)
     const utcDateStr = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z';
-    return new Date(utcDateStr).toLocaleString('ko-KR', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const date = new Date(utcDateStr);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const h = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    return `${y}-${m}-${d} ${h}:${min}`;
   };
 
   return (

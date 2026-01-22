@@ -37,6 +37,15 @@ export interface EquityPoint {
   drawdown: number;
 }
 
+export interface SkippedSignal {
+  time: string;
+  direction: 'long' | 'short';
+  price: number;
+  reason: 'fee';  // 수수료 커버 불가로 스킵
+  expectedReturn: number;  // 기대 수익률 (%)
+  totalCost: number;  // 총 비용 (%)
+}
+
 export interface BacktestResult {
   symbol: string;
   timeframe: string;
@@ -57,6 +66,7 @@ export interface BacktestResult {
   sharpeRatio: number;
   trades: TradeResult[];
   equityCurve: EquityPoint[];
+  skippedSignals?: SkippedSignal[];  // 수수료 때문에 스킵된 신호
 }
 
 export async function runBacktest(params: BacktestParams): Promise<BacktestResult> {

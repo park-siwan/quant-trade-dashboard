@@ -14,17 +14,6 @@ import {
 } from '@/lib/backtest-api';
 
 interface OptimizePanelProps {
-  onApplyParams: (params: {
-    rsiPeriod: number;
-    pivotLeftBars: number;
-    pivotRightBars: number;
-    minDistance: number;
-    maxDistance: number;
-    takeProfitAtr: number;
-    stopLossAtr: number;
-    minDivergencePct?: number;
-    indicators?: string[];
-  }) => void;
   onSaveSuccess?: () => void;
 }
 
@@ -37,7 +26,7 @@ function formatTime(seconds: number): string {
 
 type OptimizeMethod = 'grid' | 'bayesian';
 
-export default function OptimizePanel({ onApplyParams, onSaveSuccess }: OptimizePanelProps) {
+export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -89,20 +78,6 @@ export default function OptimizePanel({ onApplyParams, onSaveSuccess }: Optimize
       setIsLoading(false);
       setProgress(null);
     }
-  };
-
-  const handleApply = (item: OptimizeResultItem) => {
-    onApplyParams({
-      rsiPeriod: item.params.rsi_period,
-      pivotLeftBars: item.params.pivot_left,
-      pivotRightBars: item.params.pivot_right,
-      minDistance: item.params.min_distance,
-      maxDistance: item.params.max_distance,
-      takeProfitAtr: item.params.tp_atr,
-      stopLossAtr: item.params.sl_atr,
-      minDivergencePct: item.params.min_div_pct,
-      indicators: params.indicators,  // 현재 선택된 인디케이터 전달
-    });
   };
 
   const handleSaveOne = async (item: OptimizeResultItem, rank: number) => {
@@ -493,22 +468,14 @@ export default function OptimizePanel({ onApplyParams, onSaveSuccess }: Optimize
                     <td className="py-2 px-1 text-right font-medium text-blue-400 text-xs">{item.result.sharpeRatio.toFixed(2)}</td>
                     <td className="py-2 px-1 text-right text-zinc-400 text-xs">{item.result.profitFactor.toFixed(1)}</td>
                     <td className="py-2 px-1 text-center">
-                      <div className="flex gap-1 justify-center">
-                        <button
-                          onClick={() => handleApply(item)}
-                          className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-1.5 py-0.5 rounded"
-                        >
-                          적용
-                        </button>
-                        <button
-                          onClick={() => handleSaveOne(item, idx + 1)}
-                          disabled={isSaving}
-                          className="text-xs bg-green-600 hover:bg-green-700 disabled:bg-zinc-600 text-white px-1.5 py-0.5 rounded"
-                          title="이 결과만 저장"
-                        >
-                          저장
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => handleSaveOne(item, idx + 1)}
+                        disabled={isSaving}
+                        className="text-xs bg-green-600 hover:bg-green-700 disabled:bg-zinc-600 text-white px-1.5 py-0.5 rounded"
+                        title="이 결과만 저장"
+                      >
+                        저장
+                      </button>
                     </td>
                   </tr>
                 ))}
