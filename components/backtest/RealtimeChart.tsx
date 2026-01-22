@@ -61,6 +61,7 @@ export default function RealtimeChart() {
   const [hoveredSkipped, setHoveredSkipped] = useState<SkippedSignal | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const tradeMapRef = useRef<Map<number, { trade?: TradeResult; skipped?: SkippedSignal; type: 'entry' | 'exit' | 'skipped' }>>(new Map());
+  const initialCandlesLoadedRef = useRef(false);
 
   // 알림 관련 상태
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -215,6 +216,7 @@ export default function RealtimeChart() {
   useEffect(() => {
     const loadCandles = async () => {
       setIsLoading(true);
+      initialCandlesLoadedRef.current = false;
       try {
         const response = await fetch(
           `${API_BASE}/exchange/candles?symbol=${encodeURIComponent('BTC/USDT')}&timeframe=${timeframe}&limit=500`
@@ -231,6 +233,7 @@ export default function RealtimeChart() {
             close: c[4],
           }));
           setCandles(formattedCandles);
+          initialCandlesLoadedRef.current = true;
         }
       } catch (err) {
         console.error('Failed to load candles:', err);
@@ -243,9 +246,9 @@ export default function RealtimeChart() {
     subscribeKline(timeframe);
   }, [timeframe, subscribeKline]);
 
-  // 실시간 캔들 업데이트
+  // 실시간 캔들 업데이트 (차트 시리즈에 직접 업데이트)
   useEffect(() => {
-    if (!kline || !candleSeriesRef.current || kline.timeframe !== timeframe || isChartDisposedRef.current) return;
+    if (!kline || kline.timeframe !== timeframe || isChartDisposedRef.current) return;
 
     const newCandle: CandlestickData = {
       time: (kline.timestamp / 1000) as Time,
@@ -255,29 +258,43 @@ export default function RealtimeChart() {
       close: kline.close,
     };
 
-    // 캔들 업데이트
-    try {
-      candleSeriesRef.current.update(newCandle);
-    } catch {
-      // 차트가 이미 disposed된 경우 무시
-      return;
+    // 차트 시리즈가 있으면 직접 업데이트
+    if (candleSeriesRef.current) {
+      try {
+        candleSeriesRef.current.update(newCandle);
+      } catch {
+        // 차트가 이미 disposed된 경우 무시
+      }
     }
 
-    // 캔들이 완료되면 목록에 추가
-    if (kline.isFinal) {
-      setCandles(prev => {
-        const last = prev[prev.length - 1];
-        if (last && (last.time as number) === newCandle.time) {
-          return [...prev.slice(0, -1), newCandle];
+    // candles state도 업데이트 (마지막 캔들만 갱신, 차트 재생성 방지)
+    setCandles(prev => {
+      if (prev.length === 0) return prev;
+
+      const lastCandle = prev[prev.length - 1];
+      const lastTime = lastCandle.time as number;
+      const newTime = newCandle.time as number;
+
+      // 같은 시간의 캔들이면 업데이트
+      if (lastTime === newTime) {
+        return [...prev.slice(0, -1), newCandle];
+      }
+      // 새 캔들이 더 최신이면 추가
+      else if (newTime > lastTime) {
+        // 최대 500개 유지
+        const updated = [...prev, newCandle];
+        if (updated.length > 500) {
+          return updated.slice(-500);
         }
-        return [...prev, newCandle];
-      });
-    }
+        return updated;
+      }
+      return prev;
+    });
   }, [kline, timeframe]);
 
-  // 차트 생성
+  // 차트 초기 생성 (타임프레임 변경 또는 초기 로드 시에만)
   useEffect(() => {
-    if (!containerRef.current || candles.length === 0) return;
+    if (!containerRef.current || candles.length === 0 || !initialCandlesLoadedRef.current) return;
 
     // 이전 차트 제거
     if (chartRef.current) {
@@ -334,106 +351,7 @@ export default function RealtimeChart() {
     candleSeries.setData(candles);
     candleSeriesRef.current = candleSeries;
 
-    // 마커 배열 및 거래 맵 (툴팁용)
-    const markers: SeriesMarker<Time>[] = [];
-    const tradeMap = new Map<number, { trade?: TradeResult; skipped?: SkippedSignal; type: 'entry' | 'exit' | 'skipped' }>();
-
-    // 차트 캔들 시간 범위
-    const candleTimes = candles.map(c => c.time as number);
-    const minCandleTime = Math.min(...candleTimes);
-    const maxCandleTime = Math.max(...candleTimes);
-
-    // 백테스트 과거 거래 마커 추가
-    if (backtestTrades.length > 0) {
-      backtestTrades.forEach((trade) => {
-        const entryTime = new Date(trade.entryTime).getTime() / 1000;
-        const exitTime = new Date(trade.exitTime).getTime() / 1000;
-        const isLong = trade.direction === 'long';
-        const isWin = trade.pnl > 0;
-
-        // 시간이 차트 범위 내인지 확인
-        const isEntryInRange = entryTime >= minCandleTime && entryTime <= maxCandleTime;
-        const isExitInRange = exitTime >= minCandleTime && exitTime <= maxCandleTime;
-
-        // 진입 마커 (차트 범위 내일 때만)
-        if (isEntryInRange) {
-          markers.push({
-            time: entryTime as Time,
-            position: isLong ? 'belowBar' : 'aboveBar',
-            color: '#ffffff',
-            shape: 'text',
-            text: isLong ? '🚀' : '🌧',
-            size: 0.5,
-          } as SeriesMarker<Time>);
-          tradeMap.set(entryTime, { trade, type: 'entry' });
-        }
-
-        // 청산 마커 (차트 범위 내일 때만)
-        if (isExitInRange) {
-          markers.push({
-            time: exitTime as Time,
-            position: isLong ? 'aboveBar' : 'belowBar',
-            color: '#ffffff',
-            shape: 'text',
-            text: isWin ? '💰' : '💸',
-            size: 0.5,
-          } as SeriesMarker<Time>);
-          tradeMap.set(exitTime, { trade, type: 'exit' });
-        }
-      });
-    }
-
-    // 스킵된 신호 마커 추가 (수수료 손실 우려)
-    if (skippedSignals.length > 0) {
-      skippedSignals.forEach((signal) => {
-        const signalTime = new Date(signal.time).getTime() / 1000;
-        const isLong = signal.direction === 'long';
-        const isInRange = signalTime >= minCandleTime && signalTime <= maxCandleTime;
-
-        if (isInRange) {
-          markers.push({
-            time: signalTime as Time,
-            position: isLong ? 'belowBar' : 'aboveBar',
-            color: '#6b7280',
-            shape: 'text',
-            text: '⏸️',
-            size: 0.5,
-          } as SeriesMarker<Time>);
-          tradeMap.set(signalTime, { skipped: signal, type: 'skipped' });
-        }
-      });
-    }
-
-    // 실시간 다이버전스 신호 마커 추가
-    if (divergenceHistory.length > 0) {
-      divergenceHistory.forEach(signal => {
-        const signalTime = signal.timestamp / 1000;
-        const isLong = signal.direction === 'bullish';
-        const isInRange = signalTime >= minCandleTime && signalTime <= maxCandleTime;
-
-        if (isInRange) {
-          markers.push({
-            time: signalTime as Time,
-            position: isLong ? 'belowBar' : 'aboveBar',
-            color: '#ffffff',
-            shape: 'text',
-            text: isLong ? '🚀' : '🌧',
-            size: 0.5,
-          } as SeriesMarker<Time>);
-        }
-      });
-    }
-
-    // 마커 정렬 후 추가
-    if (markers.length > 0) {
-      markers.sort((a, b) => (a.time as number) - (b.time as number));
-      createSeriesMarkers(candleSeries, markers);
-    }
-
-    // tradeMap을 ref에 저장 (툴팁용)
-    tradeMapRef.current = tradeMap;
-
-    // 크로스헤어 이동 시 거래 정보 표시
+    // 크로스헤어 이동 시 거래 정보 표시 (툴팁)
     chart.subscribeCrosshairMove((param) => {
       if (!param.time || !param.point) {
         setHoveredTrade(null);
@@ -491,7 +409,100 @@ export default function RealtimeChart() {
       chartRef.current = null;
       candleSeriesRef.current = null;
     };
-  }, [candles, divergenceHistory, backtestTrades, skippedSignals, timeframe]);
+  }, [timeframe, isLoading]);
+
+  // 마커 업데이트 (백테스트 결과, 스킵 신호, 다이버전스 신호 변경 시)
+  useEffect(() => {
+    if (!candleSeriesRef.current || candles.length === 0) return;
+
+    const markers: SeriesMarker<Time>[] = [];
+    const tradeMap = new Map<number, { trade?: TradeResult; skipped?: SkippedSignal; type: 'entry' | 'exit' | 'skipped' }>();
+
+    const candleTimes = candles.map(c => c.time as number);
+    const minCandleTime = Math.min(...candleTimes);
+    const maxCandleTime = Math.max(...candleTimes);
+
+    // 백테스트 거래 마커
+    if (backtestTrades.length > 0) {
+      backtestTrades.forEach((trade) => {
+        const entryTime = new Date(trade.entryTime).getTime() / 1000;
+        const exitTime = new Date(trade.exitTime).getTime() / 1000;
+        const isLong = trade.direction === 'long';
+        const isWin = trade.pnl > 0;
+
+        if (entryTime >= minCandleTime && entryTime <= maxCandleTime) {
+          markers.push({
+            time: entryTime as Time,
+            position: isLong ? 'belowBar' : 'aboveBar',
+            color: '#ffffff',
+            shape: 'text',
+            text: isLong ? '🚀' : '🌧',
+            size: 0.5,
+          } as SeriesMarker<Time>);
+          tradeMap.set(entryTime, { trade, type: 'entry' });
+        }
+
+        if (exitTime >= minCandleTime && exitTime <= maxCandleTime) {
+          markers.push({
+            time: exitTime as Time,
+            position: isLong ? 'aboveBar' : 'belowBar',
+            color: '#ffffff',
+            shape: 'text',
+            text: isWin ? '💰' : '💸',
+            size: 0.5,
+          } as SeriesMarker<Time>);
+          tradeMap.set(exitTime, { trade, type: 'exit' });
+        }
+      });
+    }
+
+    // 스킵된 신호 마커
+    if (skippedSignals.length > 0) {
+      skippedSignals.forEach((signal) => {
+        const signalTime = new Date(signal.time).getTime() / 1000;
+        const isLong = signal.direction === 'long';
+        if (signalTime >= minCandleTime && signalTime <= maxCandleTime) {
+          markers.push({
+            time: signalTime as Time,
+            position: isLong ? 'belowBar' : 'aboveBar',
+            color: '#6b7280',
+            shape: 'text',
+            text: '⏸️',
+            size: 0.5,
+          } as SeriesMarker<Time>);
+          tradeMap.set(signalTime, { skipped: signal, type: 'skipped' });
+        }
+      });
+    }
+
+    // 실시간 다이버전스 신호 마커
+    if (divergenceHistory.length > 0) {
+      divergenceHistory.forEach(signal => {
+        const signalTime = signal.timestamp / 1000;
+        const isLong = signal.direction === 'bullish';
+        if (signalTime >= minCandleTime && signalTime <= maxCandleTime) {
+          markers.push({
+            time: signalTime as Time,
+            position: isLong ? 'belowBar' : 'aboveBar',
+            color: '#ffffff',
+            shape: 'text',
+            text: isLong ? '🚀' : '🌧',
+            size: 0.5,
+          } as SeriesMarker<Time>);
+        }
+      });
+    }
+
+    // 마커 정렬 후 추가
+    if (markers.length > 0) {
+      markers.sort((a, b) => (a.time as number) - (b.time as number));
+      createSeriesMarkers(candleSeriesRef.current, markers);
+    } else {
+      createSeriesMarkers(candleSeriesRef.current, []);
+    }
+
+    tradeMapRef.current = tradeMap;
+  }, [backtestTrades, skippedSignals, divergenceHistory, candles.length]);
 
   return (
     <div className="bg-zinc-900 p-4 rounded-lg">
