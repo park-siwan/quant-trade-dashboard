@@ -233,6 +233,15 @@ export default function RealtimeChart() {
             low: c[3],
             close: c[4],
           }));
+
+          // 디버깅: 첫/마지막 캔들 시간 확인
+          const firstTime = new Date(candlesArray[0][0]);
+          const lastTime = new Date(candlesArray[candlesArray.length - 1][0]);
+          console.log(`[RealtimeChart] Loaded ${candlesArray.length} candles`);
+          console.log(`[RealtimeChart] First: ${firstTime.toLocaleString('ko-KR')}`);
+          console.log(`[RealtimeChart] Last: ${lastTime.toLocaleString('ko-KR')}`);
+          console.log(`[RealtimeChart] Now: ${new Date().toLocaleString('ko-KR')}`);
+
           setCandles(formattedCandles);
           initialCandlesLoadedRef.current = true;
           // 차트 재생성 트리거
