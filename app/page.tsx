@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import ChartAdapter from '@/components/ChartAdapter';
 import MTFOverview from '@/components/MTFOverview';
-import { BarChart3, Table2, BookOpen, Bitcoin } from 'lucide-react';
+import { BarChart3, Table2, BookOpen, Bitcoin, FlaskConical } from 'lucide-react';
 import { useBTCPrice } from '@/hooks/useBTCPrice';
 import { AnimatedPrice } from '@/components/shared';
 
@@ -87,6 +88,13 @@ export default function Home() {
                 {tab.label}
               </button>
             ))}
+            <Link
+              href="/backtest"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-400 hover:text-white hover:bg-white/5 ml-2 border-l border-white/10 pl-4"
+            >
+              <FlaskConical className="w-4 h-4" />
+              백테스트
+            </Link>
           </div>
         </div>
       </div>
