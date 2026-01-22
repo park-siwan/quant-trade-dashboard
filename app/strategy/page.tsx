@@ -107,55 +107,50 @@ export default function StrategyPage() {
     <div className="min-h-screen bg-zinc-950 text-white p-6">
       {/* 헤더 */}
       <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div>
-            <h1 className="text-2xl font-bold">RSI 다이버전스 전략</h1>
-            <p className="text-zinc-400 text-sm">파라미터 최적화 및 백테스트</p>
-          </div>
-          {/* 탭 메뉴 */}
-          <div className="flex gap-1 bg-zinc-800 p-1 rounded-lg">
-            <button
-              onClick={() => setActiveTab('realtime')}
-              className={`px-4 py-2 text-sm font-medium rounded transition-colors ${
-                activeTab === 'realtime'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              실시간
-            </button>
-            <button
-              onClick={() => setActiveTab('results')}
-              className={`px-4 py-2 text-sm font-medium rounded transition-colors ${
-                activeTab === 'results'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              결과 조회
-            </button>
-            <button
-              onClick={() => setActiveTab('optimize')}
-              className={`px-4 py-2 text-sm font-medium rounded transition-colors ${
-                activeTab === 'optimize'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              파라미터 최적화
-            </button>
-          </div>
+        {/* 탭 메뉴 - 넓게 */}
+        <div className="flex flex-1 gap-1 bg-zinc-800 p-1 rounded-lg">
+          <button
+            onClick={() => setActiveTab('realtime')}
+            className={`flex-1 px-6 py-2.5 text-sm font-medium rounded transition-colors ${
+              activeTab === 'realtime'
+                ? 'bg-blue-600 text-white'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+            }`}
+          >
+            실시간
+          </button>
+          <button
+            onClick={() => setActiveTab('results')}
+            className={`flex-1 px-6 py-2.5 text-sm font-medium rounded transition-colors ${
+              activeTab === 'results'
+                ? 'bg-blue-600 text-white'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+            }`}
+          >
+            결과 조회
+          </button>
+          <button
+            onClick={() => setActiveTab('optimize')}
+            className={`flex-1 px-6 py-2.5 text-sm font-medium rounded transition-colors ${
+              activeTab === 'optimize'
+                ? 'bg-blue-600 text-white'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+            }`}
+          >
+            파라미터 최적화
+          </button>
         </div>
-        <div className="flex items-center gap-4">
-          {healthStatus && (
-            <div className={`text-sm px-3 py-1 rounded ${healthStatus.valid ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>
-              {healthStatus.valid ? 'Python Ready' : healthStatus.message}
-            </div>
-          )}
-          <Link href="/" className="text-zinc-400 hover:text-white transition-colors">
-            대시보드로
-          </Link>
-        </div>
+
+        {/* 대시보드로 링크 */}
+        <Link
+          href="/"
+          className="ml-4 flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          <span>대시보드</span>
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
       </div>
 
       {/* 탭 0: 실시간 */}

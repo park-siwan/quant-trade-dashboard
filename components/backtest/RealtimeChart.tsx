@@ -82,6 +82,9 @@ export default function RealtimeChart() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastExitAlertRef = useRef<string | null>(null); // TP/SL 알림 중복 방지
 
+  // 설정 패널 상태
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   // 8bit 스타일 소리 알림 함수 (Web Audio API)
   const playAlertSound = (direction: 'bullish' | 'bearish', forcePlay = false) => {
     if (!soundEnabled && !forcePlay) return;
@@ -785,103 +788,6 @@ export default function RealtimeChart() {
 
   return (
     <div className="bg-zinc-900 p-4 rounded-lg">
-      {/* 상단 헤더: 전략 + 알림 */}
-      <div className="flex justify-between items-center mb-3 pb-3 border-b border-zinc-800">
-        {/* 전략 선택 */}
-        <div className="relative">
-          <button
-            onClick={() => setIsStrategyOpen(!isStrategyOpen)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-xs transition-colors"
-          >
-            {selectedStrategy ? (
-              <>
-                <span className="text-zinc-400">전략:</span>
-                <span className="text-blue-400">RSI {selectedStrategy.rsiPeriod}</span>
-                <span className="text-zinc-500">|</span>
-                <span className="text-zinc-300">Pvt {selectedStrategy.pivotLeft}/{selectedStrategy.pivotRight}</span>
-                <span className="text-zinc-500">|</span>
-                <span className="text-green-400">SR {selectedStrategy.sharpeRatio.toFixed(2)}</span>
-              </>
-            ) : (
-              <span className="text-zinc-400">전략 선택...</span>
-            )}
-            <svg className={`w-3 h-3 text-zinc-400 transition-transform ${isStrategyOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {/* 드롭다운 메뉴 */}
-          {isStrategyOpen && strategies.length > 0 && (
-            <div className="absolute top-full left-0 mt-1 w-80 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
-              {strategies.map((strategy, idx) => (
-                <button
-                  key={strategy.id}
-                  onClick={() => handleStrategyChange(strategy)}
-                  className={`w-full px-3 py-2 text-left text-xs hover:bg-zinc-700 transition-colors flex items-center justify-between ${
-                    selectedStrategy?.id === strategy.id ? 'bg-zinc-700' : ''
-                  } ${idx === 0 ? 'rounded-t-lg' : ''} ${idx === strategies.length - 1 ? 'rounded-b-lg' : ''}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-zinc-500 w-4">#{idx + 1}</span>
-                    <span className="text-blue-400">RSI {strategy.rsiPeriod}</span>
-                    <span className="text-zinc-500">|</span>
-                    <span className="text-zinc-300">Pvt {strategy.pivotLeft}/{strategy.pivotRight}</span>
-                    <span className="text-zinc-500">|</span>
-                    <span className="text-zinc-300">TP/SL {strategy.tpAtr}/{strategy.slAtr}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-400 font-medium">SR {strategy.sharpeRatio.toFixed(2)}</span>
-                    <span className={`${strategy.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {strategy.totalPnlPercent >= 0 ? '+' : ''}{strategy.totalPnlPercent.toFixed(0)}%
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 알림 컨트롤 */}
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded-l text-xs transition-colors ${
-              soundEnabled
-                ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30'
-                : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
-            }`}
-            title={soundEnabled ? '알림 끄기' : '알림 켜기'}
-          >
-            {soundEnabled ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-              </svg>
-            )}
-          </button>
-          <button onClick={() => playAlertSound('bullish', true)} className="px-2 py-1 bg-zinc-800 hover:bg-green-600/30 text-green-400 text-xs transition-colors" title="롱 신호">🚀</button>
-          <button onClick={() => playAlertSound('bearish', true)} className="px-2 py-1 bg-zinc-800 hover:bg-red-600/30 text-red-400 text-xs transition-colors" title="숏 신호">🌧</button>
-          <button onClick={() => playExitSound(true, true)} className="px-2 py-1 bg-zinc-800 hover:bg-green-600/30 text-green-400 text-xs transition-colors" title="익절">💰</button>
-          <button onClick={() => playExitSound(false, true)} className="px-2 py-1 bg-zinc-800 hover:bg-red-600/30 text-red-400 text-xs transition-colors" title="손절">💸</button>
-          <div className="flex items-center gap-1 px-2 bg-zinc-800 rounded-r">
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={soundVolume * 100}
-              onChange={(e) => setSoundVolume(Number(e.target.value) / 100)}
-              className="w-12 h-1 bg-zinc-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
-              title={`볼륨: ${Math.round(soundVolume * 100)}%`}
-            />
-            <span className="text-zinc-500 text-[10px] w-6">{Math.round(soundVolume * 100)}%</span>
-          </div>
-        </div>
-      </div>
-
       {/* 백테스트 통계 카드 */}
       {backtestStats && (
         <div className="grid grid-cols-6 gap-2 mb-3">
@@ -924,7 +830,7 @@ export default function RealtimeChart() {
         </div>
       )}
 
-      {/* 차트 헤더: 가격 + 타임프레임 */}
+      {/* 차트 헤더: 가격 + 설정 */}
       <div className="flex justify-between items-center mb-3">
         <div className="flex items-center gap-3">
           {/* 가격 + 등락 */}
@@ -942,23 +848,133 @@ export default function RealtimeChart() {
               )}
             </h2>
           </div>
+          {/* 현재 설정 요약 */}
+          <div className="flex items-center gap-2 text-xs text-zinc-500">
+            <span className="bg-zinc-800 px-2 py-0.5 rounded">{timeframe}</span>
+            {selectedStrategy && (
+              <span className="bg-zinc-800 px-2 py-0.5 rounded">
+                RSI {selectedStrategy.rsiPeriod}
+              </span>
+            )}
+            {soundEnabled && <span>🔊</span>}
+          </div>
         </div>
 
-        {/* 타임프레임 선택 */}
-        <div className="flex gap-1 bg-zinc-800 p-1 rounded">
-          {['1m', '5m', '15m', '1h'].map(tf => (
-            <button
-              key={tf}
-              onClick={() => setTimeframe(tf)}
-              className={`px-2 py-1 text-xs rounded ${
-                timeframe === tf
-                  ? 'bg-blue-600 text-white'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              {tf}
-            </button>
-          ))}
+        {/* 설정 버튼 */}
+        <div className="relative">
+          <button
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+            className={`p-2 rounded transition-colors ${
+              isSettingsOpen ? 'bg-zinc-700 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+            }`}
+            title="설정"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+
+          {/* 설정 패널 */}
+          {isSettingsOpen && (
+            <div className="absolute top-full right-0 mt-2 w-80 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 p-4 space-y-4">
+              {/* 타임프레임 */}
+              <div>
+                <div className="text-xs text-zinc-400 mb-2">타임프레임</div>
+                <div className="flex gap-1">
+                  {['1m', '5m', '15m', '1h'].map(tf => (
+                    <button
+                      key={tf}
+                      onClick={() => setTimeframe(tf)}
+                      className={`flex-1 px-2 py-1.5 text-xs rounded ${
+                        timeframe === tf
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-zinc-700 text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      {tf}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 전략 선택 */}
+              <div>
+                <div className="text-xs text-zinc-400 mb-2">전략</div>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsStrategyOpen(!isStrategyOpen)}
+                    className="w-full flex items-center justify-between px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-xs transition-colors"
+                  >
+                    {selectedStrategy ? (
+                      <span className="text-white">
+                        RSI {selectedStrategy.rsiPeriod} | Pvt {selectedStrategy.pivotLeft}/{selectedStrategy.pivotRight} | SR {selectedStrategy.sharpeRatio.toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400">전략 선택...</span>
+                    )}
+                    <svg className={`w-3 h-3 text-zinc-400 transition-transform ${isStrategyOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {isStrategyOpen && strategies.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-700 border border-zinc-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                      {strategies.map((strategy, idx) => (
+                        <button
+                          key={strategy.id}
+                          onClick={() => { handleStrategyChange(strategy); setIsStrategyOpen(false); }}
+                          className={`w-full px-3 py-2 text-left text-xs hover:bg-zinc-600 transition-colors ${
+                            selectedStrategy?.id === strategy.id ? 'bg-zinc-600' : ''
+                          }`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">#{idx + 1} RSI {strategy.rsiPeriod} | Pvt {strategy.pivotLeft}/{strategy.pivotRight}</span>
+                            <span className="text-green-400">SR {strategy.sharpeRatio.toFixed(2)}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 사운드 설정 */}
+              <div>
+                <div className="text-xs text-zinc-400 mb-2">사운드 알림</div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setSoundEnabled(!soundEnabled)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${
+                      soundEnabled
+                        ? 'bg-green-600/30 text-green-400'
+                        : 'bg-zinc-700 text-zinc-500'
+                    }`}
+                  >
+                    {soundEnabled ? '🔊 켜짐' : '🔇 꺼짐'}
+                  </button>
+                  <div className="flex-1 flex items-center gap-2">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={soundVolume * 100}
+                      onChange={(e) => setSoundVolume(Number(e.target.value) / 100)}
+                      className="flex-1 h-1 bg-zinc-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      disabled={!soundEnabled}
+                    />
+                    <span className="text-zinc-500 text-xs w-8">{Math.round(soundVolume * 100)}%</span>
+                  </div>
+                </div>
+                {/* 테스트 버튼 */}
+                <div className="flex gap-1 mt-2">
+                  <button onClick={() => playAlertSound('bullish', true)} className="flex-1 px-2 py-1 bg-zinc-700 hover:bg-green-600/30 text-green-400 text-xs rounded transition-colors">🚀 롱</button>
+                  <button onClick={() => playAlertSound('bearish', true)} className="flex-1 px-2 py-1 bg-zinc-700 hover:bg-red-600/30 text-red-400 text-xs rounded transition-colors">🌧 숏</button>
+                  <button onClick={() => playExitSound(true, true)} className="flex-1 px-2 py-1 bg-zinc-700 hover:bg-green-600/30 text-green-400 text-xs rounded transition-colors">💰 익절</button>
+                  <button onClick={() => playExitSound(false, true)} className="flex-1 px-2 py-1 bg-zinc-700 hover:bg-red-600/30 text-red-400 text-xs rounded transition-colors">💸 손절</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
