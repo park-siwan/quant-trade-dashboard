@@ -46,6 +46,19 @@ export interface SkippedSignal {
   totalCost: number;  // 총 비용 (%)
 }
 
+// 열린 포지션 (아직 청산되지 않은)
+export interface OpenPosition {
+  entryTime: string;
+  direction: 'long' | 'short';
+  entryPrice: number;
+  currentPrice: number;
+  tp: number;
+  sl: number;
+  size: number;
+  unrealizedPnl: number;
+  unrealizedPnlPercent: number;
+}
+
 export interface BacktestResult {
   symbol: string;
   timeframe: string;
@@ -67,6 +80,7 @@ export interface BacktestResult {
   trades: TradeResult[];
   equityCurve: EquityPoint[];
   skippedSignals?: SkippedSignal[];  // 수수료 때문에 스킵된 신호
+  openPosition?: OpenPosition | null;  // 열린 포지션 (청산 안 된)
 }
 
 export async function runBacktest(params: BacktestParams): Promise<BacktestResult> {
