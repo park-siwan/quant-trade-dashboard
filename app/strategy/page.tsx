@@ -1,41 +1,51 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
 import { CandlestickData } from 'lightweight-charts';
-import { checkBacktestHealth, BacktestResult, TradeResult, runBacktest } from '@/lib/backtest-api';
+import { GNB, StrategyLNB, type StrategySubTab } from '@/components/layout';
+import RealtimeChart from '@/components/backtest/RealtimeChart';
 import OptimizePanel from '@/components/backtest/OptimizePanel';
 import SavedResultsPanel, { SavedResultsPanelRef } from '@/components/backtest/SavedResultsPanel';
 import BacktestStats from '@/components/backtest/BacktestStats';
 import BacktestChart from '@/components/backtest/BacktestChart';
 import EquityCurve from '@/components/backtest/EquityCurve';
 import TradeList from '@/components/backtest/TradeList';
-import RealtimeChart from '@/components/backtest/RealtimeChart';
+import { BacktestResult, TradeResult, runBacktest } from '@/lib/backtest-api';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
-type TabType = 'realtime' | 'results' | 'optimize';
+const STRATEGY_TAB_STORAGE_KEY = 'strategy-sub-tab';
 
 export default function StrategyPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('realtime');
-  const [healthStatus, setHealthStatus] = useState<{ valid: boolean; message: string } | null>(null);
+  const [strategySubTab, setStrategySubTab] = useState<StrategySubTab>('realtime');
+  const [isTabLoaded, setIsTabLoaded] = useState(false);
   const savedResultsRef = useRef<SavedResultsPanelRef>(null);
 
-  // 결과 시각화를 위한 상태
+  // 결과 조회 상태
   const [isLoadingResult, setIsLoadingResult] = useState(false);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [candles, setCandles] = useState<CandlestickData[]>([]);
   const [selectedTrade, setSelectedTrade] = useState<TradeResult | null>(null);
   const [resultError, setResultError] = useState<string | null>(null);
 
+  // localStorage에서 탭 상태 복원
   useEffect(() => {
-    checkBacktestHealth().then(setHealthStatus).catch(() => {
-      setHealthStatus({ valid: false, message: 'API 연결 실패' });
-    });
+    if (typeof window !== 'undefined') {
+      const savedStrategyTab = localStorage.getItem(STRATEGY_TAB_STORAGE_KEY) as StrategySubTab | null;
+      if (savedStrategyTab && ['realtime', 'results', 'optimize'].includes(savedStrategyTab)) {
+        setStrategySubTab(savedStrategyTab);
+      }
+      setIsTabLoaded(true);
+    }
   }, []);
 
+  // 탭 변경 시 저장
+  useEffect(() => {
+    if (isTabLoaded && typeof window !== 'undefined') {
+      localStorage.setItem(STRATEGY_TAB_STORAGE_KEY, strategySubTab);
+    }
+  }, [strategySubTab, isTabLoaded]);
+
   const handleSaveSuccess = () => {
-    // 저장 성공 시 SavedResultsPanel 새로고침
     savedResultsRef.current?.refresh();
   };
 
@@ -51,13 +61,11 @@ export default function StrategyPage() {
     minDivergencePct?: number;
     indicators?: string[];
   }) => {
-
     setIsLoadingResult(true);
     setResultError(null);
     setSelectedTrade(null);
 
     try {
-      // 백테스트 실행 - 저장된 결과의 인디케이터를 사용하거나, 없으면 RSI만 사용
       const indicators = params.indicators || ['rsi'];
       const result = await runBacktest({
         symbol: 'BTC/USDT',
@@ -77,13 +85,11 @@ export default function StrategyPage() {
       });
       setBacktestResult(result);
 
-      // 캔들 데이터 가져오기 (차트용)
+      // 캔들 데이터 가져오기
       const candleResponse = await fetch(
         `${API_BASE}/exchange/candles?symbol=${encodeURIComponent('BTC/USDT')}&timeframe=5m&limit=5000`
       );
       const candleData = await candleResponse.json();
-
-      // API 응답 구조: { data: { candles: [...] } } 또는 { candles: [...] }
       const candlesArray = candleData.data?.candles || candleData.candles;
       if (candlesArray && candlesArray.length > 0) {
         const formattedCandles: CandlestickData[] = candlesArray.map((c: number[]) => ({
@@ -104,141 +110,89 @@ export default function StrategyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white p-6">
-      {/* 헤더 */}
-      <div className="flex justify-between items-center mb-6">
-        {/* 탭 메뉴 - 넓게 */}
-        <div className="flex flex-1 gap-1 bg-zinc-800 p-1 rounded-lg">
-          <button
-            onClick={() => setActiveTab('realtime')}
-            className={`flex-1 px-6 py-2.5 text-sm font-medium rounded transition-colors ${
-              activeTab === 'realtime'
-                ? 'bg-blue-600 text-white'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
-            }`}
-          >
-            실시간
-          </button>
-          <button
-            onClick={() => setActiveTab('results')}
-            className={`flex-1 px-6 py-2.5 text-sm font-medium rounded transition-colors ${
-              activeTab === 'results'
-                ? 'bg-blue-600 text-white'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
-            }`}
-          >
-            결과 조회
-          </button>
-          <button
-            onClick={() => setActiveTab('optimize')}
-            className={`flex-1 px-6 py-2.5 text-sm font-medium rounded transition-colors ${
-              activeTab === 'optimize'
-                ? 'bg-blue-600 text-white'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
-            }`}
-          >
-            파라미터 최적화
-          </button>
-        </div>
+    <div className='min-h-screen bg-[#0a0a0a] bg-pattern relative overflow-hidden'>
+      {/* 배경 장식 */}
+      <div className='absolute top-0 left-0 w-[500px] h-[500px] bg-gray-500/10 rounded-full blur-[120px] -translate-x-1/3 -translate-y-1/3'></div>
+      <div className='absolute bottom-0 right-0 w-[400px] h-[400px] bg-gray-600/8 rounded-full blur-[100px] translate-x-1/4 translate-y-1/4'></div>
 
-        {/* 대시보드로 링크 */}
-        <Link
-          href="/"
-          className="ml-4 flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-        >
-          <span>대시보드</span>
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </Link>
-      </div>
+      {/* GNB */}
+      <GNB />
 
-      {/* 탭 0: 실시간 */}
-      {activeTab === 'realtime' && (
-        <div>
-          <RealtimeChart />
-        </div>
-      )}
+      {/* 메인 콘텐츠 */}
+      <div className='relative z-10 p-4 md:p-8'>
+        {/* LNB */}
+        <StrategyLNB activeSubTab={strategySubTab} onSubTabChange={setStrategySubTab} />
 
-      {/* 탭 1: 결과 조회 */}
-      {activeTab === 'results' && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {/* 좌측: 저장된 결과 목록 + 자산곡선 + 거래목록 */}
-          <div className="space-y-4">
-            <SavedResultsPanel
-              ref={savedResultsRef}
-              onViewResult={handleViewResult}
-              autoSelectFirst={true}
-            />
+        {/* 실시간 */}
+        {strategySubTab === 'realtime' && <RealtimeChart />}
 
-            {/* 자산 곡선 & 거래 목록 */}
-            {backtestResult && (
-              <>
-                <EquityCurve
-                  data={backtestResult.equityCurve}
-                  initialCapital={1000}
-                />
-                <TradeList
-                  trades={backtestResult.trades}
-                  onTradeClick={setSelectedTrade}
-                  selectedTrade={selectedTrade}
-                />
-              </>
-            )}
-          </div>
-
-          {/* 우측: 백테스트 결과 (통계 + 차트) */}
-          <div className="space-y-4">
-            {/* 로딩 상태 */}
-            {isLoadingResult && (
-              <div className="bg-zinc-900 p-4 rounded-lg flex items-center justify-center gap-2">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-                <span className="text-zinc-400">백테스트 실행 중...</span>
-              </div>
-            )}
-
-            {/* 에러 메시지 */}
-            {resultError && (
-              <div className="bg-red-900/30 border border-red-700 p-4 rounded-lg text-red-400">
-                {resultError}
-              </div>
-            )}
-
-            {/* 백테스트 결과 */}
-            {backtestResult ? (
-              <>
-                {/* 통계 */}
-                <BacktestStats result={backtestResult} />
-
-                {/* 차트 */}
-                {candles.length > 0 ? (
-                  <BacktestChart
-                    result={backtestResult}
-                    candles={candles}
+        {/* 결과 조회 */}
+        {strategySubTab === 'results' && (
+          <div className='grid grid-cols-1 xl:grid-cols-2 gap-6'>
+            {/* 좌측 */}
+            <div className='space-y-4'>
+              <SavedResultsPanel
+                ref={savedResultsRef}
+                onViewResult={handleViewResult}
+                autoSelectFirst={true}
+              />
+              {backtestResult && (
+                <>
+                  <EquityCurve data={backtestResult.equityCurve} initialCapital={1000} />
+                  <TradeList
+                    trades={backtestResult.trades}
                     onTradeClick={setSelectedTrade}
                     selectedTrade={selectedTrade}
                   />
-                ) : (
-                  <div className="bg-zinc-900 p-4 rounded-lg">
-                    <p className="text-zinc-400 text-sm">캔들 데이터 로딩 중...</p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="bg-zinc-900 p-8 rounded-lg text-center text-zinc-500">
-                <p>저장된 결과를 클릭하면 백테스트 결과가 표시됩니다.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+                </>
+              )}
+            </div>
 
-      {/* 탭 2: 파라미터 최적화 */}
-      {activeTab === 'optimize' && (
-        <div className="max-w-4xl">
-          <OptimizePanel onSaveSuccess={handleSaveSuccess} />
-        </div>
-      )}
+            {/* 우측 */}
+            <div className='space-y-4'>
+              {isLoadingResult && (
+                <div className='bg-zinc-900 p-4 rounded-lg flex items-center justify-center gap-2'>
+                  <div className='animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500'></div>
+                  <span className='text-zinc-400'>백테스트 실행 중...</span>
+                </div>
+              )}
+              {resultError && (
+                <div className='bg-red-900/30 border border-red-700 p-4 rounded-lg text-red-400'>
+                  {resultError}
+                </div>
+              )}
+              {backtestResult ? (
+                <>
+                  <BacktestStats result={backtestResult} />
+                  {candles.length > 0 ? (
+                    <BacktestChart
+                      result={backtestResult}
+                      candles={candles}
+                      onTradeClick={setSelectedTrade}
+                      selectedTrade={selectedTrade}
+                    />
+                  ) : (
+                    <div className='bg-zinc-900 p-4 rounded-lg'>
+                      <p className='text-zinc-400 text-sm'>캔들 데이터 로딩 중...</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className='bg-zinc-900 p-8 rounded-lg text-center text-zinc-500'>
+                  <p>저장된 결과를 클릭하면 백테스트 결과가 표시됩니다.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 파라미터 최적화 */}
+        {strategySubTab === 'optimize' && (
+          <div className='max-w-4xl'>
+            <OptimizePanel onSaveSuccess={handleSaveSuccess} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
