@@ -68,8 +68,8 @@ export default function RealtimeChart() {
   const audioContextRef = useRef<AudioContext | null>(null);
 
   // 소리 알림 함수 (Web Audio API)
-  const playAlertSound = (direction: 'bullish' | 'bearish') => {
-    if (!soundEnabled) return;
+  const playAlertSound = (direction: 'bullish' | 'bearish', forcePlay = false) => {
+    if (!soundEnabled && !forcePlay) return;
 
     try {
       // AudioContext 생성 (브라우저 정책상 사용자 인터랙션 후에만 가능)
@@ -561,28 +561,45 @@ export default function RealtimeChart() {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* 알림 토글 */}
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
-              soundEnabled
-                ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30'
-                : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
-            }`}
-            title={soundEnabled ? '알림 끄기' : '알림 켜기'}
-          >
-            {soundEnabled ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-              </svg>
-            )}
-            <span>{soundEnabled ? '알림 ON' : '알림 OFF'}</span>
-          </button>
+          {/* 알림 토글 및 미리듣기 */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-l text-xs transition-colors ${
+                soundEnabled
+                  ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30'
+                  : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
+              }`}
+              title={soundEnabled ? '알림 끄기' : '알림 켜기'}
+            >
+              {soundEnabled ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                </svg>
+              )}
+              <span>{soundEnabled ? 'ON' : 'OFF'}</span>
+            </button>
+            {/* 미리듣기 버튼 */}
+            <button
+              onClick={() => playAlertSound('bullish', true)}
+              className="px-2 py-1 bg-zinc-800 hover:bg-green-600/30 text-green-400 text-xs transition-colors"
+              title="롱 알림음 미리듣기"
+            >
+              🚀
+            </button>
+            <button
+              onClick={() => playAlertSound('bearish', true)}
+              className="px-2 py-1 bg-zinc-800 hover:bg-red-600/30 text-red-400 text-xs rounded-r transition-colors"
+              title="숏 알림음 미리듣기"
+            >
+              🌧
+            </button>
+          </div>
 
           {/* 타임프레임 선택 */}
           <div className="flex gap-1 bg-zinc-800 p-1 rounded">
