@@ -116,6 +116,7 @@ export default function RealtimeChart() {
   const lastSignalIdRef = useRef<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastExitAlertRef = useRef<string | null>(null); // TP/SL 알림 중복 방지
+  const lastEntryAlertRef = useRef<string | null>(null); // 진입 알림 중복 방지
 
   // 설정 패널 상태
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -407,6 +408,35 @@ export default function RealtimeChart() {
       }
     }
   }, [ticker?.price, openPosition, soundEnabled]);
+
+  // 새 포지션 진입 알림
+  useEffect(() => {
+    if (!openPosition) return;
+
+    // 고유 알림 ID (진입시간 + 방향)
+    const entryId = `${openPosition.entryTime}-${openPosition.direction}`;
+
+    // 이미 알림한 경우 스킵
+    if (lastEntryAlertRef.current === entryId) return;
+
+    lastEntryAlertRef.current = entryId;
+    const isLong = openPosition.direction === 'long';
+
+    // 진입 소리 알림 (다이버전스 신호와 동일한 사운드)
+    playAlertSound(isLong ? 'bullish' : 'bearish');
+
+    // 브라우저 알림
+    const directionText = isLong ? '롱' : '숏';
+    const emoji = isLong ? '🟢' : '🔴';
+    showNotification(
+      `${emoji} ${directionText} 진입!`,
+      `진입가: $${openPosition.entryPrice.toLocaleString()} | TP: $${openPosition.tp.toLocaleString()} | SL: $${openPosition.sl.toLocaleString()}`,
+    );
+
+    console.log(
+      `[Entry Alert] ${openPosition.direction.toUpperCase()} @ $${openPosition.entryPrice}`,
+    );
+  }, [openPosition, soundEnabled]);
 
   // 상위 전략 목록 로드
   useEffect(() => {
@@ -1103,8 +1133,70 @@ export default function RealtimeChart() {
     }
   }, [openPosition, ticker?.price]);
 
+  // 총 소요시간 계산 (모든 거래의 소요시간 합계)
+  const totalDuration = backtestTrades.reduce((acc, trade) => {
+    const entryDate = new Date(trade.entryTime + 'Z');
+    const exitDate = new Date(trade.exitTime + 'Z');
+    return acc + (exitDate.getTime() - entryDate.getTime());
+  }, 0);
+
+  const formatDuration = (ms: number) => {
+    const hours = Math.floor(ms / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+    if (days > 0) {
+      return `${days}일 ${remainingHours}시간`;
+    }
+    return `${hours}시간`;
+  };
+
   return (
-    <div className='grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px] gap-4 w-full overflow-hidden items-stretch max-h-[calc(100vh-180px)]'>
+    <div className='flex flex-col gap-4 w-full overflow-hidden max-h-[calc(100vh-120px)]'>
+      {/* 상단: 통계 헤더 (전체 너비) */}
+      {backtestStats && (
+        <div className='flex items-center gap-3 px-4 py-2 bg-zinc-900 rounded-lg'>
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>수익</span>
+            <span className={`text-sm font-bold ${backtestStats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {backtestStats.totalPnlPercent >= 0 ? '+' : ''}{backtestStats.totalPnlPercent.toFixed(1)}%
+            </span>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>Sharpe</span>
+            <span className='text-zinc-300 text-sm font-bold'>{backtestStats.sharpeRatio.toFixed(2)}</span>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>승률</span>
+            <span className={`text-sm font-bold ${backtestStats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+              {backtestStats.winRate.toFixed(0)}%
+            </span>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>PF</span>
+            <span className='text-zinc-300 text-sm font-bold'>{backtestStats.profitFactor.toFixed(2)}</span>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>MDD</span>
+            <span className='text-zinc-300 text-sm font-bold'>-{backtestStats.maxDrawdownPercent.toFixed(1)}%</span>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>거래</span>
+            <span className='text-zinc-300 text-sm font-bold'>{backtestStats.totalTrades}회</span>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>소요</span>
+            <span className='text-zinc-300 text-sm font-bold'>{formatDuration(totalDuration)}</span>
+          </div>
+        </div>
+      )}
+
+      <div className='grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px] gap-4 flex-1 min-h-0'>
       {/* 좌측: 메인 차트 영역 */}
       <div className='bg-zinc-900 p-4 rounded-lg min-w-0 flex flex-col overflow-hidden'>
         {/* 1. 헤더: 연결 상태 + 설정 */}
@@ -1344,54 +1436,7 @@ export default function RealtimeChart() {
           </div>
         </div>
 
-        {/* 2. 백테스트 통계 카드 */}
-        {backtestStats && (
-          <div className='grid grid-cols-6 gap-2 mb-3'>
-            <div className='bg-zinc-800 rounded p-2 text-center'>
-              <div className='text-zinc-500 text-xs'>총 수익</div>
-              <div
-                className={`text-sm font-bold ${backtestStats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}
-              >
-                {backtestStats.totalPnlPercent >= 0 ? '+' : ''}
-                {backtestStats.totalPnlPercent.toFixed(1)}%
-              </div>
-            </div>
-            <div className='bg-zinc-800 rounded p-2 text-center'>
-              <div className='text-zinc-500 text-xs'>안정성 (Sharpe)</div>
-              <div className='text-zinc-300 text-sm font-bold'>
-                {backtestStats.sharpeRatio.toFixed(2)}
-              </div>
-            </div>
-            <div className='bg-zinc-800 rounded p-2 text-center'>
-              <div className='text-zinc-500 text-xs'>승률</div>
-              <div
-                className={`text-sm font-bold ${backtestStats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}
-              >
-                {backtestStats.winRate.toFixed(0)}%
-              </div>
-            </div>
-            <div className='bg-zinc-800 rounded p-2 text-center'>
-              <div className='text-zinc-500 text-xs'>수익/손실 (PF)</div>
-              <div className='text-zinc-300 text-sm font-bold'>
-                {backtestStats.profitFactor.toFixed(2)}
-              </div>
-            </div>
-            <div className='bg-zinc-800 rounded p-2 text-center'>
-              <div className='text-zinc-500 text-xs'>최대손실 (MDD)</div>
-              <div className='text-zinc-300 text-sm font-bold'>
-                -{backtestStats.maxDrawdownPercent.toFixed(1)}%
-              </div>
-            </div>
-            <div className='bg-zinc-800 rounded p-2 text-center'>
-              <div className='text-zinc-500 text-xs'>총 거래</div>
-              <div className='text-zinc-300 text-sm font-bold'>
-                {backtestStats.totalTrades}회
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 3. 열린 포지션 카드 (통계 카드 아래) */}
+        {/* 2. 열린 포지션 카드 */}
         {openPosition && (
           <div
             className={`mb-3 p-3 rounded-lg border ${
@@ -1963,8 +2008,29 @@ export default function RealtimeChart() {
                   })()}
               </svg>
             </div>
+            {/* 월간 예상 수익률 */}
+            {totalDuration > 0 && backtestStats && (() => {
+              const hoursTraded = totalDuration / (1000 * 60 * 60);
+              const hourlyReturn = backtestStats.totalPnlPercent / hoursTraded;
+              const monthlyHours = 30 * 24; // 720시간
+              const monthlyProjection = hourlyReturn * monthlyHours;
+              return (
+                <div className='mt-3 pt-3 border-t border-zinc-700'>
+                  <div className='flex justify-between items-center'>
+                    <span className='text-xs text-zinc-500'>월간 예상</span>
+                    <span className={`text-sm font-bold ${monthlyProjection >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {monthlyProjection >= 0 ? '+' : ''}{monthlyProjection.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className='text-[10px] text-zinc-600 mt-1'>
+                    시간당 {hourlyReturn >= 0 ? '+' : ''}{hourlyReturn.toFixed(3)}% × 720h
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
+      </div>
       </div>
     </div>
   );
