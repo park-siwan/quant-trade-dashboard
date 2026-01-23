@@ -22,6 +22,7 @@ import {
   BacktestResult,
   EquityPoint,
 } from '@/lib/backtest-api';
+import { CHART } from '@/lib/constants';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -126,7 +127,11 @@ export default function RealtimeChart() {
   const lastCandleTimeRef = useRef<number>(0); // 마지막 캔들 시간 (새 캔들 감지용)
 
   // 백테스트 throttling (중복 호출 방지)
-  const lastBacktestCallRef = useRef<{ strategyId: number; timeframe: string; timestamp: number } | null>(null);
+  const lastBacktestCallRef = useRef<{
+    strategyId: number;
+    timeframe: string;
+    timestamp: number;
+  } | null>(null);
   const BACKTEST_THROTTLE_MS = 2000; // 동일 전략/타임프레임으로 2초 내 재호출 방지
 
   // 8bit 스타일 소리 알림 함수 (Web Audio API)
@@ -582,7 +587,9 @@ export default function RealtimeChart() {
     };
 
     // 새 캔들 시작 감지 (기존 캔들 시간과 다르면 새 캔들)
-    const isNewCandle = lastCandleTimeRef.current > 0 && newCandleTime > lastCandleTimeRef.current;
+    const isNewCandle =
+      lastCandleTimeRef.current > 0 &&
+      newCandleTime > lastCandleTimeRef.current;
 
     if (isNewCandle && selectedStrategy) {
       // 새 캔들 시작! 백테스트 재실행
@@ -601,8 +608,12 @@ export default function RealtimeChart() {
         coloredCandle = {
           ...newCandle,
           color: isLong ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-          borderColor: isLong ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)',
-          wickColor: isLong ? 'rgba(34, 197, 94, 0.18)' : 'rgba(239, 68, 68, 0.18)',
+          borderColor: isLong
+            ? 'rgba(34, 197, 94, 0.25)'
+            : 'rgba(239, 68, 68, 0.25)',
+          wickColor: isLong
+            ? 'rgba(34, 197, 94, 0.18)'
+            : 'rgba(239, 68, 68, 0.18)',
         } as CandlestickData;
       }
     }
@@ -902,6 +913,16 @@ export default function RealtimeChart() {
     );
     console.log('[Markers] Colored candles:', tradeColorMap.size);
 
+    // 투명 스페이서 마커 생성 헬퍼 (캔들과 간격 확보)
+    const createSpacer = (time: number, position: 'aboveBar' | 'belowBar') =>
+      ({
+        time: time as Time,
+        position,
+        color: 'transparent',
+        shape: 'circle',
+        size: CHART.SPACER_SIZE,
+      }) as SeriesMarker<Time>;
+
     // 백테스트 거래 마커 (parseTradeTime 사용 - BacktestChart와 동일)
     if (backtestTrades.length > 0) {
       backtestTrades.forEach((trade) => {
@@ -912,12 +933,13 @@ export default function RealtimeChart() {
 
         // 진입 마커 (롱: 밝은 초록 화살표, 숏: 밝은 빨강 화살표)
         if (entryTime >= minCandleTime && entryTime <= maxCandleTime) {
+          markers.push(createSpacer(entryTime, isLong ? 'belowBar' : 'aboveBar'));
           markers.push({
             time: entryTime as Time,
             position: isLong ? 'belowBar' : 'aboveBar',
             color: isLong ? '#22c55e' : '#ef4444',
             shape: isLong ? 'arrowUp' : 'arrowDown',
-            size: 1,
+            size: CHART.MARKER_SIZE_ARROW,
           } as SeriesMarker<Time>);
           tradeMap.set(entryTime, { trade, type: 'entry' });
         }
@@ -929,19 +951,21 @@ export default function RealtimeChart() {
           : trade.exitPrice < trade.entryPrice;
         const isFeeLoss = priceMovedFavorably && trade.pnl <= 0;
 
-        let exitColor = '#22c55e'; // 익절: 초록
+        const alpha = CHART.MARKER_CIRCLE_OPACITY;
+        let exitColor = `rgba(34, 197, 94, ${alpha})`; // 익절: 초록
         if (!isWin) {
-          exitColor = isFeeLoss ? '#9ca3af' : '#facc15'; // 수수료 손실: 회색, 진짜 손절: 노랑
+          exitColor = isFeeLoss ? `rgba(156, 163, 175, ${alpha})` : `rgba(250, 204, 21, ${alpha})`; // 수수료 손실: 회색, 진짜 손절: 노랑
         }
 
         // 청산 마커
         if (exitTime >= minCandleTime && exitTime <= maxCandleTime) {
+          markers.push(createSpacer(exitTime, isLong ? 'aboveBar' : 'belowBar'));
           markers.push({
             time: exitTime as Time,
             position: isLong ? 'aboveBar' : 'belowBar',
             color: exitColor,
             shape: 'circle',
-            size: 0.5,
+            size: CHART.MARKER_SIZE_CIRCLE,
           } as SeriesMarker<Time>);
           tradeMap.set(exitTime, { trade, type: 'exit' });
         }
@@ -954,24 +978,26 @@ export default function RealtimeChart() {
         const signalTime = parseTradeTime(signal.time);
         const isLong = signal.direction === 'long';
         if (signalTime >= minCandleTime && signalTime <= maxCandleTime) {
+          markers.push(createSpacer(signalTime, isLong ? 'belowBar' : 'aboveBar'));
           // 진입 화살표 마커
           markers.push({
             time: signalTime as Time,
             position: isLong ? 'belowBar' : 'aboveBar',
             color: '#9ca3af', // gray-400 회색
             shape: isLong ? 'arrowUp' : 'arrowDown',
-            size: 0.8,
+            size: CHART.MARKER_SIZE_ARROW,
           } as SeriesMarker<Time>);
           tradeMap.set(signalTime, { skipped: signal, type: 'skipped' });
 
           // 예상 TP 위치 회색 점 (tp 필드가 있을 때만)
           if (signal.tp) {
+            markers.push(createSpacer(signalTime, isLong ? 'aboveBar' : 'belowBar'));
             markers.push({
               time: signalTime as Time,
               position: isLong ? 'aboveBar' : 'belowBar',
-              color: '#6b7280', // gray-500 회색 점
+              color: `rgba(107, 114, 128, ${CHART.MARKER_CIRCLE_OPACITY})`, // gray-500 회색 점
               shape: 'circle',
-              size: 0.3,
+              size: CHART.MARKER_SIZE_CIRCLE,
             } as SeriesMarker<Time>);
           }
         }
@@ -984,12 +1010,13 @@ export default function RealtimeChart() {
         const signalTime = signal.timestamp / 1000;
         const isLong = signal.direction === 'bullish';
         if (signalTime >= minCandleTime && signalTime <= maxCandleTime) {
+          markers.push(createSpacer(signalTime, isLong ? 'belowBar' : 'aboveBar'));
           markers.push({
             time: signalTime as Time,
             position: isLong ? 'belowBar' : 'aboveBar',
             color: isLong ? '#22c55e' : '#ef4444',
             shape: isLong ? 'arrowUp' : 'arrowDown',
-            size: 1,
+            size: CHART.MARKER_SIZE_ARROW,
           } as SeriesMarker<Time>);
         }
       });
@@ -1076,598 +1103,619 @@ export default function RealtimeChart() {
     }
   }, [openPosition, ticker?.price]);
 
-
   return (
     <div className='grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px] gap-4 w-full overflow-hidden items-stretch max-h-[calc(100vh-180px)]'>
       {/* 좌측: 메인 차트 영역 */}
       <div className='bg-zinc-900 p-4 rounded-lg min-w-0 flex flex-col overflow-hidden'>
         {/* 1. 헤더: 연결 상태 + 설정 */}
-      <div className='flex items-center justify-between mb-3'>
-        {/* 좌측: 연결 상태 + 백테스트 상태 */}
-        <div className='flex items-center gap-4'>
-          <div className='flex items-center gap-2'>
-            <span
-              className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
-            />
-            <span className='text-xs text-zinc-400'>
-              {isConnected ? '실시간' : '연결 끊김'}
-            </span>
-          </div>
-          {/* 다음 캔들 카운트다운 */}
-          <div className='flex items-center gap-2 px-2 py-1 bg-zinc-800 rounded'>
-            <span className='text-xs text-zinc-500'>다음 캔들</span>
-            <span className={`text-xs font-mono ${nextCandleCountdown <= 10 ? 'text-yellow-400' : 'text-zinc-300'}`}>
-              {Math.floor(nextCandleCountdown / 60)}:{(nextCandleCountdown % 60).toString().padStart(2, '0')}
-            </span>
-          </div>
-          {/* 백테스트 상태 */}
-          <div className='flex items-center gap-2'>
-            {isBacktestRunning ? (
-              <span className='flex items-center gap-1 text-xs text-blue-400'>
-                <span className='w-2 h-2 rounded-full bg-blue-400 animate-pulse' />
-                분석중...
+        <div className='flex items-center justify-between mb-3'>
+          {/* 좌측: 연결 상태 + 백테스트 상태 */}
+          <div className='flex items-center gap-4'>
+            <div className='flex items-center gap-2'>
+              <span
+                className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
+              />
+              <span className='text-xs text-zinc-400'>
+                {isConnected ? '실시간' : '연결 끊김'}
               </span>
-            ) : lastBacktestTime ? (
-              <span className='text-xs text-zinc-500'>
-                마지막 분석: {lastBacktestTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </div>
+            {/* 다음 캔들 카운트다운 */}
+            <div className='flex items-center gap-2 px-2 py-1 bg-zinc-800 rounded'>
+              <span className='text-xs text-zinc-500'>다음 캔들</span>
+              <span
+                className={`text-xs font-mono ${nextCandleCountdown <= 10 ? 'text-yellow-400' : 'text-zinc-300'}`}
+              >
+                {Math.floor(nextCandleCountdown / 60)}:
+                {(nextCandleCountdown % 60).toString().padStart(2, '0')}
               </span>
-            ) : null}
+            </div>
+            {/* 백테스트 상태 */}
+            <div className='flex items-center gap-2'>
+              {isBacktestRunning ? (
+                <span className='flex items-center gap-1 text-xs text-blue-400'>
+                  <span className='w-2 h-2 rounded-full bg-blue-400 animate-pulse' />
+                  분석중...
+                </span>
+              ) : lastBacktestTime ? (
+                <span className='text-xs text-zinc-500'>
+                  마지막 분석:{' '}
+                  {lastBacktestTime.toLocaleTimeString('ko-KR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                  })}
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          {/* 우측: 타임프레임 + 사운드 + 설정 버튼 */}
+          <div className='flex items-center gap-2'>
+            {/* 타임프레임 표시 */}
+            <div className='size-9 flex items-center justify-center p-2 bg-zinc-800 rounded text-xs text-zinc-400 leading-10'>
+              {timeframe}
+            </div>
+            {/* 사운드 상태 */}
+            <div className='p-2 bg-zinc-800 rounded text-sm'>
+              {soundEnabled ? '🔊' : '🔇'}
+            </div>
+            {/* 설정 버튼 */}
+            <div className='relative'>
+              <button
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                className={`p-2 rounded transition-colors ${
+                  isSettingsOpen
+                    ? 'bg-zinc-700 text-white'
+                    : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                }`}
+                title='설정'
+              >
+                <svg
+                  className='w-5 h-5'
+                  fill='none'
+                  stroke='currentColor'
+                  viewBox='0 0 24 24'
+                >
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth={2}
+                    d='M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z'
+                  />
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth={2}
+                    d='M15 12a3 3 0 11-6 0 3 3 0 016 0z'
+                  />
+                </svg>
+              </button>
+
+              {/* 설정 패널 */}
+              {isSettingsOpen && (
+                <div className='absolute top-full right-0 mt-2 w-80 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 p-4 space-y-4'>
+                  {/* 타임프레임 */}
+                  <div>
+                    <div className='text-xs text-zinc-400 mb-2'>타임프레임</div>
+                    <div className='flex items-center gap-1'>
+                      {['1m', '5m', '15m', '1h'].map((tf) => (
+                        <button
+                          key={tf}
+                          onClick={() => setTimeframe(tf)}
+                          className={`flex-1 px-2 py-1.5 text-xs rounded ${
+                            timeframe === tf
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-zinc-700 text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {tf}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 전략 선택 */}
+                  <div>
+                    <div className='text-xs text-zinc-400 mb-2'>전략</div>
+                    <div className='relative'>
+                      <button
+                        onClick={() => setIsStrategyOpen(!isStrategyOpen)}
+                        className='w-full flex items-center justify-between px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-xs transition-colors'
+                      >
+                        {selectedStrategy ? (
+                          <span className='text-white'>
+                            RSI {selectedStrategy.rsiPeriod} | Pvt{' '}
+                            {selectedStrategy.pivotLeft}/
+                            {selectedStrategy.pivotRight} | SR{' '}
+                            {selectedStrategy.sharpeRatio.toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className='text-zinc-400'>전략 선택...</span>
+                        )}
+                        <svg
+                          className={`w-3 h-3 text-zinc-400 transition-transform ${isStrategyOpen ? 'rotate-180' : ''}`}
+                          fill='none'
+                          stroke='currentColor'
+                          viewBox='0 0 24 24'
+                        >
+                          <path
+                            strokeLinecap='round'
+                            strokeLinejoin='round'
+                            strokeWidth={2}
+                            d='M19 9l-7 7-7-7'
+                          />
+                        </svg>
+                      </button>
+                      {isStrategyOpen && strategies.length > 0 && (
+                        <div className='absolute top-full left-0 right-0 mt-1 bg-zinc-700 border border-zinc-600 rounded-lg shadow-xl max-h-48 overflow-y-auto'>
+                          {strategies.map((strategy, idx) => (
+                            <button
+                              key={strategy.id}
+                              onClick={() => {
+                                handleStrategyChange(strategy);
+                                setIsStrategyOpen(false);
+                              }}
+                              className={`w-full px-3 py-2 text-left text-xs hover:bg-zinc-600 transition-colors ${
+                                selectedStrategy?.id === strategy.id
+                                  ? 'bg-zinc-600'
+                                  : ''
+                              }`}
+                            >
+                              <div className='flex justify-between items-center'>
+                                <span className='text-zinc-300'>
+                                  #{idx + 1} RSI {strategy.rsiPeriod} | Pvt{' '}
+                                  {strategy.pivotLeft}/{strategy.pivotRight}
+                                </span>
+                                <span className='text-green-400'>
+                                  SR {strategy.sharpeRatio.toFixed(2)}
+                                </span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 사운드 설정 */}
+                  <div>
+                    <div className='text-xs text-zinc-400 mb-2'>
+                      사운드 알림
+                    </div>
+                    <div className='flex items-center gap-3'>
+                      <button
+                        onClick={() => setSoundEnabled(!soundEnabled)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${
+                          soundEnabled
+                            ? 'bg-green-600/30 text-green-400'
+                            : 'bg-zinc-700 text-zinc-500'
+                        }`}
+                      >
+                        {soundEnabled ? '🔊 켜짐' : '🔇 꺼짐'}
+                      </button>
+                      <div className='flex-1 flex items-center gap-2'>
+                        <input
+                          type='range'
+                          min='0'
+                          max='100'
+                          value={soundVolume * 100}
+                          onChange={(e) =>
+                            setSoundVolume(Number(e.target.value) / 100)
+                          }
+                          className='flex-1 h-1 bg-zinc-600 rounded-lg appearance-none cursor-pointer accent-blue-500'
+                          disabled={!soundEnabled}
+                        />
+                        <span className='text-zinc-500 text-xs w-8'>
+                          {Math.round(soundVolume * 100)}%
+                        </span>
+                      </div>
+                    </div>
+                    {/* 테스트 버튼 */}
+                    <div className='flex gap-1 mt-2'>
+                      <button
+                        onClick={() => playAlertSound('bullish', true)}
+                        className='flex-1 px-2 py-1 bg-zinc-700 hover:bg-green-600/30 text-green-400 text-xs rounded transition-colors'
+                      >
+                        🚀 롱
+                      </button>
+                      <button
+                        onClick={() => playAlertSound('bearish', true)}
+                        className='flex-1 px-2 py-1 bg-zinc-700 hover:bg-red-600/30 text-red-400 text-xs rounded transition-colors'
+                      >
+                        🌧 숏
+                      </button>
+                      <button
+                        onClick={() => playExitSound(true, true)}
+                        className='flex-1 px-2 py-1 bg-zinc-700 hover:bg-green-600/30 text-green-400 text-xs rounded transition-colors'
+                      >
+                        🪙 익절
+                      </button>
+                      <button
+                        onClick={() => playExitSound(false, true)}
+                        className='flex-1 px-2 py-1 bg-zinc-700 hover:bg-red-600/30 text-red-400 text-xs rounded transition-colors'
+                      >
+                        💸 손절
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* 우측: 타임프레임 + 사운드 + 설정 버튼 */}
-        <div className='flex items-center gap-2'>
-          {/* 타임프레임 표시 */}
-          <div className='size-9 flex items-center justify-center p-2 bg-zinc-800 rounded text-xs text-zinc-400 leading-10'>
-            {timeframe}
-          </div>
-          {/* 사운드 상태 */}
-          <div className='p-2 bg-zinc-800 rounded text-sm'>
-            {soundEnabled ? '🔊' : '🔇'}
-          </div>
-          {/* 설정 버튼 */}
-          <div className='relative'>
-            <button
-              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className={`p-2 rounded transition-colors ${
-                isSettingsOpen
-                  ? 'bg-zinc-700 text-white'
-                  : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
-              }`}
-              title='설정'
-            >
-              <svg
-                className='w-5 h-5'
-                fill='none'
-                stroke='currentColor'
-                viewBox='0 0 24 24'
+        {/* 2. 백테스트 통계 카드 */}
+        {backtestStats && (
+          <div className='grid grid-cols-6 gap-2 mb-3'>
+            <div className='bg-zinc-800 rounded p-2 text-center'>
+              <div className='text-zinc-500 text-xs'>총 수익</div>
+              <div
+                className={`text-sm font-bold ${backtestStats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}
               >
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth={2}
-                  d='M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z'
-                />
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth={2}
-                  d='M15 12a3 3 0 11-6 0 3 3 0 016 0z'
-                />
-              </svg>
-            </button>
+                {backtestStats.totalPnlPercent >= 0 ? '+' : ''}
+                {backtestStats.totalPnlPercent.toFixed(1)}%
+              </div>
+            </div>
+            <div className='bg-zinc-800 rounded p-2 text-center'>
+              <div className='text-zinc-500 text-xs'>안정성 (Sharpe)</div>
+              <div className='text-zinc-300 text-sm font-bold'>
+                {backtestStats.sharpeRatio.toFixed(2)}
+              </div>
+            </div>
+            <div className='bg-zinc-800 rounded p-2 text-center'>
+              <div className='text-zinc-500 text-xs'>승률</div>
+              <div
+                className={`text-sm font-bold ${backtestStats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}
+              >
+                {backtestStats.winRate.toFixed(0)}%
+              </div>
+            </div>
+            <div className='bg-zinc-800 rounded p-2 text-center'>
+              <div className='text-zinc-500 text-xs'>수익/손실 (PF)</div>
+              <div className='text-zinc-300 text-sm font-bold'>
+                {backtestStats.profitFactor.toFixed(2)}
+              </div>
+            </div>
+            <div className='bg-zinc-800 rounded p-2 text-center'>
+              <div className='text-zinc-500 text-xs'>최대손실 (MDD)</div>
+              <div className='text-zinc-300 text-sm font-bold'>
+                -{backtestStats.maxDrawdownPercent.toFixed(1)}%
+              </div>
+            </div>
+            <div className='bg-zinc-800 rounded p-2 text-center'>
+              <div className='text-zinc-500 text-xs'>총 거래</div>
+              <div className='text-zinc-300 text-sm font-bold'>
+                {backtestStats.totalTrades}회
+              </div>
+            </div>
+          </div>
+        )}
 
-            {/* 설정 패널 */}
-            {isSettingsOpen && (
-              <div className='absolute top-full right-0 mt-2 w-80 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 p-4 space-y-4'>
-                {/* 타임프레임 */}
-                <div>
-                  <div className='text-xs text-zinc-400 mb-2'>타임프레임</div>
-                  <div className='flex items-center gap-1'>
-                    {['1m', '5m', '15m', '1h'].map((tf) => (
-                      <button
-                        key={tf}
-                        onClick={() => setTimeframe(tf)}
-                        className={`flex-1 px-2 py-1.5 text-xs rounded ${
-                          timeframe === tf
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-zinc-700 text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        {tf}
-                      </button>
-                    ))}
-                  </div>
+        {/* 3. 열린 포지션 카드 (통계 카드 아래) */}
+        {openPosition && (
+          <div
+            className={`mb-3 p-3 rounded-lg border ${
+              openPosition.direction === 'long'
+                ? 'bg-green-900/20 border-green-500/50'
+                : 'bg-red-900/20 border-red-500/50'
+            }`}
+          >
+            <div className='flex items-center justify-between'>
+              <div className='flex items-center gap-3'>
+                <span
+                  className={`text-xl font-bold ${openPosition.direction === 'long' ? 'text-green-400' : 'text-red-400'}`}
+                >
+                  {openPosition.direction === 'long'
+                    ? '🟢 롱 진행중'
+                    : '🔴 숏 진행중'}
+                </span>
+                <div className='flex items-center gap-2 text-sm'>
+                  <span className='text-zinc-400'>진입</span>
+                  <span className='text-white font-medium'>
+                    ${openPosition.entryPrice.toFixed(2)}
+                  </span>
                 </div>
+              </div>
+              <div className='flex items-center gap-4'>
+                {/* 실시간 PnL */}
+                {(() => {
+                  const currentPrice =
+                    ticker?.price || openPosition.currentPrice;
+                  const isLong = openPosition.direction === 'long';
+                  const pnlPercent = isLong
+                    ? ((currentPrice - openPosition.entryPrice) /
+                        openPosition.entryPrice) *
+                      100
+                    : ((openPosition.entryPrice - currentPrice) /
+                        openPosition.entryPrice) *
+                      100;
+                  const pnl =
+                    (pnlPercent / 100) *
+                    openPosition.size *
+                    openPosition.entryPrice;
+                  const isProfit = pnl >= 0;
 
-                {/* 전략 선택 */}
-                <div>
-                  <div className='text-xs text-zinc-400 mb-2'>전략</div>
-                  <div className='relative'>
-                    <button
-                      onClick={() => setIsStrategyOpen(!isStrategyOpen)}
-                      className='w-full flex items-center justify-between px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-xs transition-colors'
+                  return (
+                    <div
+                      className={`text-lg font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}
                     >
-                      {selectedStrategy ? (
-                        <span className='text-white'>
-                          RSI {selectedStrategy.rsiPeriod} | Pvt{' '}
-                          {selectedStrategy.pivotLeft}/
-                          {selectedStrategy.pivotRight} | SR{' '}
-                          {selectedStrategy.sharpeRatio.toFixed(2)}
-                        </span>
-                      ) : (
-                        <span className='text-zinc-400'>전략 선택...</span>
-                      )}
-                      <svg
-                        className={`w-3 h-3 text-zinc-400 transition-transform ${isStrategyOpen ? 'rotate-180' : ''}`}
-                        fill='none'
-                        stroke='currentColor'
-                        viewBox='0 0 24 24'
-                      >
-                        <path
-                          strokeLinecap='round'
-                          strokeLinejoin='round'
-                          strokeWidth={2}
-                          d='M19 9l-7 7-7-7'
-                        />
-                      </svg>
-                    </button>
-                    {isStrategyOpen && strategies.length > 0 && (
-                      <div className='absolute top-full left-0 right-0 mt-1 bg-zinc-700 border border-zinc-600 rounded-lg shadow-xl max-h-48 overflow-y-auto'>
-                        {strategies.map((strategy, idx) => (
-                          <button
-                            key={strategy.id}
-                            onClick={() => {
-                              handleStrategyChange(strategy);
-                              setIsStrategyOpen(false);
-                            }}
-                            className={`w-full px-3 py-2 text-left text-xs hover:bg-zinc-600 transition-colors ${
-                              selectedStrategy?.id === strategy.id
-                                ? 'bg-zinc-600'
-                                : ''
-                            }`}
-                          >
-                            <div className='flex justify-between items-center'>
-                              <span className='text-zinc-300'>
-                                #{idx + 1} RSI {strategy.rsiPeriod} | Pvt{' '}
-                                {strategy.pivotLeft}/{strategy.pivotRight}
-                              </span>
-                              <span className='text-green-400'>
-                                SR {strategy.sharpeRatio.toFixed(2)}
-                              </span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 사운드 설정 */}
-                <div>
-                  <div className='text-xs text-zinc-400 mb-2'>사운드 알림</div>
-                  <div className='flex items-center gap-3'>
-                    <button
-                      onClick={() => setSoundEnabled(!soundEnabled)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${
-                        soundEnabled
-                          ? 'bg-green-600/30 text-green-400'
-                          : 'bg-zinc-700 text-zinc-500'
-                      }`}
-                    >
-                      {soundEnabled ? '🔊 켜짐' : '🔇 꺼짐'}
-                    </button>
-                    <div className='flex-1 flex items-center gap-2'>
-                      <input
-                        type='range'
-                        min='0'
-                        max='100'
-                        value={soundVolume * 100}
-                        onChange={(e) =>
-                          setSoundVolume(Number(e.target.value) / 100)
-                        }
-                        className='flex-1 h-1 bg-zinc-600 rounded-lg appearance-none cursor-pointer accent-blue-500'
-                        disabled={!soundEnabled}
-                      />
-                      <span className='text-zinc-500 text-xs w-8'>
-                        {Math.round(soundVolume * 100)}%
-                      </span>
+                      {isProfit ? '+' : ''}
+                      {pnl.toFixed(2)} ({pnlPercent.toFixed(2)}%)
+                    </div>
+                  );
+                })()}
+                {/* TP/SL */}
+                <div className='flex gap-3 text-xs'>
+                  <div className='text-center'>
+                    <div className='text-green-400'>TP</div>
+                    <div className='text-white'>
+                      ${openPosition.tp.toFixed(0)}
                     </div>
                   </div>
-                  {/* 테스트 버튼 */}
-                  <div className='flex gap-1 mt-2'>
-                    <button
-                      onClick={() => playAlertSound('bullish', true)}
-                      className='flex-1 px-2 py-1 bg-zinc-700 hover:bg-green-600/30 text-green-400 text-xs rounded transition-colors'
+                  <div className='text-center'>
+                    <div className='text-red-400'>SL</div>
+                    <div className='text-white'>
+                      ${openPosition.sl.toFixed(0)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 4. 차트 */}
+        {isLoading ? (
+          <div className='h-[500px] flex items-center justify-center'>
+            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500'></div>
+          </div>
+        ) : (
+          <div ref={containerRef} className='w-full relative'>
+            {/* 진행 중 포지션 이모지 오버레이 */}
+            {openPosition &&
+              chartRef.current &&
+              candleSeriesRef.current &&
+              (() => {
+                const entryTime = parseTradeTime(openPosition.entryTime);
+                const isLong = openPosition.direction === 'long';
+                const x = chartRef.current
+                  .timeScale()
+                  .timeToCoordinate(entryTime as any);
+                const y = candleSeriesRef.current.priceToCoordinate(
+                  openPosition.entryPrice,
+                );
+                if (x !== null && y !== null) {
+                  return (
+                    <div
+                      className='absolute pointer-events-none z-40 text-2xl'
+                      style={{
+                        left: x - 12,
+                        top: isLong ? y + 10 : y - 40,
+                      }}
                     >
-                      🚀 롱
-                    </button>
-                    <button
-                      onClick={() => playAlertSound('bearish', true)}
-                      className='flex-1 px-2 py-1 bg-zinc-700 hover:bg-red-600/30 text-red-400 text-xs rounded transition-colors'
-                    >
-                      🌧 숏
-                    </button>
-                    <button
-                      onClick={() => playExitSound(true, true)}
-                      className='flex-1 px-2 py-1 bg-zinc-700 hover:bg-green-600/30 text-green-400 text-xs rounded transition-colors'
-                    >
-                      🪙 익절
-                    </button>
-                    <button
-                      onClick={() => playExitSound(false, true)}
-                      className='flex-1 px-2 py-1 bg-zinc-700 hover:bg-red-600/30 text-red-400 text-xs rounded transition-colors'
-                    >
-                      💸 손절
-                    </button>
+                      {isLong ? '🚀' : '🌧️'}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            {/* 거래 툴팁 */}
+            {hoveredTrade && tooltipPos && (
+              <div
+                className='absolute z-50 bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-xs shadow-lg pointer-events-none'
+                style={{
+                  left: Math.min(
+                    tooltipPos.x + 10,
+                    (containerRef.current?.clientWidth || 400) - 200,
+                  ),
+                  top: Math.max(tooltipPos.y - 80, 10),
+                }}
+              >
+                <div className='font-semibold mb-2'>
+                  <span
+                    className={
+                      hoveredTrade.direction === 'long'
+                        ? 'text-green-400'
+                        : 'text-red-400'
+                    }
+                  >
+                    {hoveredTrade.direction.toUpperCase()}
+                  </span>
+                  {(() => {
+                    const isLong = hoveredTrade.direction === 'long';
+                    const exitHigher =
+                      hoveredTrade.exitPrice > hoveredTrade.entryPrice;
+                    const priceWasFavorable = isLong ? exitHigher : !exitHigher;
+                    const isFeeLoss =
+                      priceWasFavorable && hoveredTrade.pnl <= 0;
+                    if (hoveredTrade.pnl > 0) {
+                      return <span className='ml-2 text-green-400'>익절</span>;
+                    } else if (isFeeLoss) {
+                      return (
+                        <span className='ml-2 text-yellow-400'>
+                          수수료 손실
+                        </span>
+                      );
+                    } else {
+                      return <span className='ml-2 text-red-400'>손절</span>;
+                    }
+                  })()}
+                </div>
+                <div className='space-y-1 text-zinc-300'>
+                  <div>
+                    진입:{' '}
+                    {formatKST(new Date(hoveredTrade.entryTime).getTime())}
+                  </div>
+                  <div>
+                    청산: {formatKST(new Date(hoveredTrade.exitTime).getTime())}
+                  </div>
+                  <div>진입가: ${hoveredTrade.entryPrice.toFixed(2)}</div>
+                  <div>청산가: ${hoveredTrade.exitPrice.toFixed(2)}</div>
+                  <div
+                    className={
+                      hoveredTrade.pnl > 0 ? 'text-green-400' : 'text-red-400'
+                    }
+                  >
+                    PnL: {hoveredTrade.pnl > 0 ? '+' : ''}
+                    {hoveredTrade.pnl.toFixed(2)} (
+                    {hoveredTrade.pnlPercent.toFixed(2)}%)
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* 수수료 보호 신호 툴팁 */}
+            {hoveredSkipped && tooltipPos && (
+              <div
+                className={`absolute z-50 bg-zinc-800 border rounded-lg p-3 text-xs shadow-lg pointer-events-none ${
+                  hoveredSkipped.direction === 'long'
+                    ? 'border-green-600'
+                    : 'border-red-600'
+                }`}
+                style={{
+                  left: Math.min(
+                    tooltipPos.x + 10,
+                    (containerRef.current?.clientWidth || 400) - 200,
+                  ),
+                  top: Math.max(tooltipPos.y - 80, 10),
+                }}
+              >
+                <div className='font-semibold mb-2'>
+                  <span
+                    className={
+                      hoveredSkipped.direction === 'long'
+                        ? 'text-zinc-400'
+                        : 'text-zinc-600'
+                    }
+                  >
+                    {hoveredSkipped.direction === 'long' ? '▲ 롱' : '▼ 숏'}
+                  </span>
+                  <span className='ml-2 text-yellow-400'>수수료 보호</span>
+                </div>
+                <div className='space-y-1 text-zinc-300'>
+                  <div>
+                    시간: {formatKST(new Date(hoveredSkipped.time).getTime())}
+                  </div>
+                  <div>가격: ${hoveredSkipped.price.toFixed(2)}</div>
+                  <div className='text-zinc-400 text-[10px] mt-1'>
+                    수수료가 기대수익 초과하여 진입 보류
+                  </div>
+                  <div className='mt-1 pt-1 border-t border-zinc-700'>
+                    <span className='text-yellow-400'>
+                      기대: {hoveredSkipped.expectedReturn.toFixed(2)}%
+                    </span>
+                    <span className='text-zinc-500 mx-1'>vs</span>
+                    <span className='text-red-400'>
+                      비용: {hoveredSkipped.totalCost.toFixed(2)}%
+                    </span>
                   </div>
                 </div>
               </div>
             )}
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* 2. 백테스트 통계 카드 */}
-      {backtestStats && (
-        <div className='grid grid-cols-6 gap-2 mb-3'>
-          <div className='bg-zinc-800 rounded p-2 text-center'>
-            <div className='text-zinc-500 text-xs'>총 수익</div>
-            <div
-              className={`text-sm font-bold ${backtestStats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}
-            >
-              {backtestStats.totalPnlPercent >= 0 ? '+' : ''}
-              {backtestStats.totalPnlPercent.toFixed(1)}%
-            </div>
-          </div>
-          <div className='bg-zinc-800 rounded p-2 text-center'>
-            <div className='text-zinc-500 text-xs'>안정성 (Sharpe)</div>
-            <div className='text-zinc-300 text-sm font-bold'>
-              {backtestStats.sharpeRatio.toFixed(2)}
-            </div>
-          </div>
-          <div className='bg-zinc-800 rounded p-2 text-center'>
-            <div className='text-zinc-500 text-xs'>승률</div>
-            <div
-              className={`text-sm font-bold ${backtestStats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}
-            >
-              {backtestStats.winRate.toFixed(0)}%
-            </div>
-          </div>
-          <div className='bg-zinc-800 rounded p-2 text-center'>
-            <div className='text-zinc-500 text-xs'>수익/손실 (PF)</div>
-            <div className='text-zinc-300 text-sm font-bold'>
-              {backtestStats.profitFactor.toFixed(2)}
-            </div>
-          </div>
-          <div className='bg-zinc-800 rounded p-2 text-center'>
-            <div className='text-zinc-500 text-xs'>최대손실 (MDD)</div>
-            <div className='text-zinc-300 text-sm font-bold'>
-              -{backtestStats.maxDrawdownPercent.toFixed(1)}%
-            </div>
-          </div>
-          <div className='bg-zinc-800 rounded p-2 text-center'>
-            <div className='text-zinc-500 text-xs'>총 거래</div>
-            <div className='text-zinc-300 text-sm font-bold'>
-              {backtestStats.totalTrades}회
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. 열린 포지션 카드 (통계 카드 아래) */}
-      {openPosition && (
-        <div
-          className={`mb-3 p-3 rounded-lg border ${
-            openPosition.direction === 'long'
-              ? 'bg-green-900/20 border-green-500/50'
-              : 'bg-red-900/20 border-red-500/50'
-          }`}
-        >
-          <div className='flex items-center justify-between'>
-            <div className='flex items-center gap-3'>
-              <span
-                className={`text-xl font-bold ${openPosition.direction === 'long' ? 'text-green-400' : 'text-red-400'}`}
-              >
-                {openPosition.direction === 'long'
-                  ? '🟢 롱 진행중'
-                  : '🔴 숏 진행중'}
-              </span>
-              <div className='flex items-center gap-2 text-sm'>
-                <span className='text-zinc-400'>진입</span>
-                <span className='text-white font-medium'>
-                  ${openPosition.entryPrice.toFixed(2)}
+        {/* 최근 신호 */}
+        {divergenceData && (
+          <div className='mt-4 p-3 bg-zinc-800 rounded-lg'>
+            <div className='flex items-center justify-between'>
+              <div className='flex items-center gap-2'>
+                <span
+                  className={`text-lg ${divergenceData.direction === 'bullish' ? 'text-green-400' : 'text-red-400'}`}
+                >
+                  {divergenceData.direction === 'bullish'
+                    ? '🚀 롱 신호'
+                    : '🌧 숏 신호'}
+                </span>
+                <span className='text-zinc-400 text-sm'>
+                  @ ${divergenceData.price.toLocaleString()}
                 </span>
               </div>
+              <div className='text-right'>
+                <div className='text-sm text-zinc-400'>
+                  RSI: {divergenceData.rsiValue.toFixed(1)} | 강도:{' '}
+                  {divergenceData.strength}
+                </div>
+                <div className='text-xs text-zinc-500'>
+                  {formatKST(divergenceData.timestamp)}
+                </div>
+              </div>
             </div>
-            <div className='flex items-center gap-4'>
-              {/* 실시간 PnL */}
-              {(() => {
-                const currentPrice = ticker?.price || openPosition.currentPrice;
-                const isLong = openPosition.direction === 'long';
-                const pnlPercent = isLong
-                  ? ((currentPrice - openPosition.entryPrice) /
-                      openPosition.entryPrice) *
-                    100
-                  : ((openPosition.entryPrice - currentPrice) /
-                      openPosition.entryPrice) *
-                    100;
-                const pnl =
-                  (pnlPercent / 100) *
-                  openPosition.size *
-                  openPosition.entryPrice;
-                const isProfit = pnl >= 0;
+          </div>
+        )}
 
-                return (
+        {/* 신호 히스토리 */}
+        {divergenceHistory.length > 0 && (
+          <div className='mt-4'>
+            <h3 className='text-sm font-medium text-zinc-400 mb-2'>
+              최근 신호 ({divergenceHistory.length})
+            </h3>
+            <div className='max-h-40 overflow-y-auto space-y-1'>
+              {[...divergenceHistory]
+                .reverse()
+                .slice(0, 10)
+                .map((signal, idx) => (
                   <div
-                    className={`text-lg font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}
+                    key={idx}
+                    className='flex items-center justify-between text-xs p-2 bg-zinc-800 rounded'
                   >
-                    {isProfit ? '+' : ''}
-                    {pnl.toFixed(2)} ({pnlPercent.toFixed(2)}%)
+                    <span
+                      className={
+                        signal.direction === 'bullish'
+                          ? 'text-green-400'
+                          : 'text-red-400'
+                      }
+                    >
+                      {signal.direction === 'bullish' ? '🚀 롱' : '🌧 숏'}
+                    </span>
+                    <span className='text-zinc-300'>
+                      ${signal.price.toLocaleString()}
+                    </span>
+                    <span className='text-zinc-500'>
+                      {formatKST(signal.timestamp)}
+                    </span>
                   </div>
-                );
-              })()}
-              {/* TP/SL */}
-              <div className='flex gap-3 text-xs'>
-                <div className='text-center'>
-                  <div className='text-green-400'>TP</div>
-                  <div className='text-white'>
-                    ${openPosition.tp.toFixed(0)}
-                  </div>
-                </div>
-                <div className='text-center'>
-                  <div className='text-red-400'>SL</div>
-                  <div className='text-white'>
-                    ${openPosition.sl.toFixed(0)}
-                  </div>
-                </div>
-              </div>
+                ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 4. 차트 */}
-      {isLoading ? (
-        <div className='h-[500px] flex items-center justify-center'>
-          <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500'></div>
-        </div>
-      ) : (
-        <div ref={containerRef} className='w-full relative'>
-          {/* 진행 중 포지션 이모지 오버레이 */}
-          {openPosition && chartRef.current && candleSeriesRef.current && (() => {
-            const entryTime = parseTradeTime(openPosition.entryTime);
-            const isLong = openPosition.direction === 'long';
-            const x = chartRef.current.timeScale().timeToCoordinate(entryTime as any);
-            const y = candleSeriesRef.current.priceToCoordinate(openPosition.entryPrice);
-            if (x !== null && y !== null) {
-              return (
-                <div
-                  className='absolute pointer-events-none z-40 text-2xl'
-                  style={{
-                    left: x - 12,
-                    top: isLong ? y + 10 : y - 40,
-                  }}
-                >
-                  {isLong ? '🚀' : '🌧️'}
-                </div>
-              );
-            }
-            return null;
-          })()}
-          {/* 거래 툴팁 */}
-          {hoveredTrade && tooltipPos && (
-            <div
-              className='absolute z-50 bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-xs shadow-lg pointer-events-none'
-              style={{
-                left: Math.min(
-                  tooltipPos.x + 10,
-                  (containerRef.current?.clientWidth || 400) - 200,
-                ),
-                top: Math.max(tooltipPos.y - 80, 10),
-              }}
-            >
-              <div className='font-semibold mb-2'>
-                <span
-                  className={
-                    hoveredTrade.direction === 'long'
-                      ? 'text-green-400'
-                      : 'text-red-400'
-                  }
-                >
-                  {hoveredTrade.direction.toUpperCase()}
-                </span>
-                {(() => {
-                  const isLong = hoveredTrade.direction === 'long';
-                  const exitHigher =
-                    hoveredTrade.exitPrice > hoveredTrade.entryPrice;
-                  const priceWasFavorable = isLong ? exitHigher : !exitHigher;
-                  const isFeeLoss = priceWasFavorable && hoveredTrade.pnl <= 0;
-                  if (hoveredTrade.pnl > 0) {
-                    return <span className='ml-2 text-green-400'>익절</span>;
-                  } else if (isFeeLoss) {
-                    return (
-                      <span className='ml-2 text-yellow-400'>수수료 손실</span>
-                    );
-                  } else {
-                    return <span className='ml-2 text-red-400'>손절</span>;
-                  }
-                })()}
-              </div>
-              <div className='space-y-1 text-zinc-300'>
-                <div>
-                  진입: {formatKST(new Date(hoveredTrade.entryTime).getTime())}
-                </div>
-                <div>
-                  청산: {formatKST(new Date(hoveredTrade.exitTime).getTime())}
-                </div>
-                <div>진입가: ${hoveredTrade.entryPrice.toFixed(2)}</div>
-                <div>청산가: ${hoveredTrade.exitPrice.toFixed(2)}</div>
-                <div
-                  className={
-                    hoveredTrade.pnl > 0 ? 'text-green-400' : 'text-red-400'
-                  }
-                >
-                  PnL: {hoveredTrade.pnl > 0 ? '+' : ''}
-                  {hoveredTrade.pnl.toFixed(2)} (
-                  {hoveredTrade.pnlPercent.toFixed(2)}%)
-                </div>
-              </div>
-            </div>
+        {/* 범례 */}
+        <div className='mt-3 flex flex-wrap gap-4 text-xs text-zinc-400'>
+          <span className='flex items-center gap-1'>
+            <span className='text-green-400'>▲</span> 롱 진입
+          </span>
+          <span className='flex items-center gap-1'>
+            <span className='text-red-400'>▼</span> 숏 진입
+          </span>
+          <span className='flex items-center gap-1'>
+            <span className='text-green-400'>●</span> 익절
+          </span>
+          <span className='flex items-center gap-1'>
+            <span className='text-yellow-300'>●</span> 손절
+          </span>
+          <span className='flex items-center gap-1'>
+            <span className='text-gray-400'>●</span> 수수료 손실
+          </span>
+          <span className='flex items-center gap-1'>
+            <span className='text-gray-400'>▲▼</span> 스킵
+          </span>
+          <span className='flex items-center gap-1'>
+            <span>🚀</span> 롱 진행중
+          </span>
+          <span className='flex items-center gap-1'>
+            <span>🌧️</span> 숏 진행중
+          </span>
+          {backtestTrades.length > 0 && (
+            <span className='text-zinc-500'>
+              | 거래: {backtestTrades.length}건
+            </span>
           )}
-          {/* 수수료 보호 신호 툴팁 */}
-          {hoveredSkipped && tooltipPos && (
-            <div
-              className={`absolute z-50 bg-zinc-800 border rounded-lg p-3 text-xs shadow-lg pointer-events-none ${
-                hoveredSkipped.direction === 'long'
-                  ? 'border-green-600'
-                  : 'border-red-600'
-              }`}
-              style={{
-                left: Math.min(
-                  tooltipPos.x + 10,
-                  (containerRef.current?.clientWidth || 400) - 200,
-                ),
-                top: Math.max(tooltipPos.y - 80, 10),
-              }}
-            >
-              <div className='font-semibold mb-2'>
-                <span
-                  className={
-                    hoveredSkipped.direction === 'long'
-                      ? 'text-zinc-400'
-                      : 'text-zinc-600'
-                  }
-                >
-                  {hoveredSkipped.direction === 'long' ? '▲ 롱' : '▼ 숏'}
-                </span>
-                <span className='ml-2 text-yellow-400'>수수료 보호</span>
-              </div>
-              <div className='space-y-1 text-zinc-300'>
-                <div>
-                  시간: {formatKST(new Date(hoveredSkipped.time).getTime())}
-                </div>
-                <div>가격: ${hoveredSkipped.price.toFixed(2)}</div>
-                <div className='text-zinc-400 text-[10px] mt-1'>
-                  수수료가 기대수익 초과하여 진입 보류
-                </div>
-                <div className='mt-1 pt-1 border-t border-zinc-700'>
-                  <span className='text-yellow-400'>
-                    기대: {hoveredSkipped.expectedReturn.toFixed(2)}%
-                  </span>
-                  <span className='text-zinc-500 mx-1'>vs</span>
-                  <span className='text-red-400'>
-                    비용: {hoveredSkipped.totalCost.toFixed(2)}%
-                  </span>
-                </div>
-              </div>
-            </div>
+          {skippedSignals.length > 0 && (
+            <span className='text-gray-400'>
+              | 스킵: {skippedSignals.length}건
+            </span>
           )}
         </div>
-      )}
-
-      {/* 최근 신호 */}
-      {divergenceData && (
-        <div className='mt-4 p-3 bg-zinc-800 rounded-lg'>
-          <div className='flex items-center justify-between'>
-            <div className='flex items-center gap-2'>
-              <span
-                className={`text-lg ${divergenceData.direction === 'bullish' ? 'text-green-400' : 'text-red-400'}`}
-              >
-                {divergenceData.direction === 'bullish'
-                  ? '🚀 롱 신호'
-                  : '🌧 숏 신호'}
-              </span>
-              <span className='text-zinc-400 text-sm'>
-                @ ${divergenceData.price.toLocaleString()}
-              </span>
-            </div>
-            <div className='text-right'>
-              <div className='text-sm text-zinc-400'>
-                RSI: {divergenceData.rsiValue.toFixed(1)} | 강도:{' '}
-                {divergenceData.strength}
-              </div>
-              <div className='text-xs text-zinc-500'>
-                {formatKST(divergenceData.timestamp)}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 신호 히스토리 */}
-      {divergenceHistory.length > 0 && (
-        <div className='mt-4'>
-          <h3 className='text-sm font-medium text-zinc-400 mb-2'>
-            최근 신호 ({divergenceHistory.length})
-          </h3>
-          <div className='max-h-40 overflow-y-auto space-y-1'>
-            {[...divergenceHistory]
-              .reverse()
-              .slice(0, 10)
-              .map((signal, idx) => (
-                <div
-                  key={idx}
-                  className='flex items-center justify-between text-xs p-2 bg-zinc-800 rounded'
-                >
-                  <span
-                    className={
-                      signal.direction === 'bullish'
-                        ? 'text-green-400'
-                        : 'text-red-400'
-                    }
-                  >
-                    {signal.direction === 'bullish' ? '🚀 롱' : '🌧 숏'}
-                  </span>
-                  <span className='text-zinc-300'>
-                    ${signal.price.toLocaleString()}
-                  </span>
-                  <span className='text-zinc-500'>
-                    {formatKST(signal.timestamp)}
-                  </span>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* 범례 */}
-      <div className='mt-3 flex flex-wrap gap-4 text-xs text-zinc-400'>
-        <span className='flex items-center gap-1'>
-          <span className='text-green-400'>▲</span> 롱 진입
-        </span>
-        <span className='flex items-center gap-1'>
-          <span className='text-red-400'>▼</span> 숏 진입
-        </span>
-        <span className='flex items-center gap-1'>
-          <span className='text-green-400'>●</span> 익절
-        </span>
-        <span className='flex items-center gap-1'>
-          <span className='text-yellow-300'>●</span> 손절
-        </span>
-        <span className='flex items-center gap-1'>
-          <span className='text-gray-400'>●</span> 수수료 손실
-        </span>
-        <span className='flex items-center gap-1'>
-          <span className='text-gray-400'>▲▼</span> 스킵
-        </span>
-        <span className='flex items-center gap-1'>
-          <span>🚀</span> 롱 진행중
-        </span>
-        <span className='flex items-center gap-1'>
-          <span>🌧️</span> 숏 진행중
-        </span>
-        {backtestTrades.length > 0 && (
-          <span className='text-zinc-500'>
-            | 거래: {backtestTrades.length}건
-          </span>
-        )}
-        {skippedSignals.length > 0 && (
-          <span className='text-gray-400'>
-            | 스킵: {skippedSignals.length}건
-          </span>
-        )}
-      </div>
       </div>
 
       {/* 우측: 거래 히스토리 + 자산곡선 */}
@@ -1680,19 +1728,34 @@ export default function RealtimeChart() {
           <div className='flex-1 overflow-y-auto space-y-1 min-h-0'>
             {backtestTrades.length > 0 ? (
               [...backtestTrades]
-                .sort((a, b) => new Date(b.exitTime).getTime() - new Date(a.exitTime).getTime())
+                .sort(
+                  (a, b) =>
+                    new Date(b.exitTime).getTime() -
+                    new Date(a.exitTime).getTime(),
+                )
                 .map((trade, idx) => {
                   const isWin = trade.pnl > 0;
-                  const isSelected = selectedTrade?.entryTime === trade.entryTime;
+                  const isSelected =
+                    selectedTrade?.entryTime === trade.entryTime;
                   // 수익률 계산 (진입가 기준)
-                  const pnlPercent = ((trade.exitPrice - trade.entryPrice) / trade.entryPrice) * 100 * (trade.direction === 'long' ? 1 : -1);
+                  const pnlPercent =
+                    ((trade.exitPrice - trade.entryPrice) / trade.entryPrice) *
+                    100 *
+                    (trade.direction === 'long' ? 1 : -1);
                   // 소요시간 계산
                   const entryDate = new Date(trade.entryTime + 'Z');
                   const exitDate = new Date(trade.exitTime + 'Z');
                   const durationMs = exitDate.getTime() - entryDate.getTime();
-                  const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
-                  const durationMins = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-                  const durationStr = durationHours > 0 ? `${durationHours}h ${durationMins}m` : `${durationMins}m`;
+                  const durationHours = Math.floor(
+                    durationMs / (1000 * 60 * 60),
+                  );
+                  const durationMins = Math.floor(
+                    (durationMs % (1000 * 60 * 60)) / (1000 * 60),
+                  );
+                  const durationStr =
+                    durationHours > 0
+                      ? `${durationHours}h ${durationMins}m`
+                      : `${durationMins}m`;
                   // 날짜 포맷 YYYY-MM-DD HH:MM
                   const formatDate = (d: Date) => {
                     const y = d.getFullYear();
@@ -1705,17 +1768,23 @@ export default function RealtimeChart() {
                   return (
                     <div
                       key={idx}
-                      onClick={() => setSelectedTrade(isSelected ? null : trade)}
+                      onClick={() =>
+                        setSelectedTrade(isSelected ? null : trade)
+                      }
                       className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${
-                        isSelected ? 'bg-zinc-700' : 'bg-zinc-800 hover:bg-zinc-750'
+                        isSelected
+                          ? 'bg-zinc-700'
+                          : 'bg-zinc-800 hover:bg-zinc-750'
                       }`}
                     >
                       <div className='flex items-center gap-2'>
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${
-                          trade.direction === 'long'
-                            ? 'bg-green-900/50 text-green-400'
-                            : 'bg-red-900/50 text-red-400'
-                        }`}>
+                        <span
+                          className={`text-xs px-1.5 py-0.5 rounded ${
+                            trade.direction === 'long'
+                              ? 'bg-green-900/50 text-green-400'
+                              : 'bg-red-900/50 text-red-400'
+                          }`}
+                        >
                           {trade.direction === 'long' ? 'L' : 'S'}
                         </span>
                         <div className='flex flex-col'>
@@ -1727,8 +1796,11 @@ export default function RealtimeChart() {
                           </span>
                         </div>
                       </div>
-                      <span className={`text-xs font-medium ${isWin ? 'text-green-400' : 'text-red-400'}`}>
-                        {isWin ? '+' : ''}{pnlPercent.toFixed(2)}%
+                      <span
+                        className={`text-xs font-medium ${isWin ? 'text-green-400' : 'text-red-400'}`}
+                      >
+                        {isWin ? '+' : ''}
+                        {pnlPercent.toFixed(2)}%
                       </span>
                     </div>
                   );
@@ -1748,89 +1820,147 @@ export default function RealtimeChart() {
               <h3 className='text-sm font-medium text-zinc-400'>자산 곡선</h3>
               {(() => {
                 const initialCapital = 1000;
-                const finalEquity = equityCurve[equityCurve.length - 1]?.equity || initialCapital;
+                const finalEquity =
+                  equityCurve[equityCurve.length - 1]?.equity || initialCapital;
                 const pnl = finalEquity - initialCapital;
                 const pnlPercent = (pnl / initialCapital) * 100;
                 return (
-                  <span className={`text-xs font-medium ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    ${finalEquity.toFixed(0)} ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)
+                  <span
+                    className={`text-xs font-medium ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}
+                  >
+                    ${finalEquity.toFixed(0)} ({pnlPercent >= 0 ? '+' : ''}
+                    {pnlPercent.toFixed(1)}%)
                   </span>
                 );
               })()}
             </div>
             {/* SVG 자산 곡선 */}
             <div className='h-24 w-full'>
-              <svg viewBox='0 0 105 40' className='w-full h-full' preserveAspectRatio='none'>
+              <svg
+                viewBox='0 0 105 40'
+                className='w-full h-full'
+                preserveAspectRatio='none'
+              >
                 {/* 기준선 */}
-                <line x1='0' y1='20' x2='100' y2='20' stroke='#52525b' strokeWidth='0.5' strokeDasharray='2,2' />
+                <line
+                  x1='0'
+                  y1='20'
+                  x2='100'
+                  y2='20'
+                  stroke='#52525b'
+                  strokeWidth='0.5'
+                  strokeDasharray='2,2'
+                />
                 {/* 곡선 */}
-                {equityCurve.length > 1 && (() => {
-                  const initialCapital = 1000;
-                  const values = equityCurve.map(p => p.equity);
-                  const dataMin = Math.min(...values);
-                  const dataMax = Math.max(...values);
-                  // 실제 데이터 범위에 5% 패딩만 추가 (더 가파르게 보임)
-                  const padding = (dataMax - dataMin) * 0.05 || 1;
-                  const min = dataMin - padding;
-                  const max = dataMax + padding;
-                  const range = max - min || 1;
+                {equityCurve.length > 1 &&
+                  (() => {
+                    const initialCapital = 1000;
+                    const values = equityCurve.map((p) => p.equity);
+                    const dataMin = Math.min(...values);
+                    const dataMax = Math.max(...values);
+                    // 실제 데이터 범위에 5% 패딩만 추가 (더 가파르게 보임)
+                    const padding = (dataMax - dataMin) * 0.05 || 1;
+                    const min = dataMin - padding;
+                    const max = dataMax + padding;
+                    const range = max - min || 1;
 
-                  const points = equityCurve.map((p, i) => {
-                    const x = (i / (equityCurve.length - 1)) * 100;
-                    const y = 40 - ((p.equity - min) / range) * 40;
-                    return `${x},${y}`;
-                  }).join(' ');
+                    const points = equityCurve
+                      .map((p, i) => {
+                        const x = (i / (equityCurve.length - 1)) * 100;
+                        const y = 40 - ((p.equity - min) / range) * 40;
+                        return `${x},${y}`;
+                      })
+                      .join(' ');
 
-                  const finalEquity = equityCurve[equityCurve.length - 1]?.equity || initialCapital;
-                  const isProfit = finalEquity >= initialCapital;
+                    const finalEquity =
+                      equityCurve[equityCurve.length - 1]?.equity ||
+                      initialCapital;
+                    const isProfit = finalEquity >= initialCapital;
 
-                  // 마지막 점 좌표
-                  const lastX = 100;
-                  const lastY = 40 - ((finalEquity - min) / range) * 40;
+                    // 마지막 점 좌표
+                    const lastX = 100;
+                    const lastY = 40 - ((finalEquity - min) / range) * 40;
 
-                  return (
-                    <>
-                      {/* 글로우 필터 및 그라디언트 정의 */}
-                      <defs>
-                        <filter id='glow' x='-50%' y='-50%' width='200%' height='200%'>
-                          <feGaussianBlur stdDeviation='2' result='coloredBlur' />
-                          <feMerge>
-                            <feMergeNode in='coloredBlur' />
-                            <feMergeNode in='SourceGraphic' />
-                          </feMerge>
-                        </filter>
-                        <linearGradient id='areaGradientGreen' x1='0' y1='0' x2='0' y2='1'>
-                          <stop offset='0%' stopColor='rgba(34, 197, 94, 0.3)' />
-                          <stop offset='100%' stopColor='rgba(34, 197, 94, 0)' />
-                        </linearGradient>
-                        <linearGradient id='areaGradientRed' x1='0' y1='0' x2='0' y2='1'>
-                          <stop offset='0%' stopColor='rgba(239, 68, 68, 0.3)' />
-                          <stop offset='100%' stopColor='rgba(239, 68, 68, 0)' />
-                        </linearGradient>
-                      </defs>
-                      <polyline
-                        fill='none'
-                        stroke={isProfit ? '#22c55e' : '#ef4444'}
-                        strokeWidth='1'
-                        points={points}
-                      />
-                      {/* 영역 채우기 (그라디언트) */}
-                      <polygon
-                        fill={isProfit ? 'url(#areaGradientGreen)' : 'url(#areaGradientRed)'}
-                        points={`0,40 ${points} 100,40`}
-                      />
-                      {/* 끝점 반짝이는 글로우 */}
-                      <circle
-                        cx={lastX}
-                        cy={lastY}
-                        r='2'
-                        fill={isProfit ? '#22c55e' : '#ef4444'}
-                        filter='url(#glow)'
-                        className='animate-pulse'
-                      />
-                    </>
-                  );
-                })()}
+                    return (
+                      <>
+                        {/* 글로우 필터 및 그라디언트 정의 */}
+                        <defs>
+                          <filter
+                            id='glow'
+                            x='-50%'
+                            y='-50%'
+                            width='200%'
+                            height='200%'
+                          >
+                            <feGaussianBlur
+                              stdDeviation='2'
+                              result='coloredBlur'
+                            />
+                            <feMerge>
+                              <feMergeNode in='coloredBlur' />
+                              <feMergeNode in='SourceGraphic' />
+                            </feMerge>
+                          </filter>
+                          <linearGradient
+                            id='areaGradientGreen'
+                            x1='0'
+                            y1='0'
+                            x2='0'
+                            y2='1'
+                          >
+                            <stop
+                              offset='0%'
+                              stopColor='rgba(34, 197, 94, 0.3)'
+                            />
+                            <stop
+                              offset='100%'
+                              stopColor='rgba(34, 197, 94, 0)'
+                            />
+                          </linearGradient>
+                          <linearGradient
+                            id='areaGradientRed'
+                            x1='0'
+                            y1='0'
+                            x2='0'
+                            y2='1'
+                          >
+                            <stop
+                              offset='0%'
+                              stopColor='rgba(239, 68, 68, 0.3)'
+                            />
+                            <stop
+                              offset='100%'
+                              stopColor='rgba(239, 68, 68, 0)'
+                            />
+                          </linearGradient>
+                        </defs>
+                        <polyline
+                          fill='none'
+                          stroke={isProfit ? '#22c55e' : '#ef4444'}
+                          strokeWidth='1'
+                          points={points}
+                        />
+                        {/* 영역 채우기 (그라디언트) */}
+                        <polygon
+                          fill={
+                            isProfit
+                              ? 'url(#areaGradientGreen)'
+                              : 'url(#areaGradientRed)'
+                          }
+                          points={`0,40 ${points} 100,40`}
+                        />
+                        {/* 끝점 반짝이는 글로우 */}
+                        <circle
+                          cx={lastX}
+                          cy={lastY}
+                          r='2'
+                          fill={isProfit ? '#22c55e' : '#ef4444'}
+                          filter='url(#glow)'
+                          className='animate-pulse'
+                        />
+                      </>
+                    );
+                  })()}
               </svg>
             </div>
           </div>

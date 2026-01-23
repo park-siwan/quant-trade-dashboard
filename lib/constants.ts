@@ -25,16 +25,16 @@ export const ANIMATION = {
 // ============================================
 export const WEBSOCKET = {
   // 업데이트 쓰로틀
-  THROTTLE_MS: 500,          // UI 업데이트 주기
+  THROTTLE_MS: 500, // UI 업데이트 주기
 
   // 재연결 설정
-  RECONNECT_DELAY: 5000,     // 재연결 대기 시간
+  RECONNECT_DELAY: 5000, // 재연결 대기 시간
 
   // 동기화 설정
-  SYNC_INTERVAL: 10,         // N캔들마다 전체 동기화
+  SYNC_INTERVAL: 10, // N캔들마다 전체 동기화
 
   // 캔들 퍼지 매칭 허용 범위 (초)
-  FUZZY_MATCH_SECONDS: 300,  // 5분봉 기준
+  FUZZY_MATCH_SECONDS: 300, // 5분봉 기준
 } as const;
 
 // ============================================
@@ -42,7 +42,7 @@ export const WEBSOCKET = {
 // ============================================
 export const API = {
   // 타임아웃
-  REQUEST_TIMEOUT: 10000,    // 10초
+  REQUEST_TIMEOUT: 10000, // 10초
 
   // 캔들 조회 제한
   DEFAULT_CANDLE_LIMIT: 1000,
@@ -59,16 +59,16 @@ export const API = {
 // ============================================
 export const TTS = {
   // 중복 방지 (같은 소리)
-  DEDUP_WINDOW: 3000,        // 3초 이내 같은 소리 스킵
+  DEDUP_WINDOW: 3000, // 3초 이내 같은 소리 스킵
 
   // 오래된 기록 정리
-  CLEANUP_THRESHOLD: 10000,  // 10초 이상 지난 기록 삭제
+  CLEANUP_THRESHOLD: 10000, // 10초 이상 지난 기록 삭제
 
   // 큐 제한
-  MAX_QUEUE_SIZE: 3,         // 최대 큐 크기 (초과 시 오래된 것 버림)
+  MAX_QUEUE_SIZE: 3, // 최대 큐 크기 (초과 시 오래된 것 버림)
 
   // 잠자기 복귀 후 큐 클리어 기준
-  SLEEP_THRESHOLD: 30000,    // 30초 이상 숨겨졌다 돌아오면 큐 클리어
+  SLEEP_THRESHOLD: 30000, // 30초 이상 숨겨졌다 돌아오면 큐 클리어
 } as const;
 
 // ============================================
@@ -76,10 +76,10 @@ export const TTS = {
 // ============================================
 export const SIGNAL = {
   // 오래된 신호 무시 (절전 복귀 등)
-  MAX_AGE_MS: 60000,         // 1분 이상 된 신호는 무시
+  MAX_AGE_MS: 60000, // 1분 이상 된 신호는 무시
 
   // 잠자기 복귀 기준
-  SLEEP_THRESHOLD: 30000,    // 30초 이상 숨겨졌다 돌아오면 히스토리 클리어
+  SLEEP_THRESHOLD: 30000, // 30초 이상 숨겨졌다 돌아오면 히스토리 클리어
 } as const;
 
 // ============================================
@@ -90,10 +90,10 @@ export const UI = {
   MAX_ALERT_HISTORY: 50,
 
   // 중복 알림 무시 시간
-  DUPLICATE_ALERT_WINDOW: 30000,  // 30초
+  DUPLICATE_ALERT_WINDOW: 30000, // 30초
 
   // 재알림 주기
-  REMINDER_INTERVAL: 300000,      // 5분
+  REMINDER_INTERVAL: 300000, // 5분
 } as const;
 
 // ============================================
@@ -106,6 +106,12 @@ export const CHART = {
   // 패널 비율
   MAIN_PANE_RATIO: 4,
   INDICATOR_PANE_RATIO: 1,
+
+  // 마커 크기
+  MARKER_SIZE_ARROW: 0.5, // 화살표 마커 크기 (0.5 미만시 삼각형으로 변형됨)
+  MARKER_SIZE_CIRCLE: 0.1, // 원형 마커 크기
+  MARKER_CIRCLE_OPACITY: 0.2, // 원형 마커 투명도
+  SPACER_SIZE: 1.5, // 투명 스페이서 크기
 } as const;
 
 // ============================================
