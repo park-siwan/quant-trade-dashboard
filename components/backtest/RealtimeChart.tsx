@@ -116,6 +116,16 @@ export default function RealtimeChart() {
   // 설정 패널 상태
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  // 백테스트 갱신 상태
+  const [lastBacktestTime, setLastBacktestTime] = useState<Date | null>(null);
+  const [nextCandleCountdown, setNextCandleCountdown] = useState<number>(0);
+  const [isBacktestRunning, setIsBacktestRunning] = useState(false);
+  const lastCandleTimeRef = useRef<number>(0); // 마지막 캔들 시간 (새 캔들 감지용)
+
+  // 백테스트 throttling (중복 호출 방지)
+  const lastBacktestCallRef = useRef<{ strategyId: number; timeframe: string; timestamp: number } | null>(null);
+  const BACKTEST_THROTTLE_MS = 2000; // 동일 전략/타임프레임으로 2초 내 재호출 방지
+
   // 8bit 스타일 소리 알림 함수 (Web Audio API)
   const playAlertSound = (
     direction: 'bullish' | 'bearish',
@@ -302,6 +312,29 @@ export default function RealtimeChart() {
     }
   }, []);
 
+  // 다음 캔들까지 카운트다운 타이머
+  useEffect(() => {
+    const getTimeframeSeconds = (tf: string): number => {
+      if (tf === '1m') return 60;
+      if (tf === '5m') return 300;
+      if (tf === '15m') return 900;
+      if (tf === '1h') return 3600;
+      return 300;
+    };
+
+    const updateCountdown = () => {
+      const tfSeconds = getTimeframeSeconds(timeframe);
+      const now = Math.floor(Date.now() / 1000);
+      const nextCandleTime = Math.ceil(now / tfSeconds) * tfSeconds;
+      const remaining = nextCandleTime - now;
+      setNextCandleCountdown(remaining);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [timeframe]);
+
   // TP/SL 도달 감지 및 알림 (실시간 가격 모니터링)
   useEffect(() => {
     if (!openPosition || !ticker) return;
@@ -388,15 +421,37 @@ export default function RealtimeChart() {
     setSelectedStrategy(strategy);
     setIsStrategyOpen(false);
     await changeStrategy(strategy.id);
-    // 선택된 전략으로 백테스트 실행하여 과거 거래 내역 로드
-    loadBacktestTrades(strategy);
+    // 제거: loadBacktestTrades(strategy)
+    // useEffect가 selectedStrategy 변경을 감지하여 자동으로 백테스트 실행
+    // 중복 호출 방지됨
   };
 
-  // 선택된 전략으로 백테스트 실행 (재시도 포함)
+  // 선택된 전략으로 백테스트 실행 (재시도 포함 + throttling)
   const loadBacktestTrades = async (
     strategy: SavedOptimizeResult,
     retryCount = 0,
+    forceRun = false,
   ) => {
+    // Throttling: 동일 전략/타임프레임으로 짧은 시간 내 중복 호출 방지
+    const now = Date.now();
+    if (
+      !forceRun &&
+      lastBacktestCallRef.current &&
+      lastBacktestCallRef.current.strategyId === strategy.id &&
+      lastBacktestCallRef.current.timeframe === timeframe &&
+      now - lastBacktestCallRef.current.timestamp < BACKTEST_THROTTLE_MS
+    ) {
+      console.log('[Backtest] Skipped duplicate call (throttled)');
+      return;
+    }
+
+    lastBacktestCallRef.current = {
+      strategyId: strategy.id,
+      timeframe,
+      timestamp: now,
+    };
+
+    setIsBacktestRunning(true);
     try {
       const indicators = strategy.indicators
         ? strategy.indicators.split(',').filter(Boolean)
@@ -421,6 +476,7 @@ export default function RealtimeChart() {
       setSkippedSignals(result.skippedSignals || []);
       setOpenPosition(result.openPosition || null);
       setBacktestStats(result);
+      setLastBacktestTime(new Date());
       console.log('[Backtest] Open position:', result.openPosition);
     } catch (err) {
       console.error('Failed to load backtest trades:', err);
@@ -432,19 +488,27 @@ export default function RealtimeChart() {
         setSkippedSignals([]);
         setOpenPosition(null);
       }
+    } finally {
+      setIsBacktestRunning(false);
     }
   };
 
-  // 전략 선택 시 백테스트 실행 (candles 로드 완료 후 약간의 지연)
+  // 전략/타임프레임 변경 시 백테스트 실행
+  // candles.length > 0 조건만 확인 (length 변화 자체는 의존성에서 제외)
+  const hasCandlesRef = useRef(false);
   useEffect(() => {
-    if (selectedStrategy && candles.length > 0 && !isLoading) {
-      // 백엔드에서 캔들 데이터 준비 시간 확보
+    hasCandlesRef.current = candles.length > 0;
+  }, [candles.length]);
+
+  useEffect(() => {
+    if (selectedStrategy && hasCandlesRef.current && !isLoading) {
+      // 전략 또는 타임프레임 변경 시 백테스트 실행
       const timer = setTimeout(() => {
         loadBacktestTrades(selectedStrategy);
-      }, 500);
+      }, 300);
       return () => clearTimeout(timer);
     }
-  }, [selectedStrategy, timeframe, candles.length, isLoading]);
+  }, [selectedStrategy, timeframe, isLoading]);
 
   // 초기 캔들 데이터 로드
   useEffect(() => {
@@ -504,18 +568,45 @@ export default function RealtimeChart() {
     if (!kline || kline.timeframe !== timeframe || isChartDisposedRef.current)
       return;
 
+    const newCandleTime = kline.timestamp / 1000;
     const newCandle: CandlestickData = {
-      time: (kline.timestamp / 1000) as Time,
+      time: newCandleTime as Time,
       open: kline.open,
       high: kline.high,
       low: kline.low,
       close: kline.close,
     };
 
-    // 차트 시리즈가 있으면 직접 업데이트
+    // 새 캔들 시작 감지 (기존 캔들 시간과 다르면 새 캔들)
+    const isNewCandle = lastCandleTimeRef.current > 0 && newCandleTime > lastCandleTimeRef.current;
+
+    if (isNewCandle && selectedStrategy) {
+      // 새 캔들 시작! 백테스트 재실행
+      console.log('[Candle] New candle started, refreshing backtest...');
+      loadBacktestTrades(selectedStrategy);
+    }
+
+    lastCandleTimeRef.current = newCandleTime;
+
+    // 포지션 구간인지 확인하여 색상 적용
+    let coloredCandle = newCandle;
+    if (openPosition) {
+      const entryTime = parseTradeTime(openPosition.entryTime);
+      if (newCandleTime >= entryTime) {
+        const isLong = openPosition.direction === 'long';
+        coloredCandle = {
+          ...newCandle,
+          color: isLong ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+          borderColor: isLong ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)',
+          wickColor: isLong ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+        } as CandlestickData;
+      }
+    }
+
+    // 차트 시리즈가 있으면 직접 업데이트 (색상 포함)
     if (candleSeriesRef.current) {
       try {
-        candleSeriesRef.current.update(newCandle);
+        candleSeriesRef.current.update(coloredCandle);
       } catch {
         // 차트가 이미 disposed된 경우 무시
       }
@@ -544,7 +635,7 @@ export default function RealtimeChart() {
       }
       return prev;
     });
-  }, [kline, timeframe]);
+  }, [kline, timeframe, openPosition, selectedStrategy]);
 
   // 차트 초기 생성 (타임프레임 변경 또는 초기 로드 시에만)
   useEffect(() => {
@@ -948,32 +1039,38 @@ export default function RealtimeChart() {
 
   return (
     <div className='bg-zinc-900 p-4 rounded-lg'>
-      {/* 1. 티커 헤더: 가격 + 설정 (최상단) */}
+      {/* 1. 헤더: 연결 상태 + 설정 */}
       <div className='flex items-center justify-between mb-3'>
-        {/* 좌측: 가격 정보 */}
-        <div className='flex items-center gap-3'>
-          <span
-            className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
-          />
-          <h2 className='text-xl font-bold text-white'>
-            BTC/USDT
-            {ticker && (
-              <>
-                <span className='ml-3'>
-                  $
-                  {ticker.price.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                  })}
-                </span>
-                <span
-                  className={`ml-3 text-base ${ticker.changePercent24h >= 0 ? 'text-green-400' : 'text-red-400'}`}
-                >
-                  {ticker.changePercent24h >= 0 ? '+' : ''}
-                  {ticker.changePercent24h.toFixed(2)}%
-                </span>
-              </>
-            )}
-          </h2>
+        {/* 좌측: 연결 상태 + 백테스트 상태 */}
+        <div className='flex items-center gap-4'>
+          <div className='flex items-center gap-2'>
+            <span
+              className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
+            />
+            <span className='text-xs text-zinc-400'>
+              {isConnected ? '실시간' : '연결 끊김'}
+            </span>
+          </div>
+          {/* 다음 캔들 카운트다운 */}
+          <div className='flex items-center gap-2 px-2 py-1 bg-zinc-800 rounded'>
+            <span className='text-xs text-zinc-500'>다음 캔들</span>
+            <span className={`text-xs font-mono ${nextCandleCountdown <= 10 ? 'text-yellow-400' : 'text-zinc-300'}`}>
+              {Math.floor(nextCandleCountdown / 60)}:{(nextCandleCountdown % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+          {/* 백테스트 상태 */}
+          <div className='flex items-center gap-2'>
+            {isBacktestRunning ? (
+              <span className='flex items-center gap-1 text-xs text-blue-400'>
+                <span className='w-2 h-2 rounded-full bg-blue-400 animate-pulse' />
+                분석중...
+              </span>
+            ) : lastBacktestTime ? (
+              <span className='text-xs text-zinc-500'>
+                마지막 분석: {lastBacktestTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {/* 우측: 타임프레임 + 사운드 + 설정 버튼 */}
@@ -1239,14 +1336,6 @@ export default function RealtimeChart() {
                 <span className='text-white font-medium'>
                   ${openPosition.entryPrice.toFixed(2)}
                 </span>
-                {ticker && (
-                  <>
-                    <span className='text-zinc-500'>→</span>
-                    <span className='text-white font-medium'>
-                      ${ticker.price.toLocaleString()}
-                    </span>
-                  </>
-                )}
               </div>
             </div>
             <div className='flex items-center gap-4'>
