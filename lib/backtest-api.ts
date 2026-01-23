@@ -44,6 +44,8 @@ export interface SkippedSignal {
   reason: 'fee';  // 수수료 커버 불가로 스킵
   expectedReturn: number;  // 기대 수익률 (%)
   totalCost: number;  // 총 비용 (%)
+  tp: number;  // 예상 익절가
+  sl: number;  // 예상 손절가
 }
 
 // 열린 포지션 (아직 청산되지 않은)

@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { API_CONFIG } from '@/lib/config';
+import { SIGNAL } from '@/lib/constants';
 
 // Types
 export interface TickerData {
@@ -154,6 +155,9 @@ const SocketContext = createContext<SocketContextValue>({
   subscribeMtf: () => {},
 });
 
+// 페이지가 마지막으로 숨겨진 시간
+let lastHiddenTime = 0;
+
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -169,6 +173,32 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [longShortRatioData, setLongShortRatioData] = useState<LongShortRatioData | null>(null);
   const [divergenceData, setDivergenceData] = useState<RealtimeDivergenceData | null>(null);
   const [divergenceHistory, setDivergenceHistory] = useState<RealtimeDivergenceData[]>([]);
+
+  // 페이지 visibility 변경 감지 - 잠자기 복귀 시 히스토리 클리어
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // 숨겨질 때 시간 기록
+        lastHiddenTime = Date.now();
+      } else {
+        // 다시 보일 때 - 오래 숨겨졌으면 히스토리 클리어
+        const hiddenDuration = Date.now() - lastHiddenTime;
+        if (lastHiddenTime > 0 && hiddenDuration > SIGNAL.SLEEP_THRESHOLD) {
+          console.log(`[Socket] 잠자기 복귀 (${Math.round(hiddenDuration / 1000)}초), 다이버전스 히스토리 클리어`);
+          setDivergenceHistory([]);
+          setDivergenceData(null);
+        }
+        lastHiddenTime = 0;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -239,6 +269,13 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     // 실시간 다이버전스 신호
     socket.on('data:divergence', (data: RealtimeDivergenceData) => {
+      // 오래된 신호 무시 (절전 복귀 후 쌓인 신호 방지)
+      const signalAge = Date.now() - data.timestamp;
+      if (signalAge > SIGNAL.MAX_AGE_MS) {
+        console.log(`[Socket] 오래된 다이버전스 신호 무시 (${Math.round(signalAge / 1000)}초 전)`);
+        return;
+      }
+
       setDivergenceData(data);
       // 히스토리에 추가 (최대 50개 유지)
       setDivergenceHistory(prev => {
