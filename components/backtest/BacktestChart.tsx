@@ -155,7 +155,7 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
         shape: 'text',
         text: exitText,
         size: 0.5,
-      } as SeriesMarker<Time>);
+      } as unknown as SeriesMarker<Time>);
 
       // 맵에 저장 (수수료 손실 여부 포함)
       tradeMap.set(entryTime as number, { trade, type: 'entry', feeLoss });
