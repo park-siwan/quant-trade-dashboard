@@ -116,6 +116,7 @@ export function useTTS(options: TTSOptions = {}) {
   const queueRef = useRef<string[][]>([]);
   const isProcessingRef = useRef(false);
   const pendingQueueRef = useRef<string[][]>([]); // 잠금 해제 전 대기열
+  const processQueueRef = useRef<(() => void) | null>(null); // processQueue 함수 참조
 
   // 페이지 visibility 변경 감지 - 잠자기 복귀 시 큐 클리어
   useEffect(() => {
@@ -156,12 +157,18 @@ export function useTTS(options: TTSOptions = {}) {
     const checkUnlock = () => {
       if (hasUserInteraction && !isUnlocked) {
         setIsUnlocked(true);
-        // 대기 중인 알림이 있으면 재생
+        // 대기 중인 알림이 있으면 큐에 추가하고 재생
         if (pendingQueueRef.current.length > 0) {
           pendingQueueRef.current.forEach(files => {
             queueRef.current.push(files);
           });
           pendingQueueRef.current = [];
+          // 큐 처리 시작 (setTimeout으로 상태 업데이트 후 실행)
+          setTimeout(() => {
+            if (queueRef.current.length > 0 && !isProcessingRef.current) {
+              processQueueRef.current?.();
+            }
+          }, 0);
         }
       }
     };
@@ -189,15 +196,20 @@ export function useTTS(options: TTSOptions = {}) {
   // 단일 오디오 파일 재생
   const playAudioFile = useCallback((src: string): Promise<void> => {
     return new Promise((resolve, reject) => {
+      // 사용자 상호작용 없으면 재생 시도하지 않음 (브라우저 에러 방지)
+      if (!hasUserInteraction) {
+        resolve();
+        return;
+      }
+
       const audio = new Audio(src);
       audioRef.current = audio;
       audio.onended = () => resolve();
       audio.onerror = () => reject(new Error(`Failed to play ${src}`));
       audio.play().catch((error) => {
-        // 사용자 상호작용 없음 에러는 조용히 처리 (콘솔 에러 방지)
+        // 혹시 모를 에러는 조용히 처리
         if (error.name === 'NotAllowedError') {
-          console.log('[TTS] 오디오 재생 대기 중 - 페이지 클릭 필요');
-          resolve(); // 에러 대신 정상 종료로 처리
+          resolve();
         } else {
           reject(error);
         }
@@ -223,6 +235,7 @@ export function useTTS(options: TTSOptions = {}) {
   // 큐 처리 (중복 방지)
   const processQueue = useCallback(async () => {
     if (isProcessingRef.current || queueRef.current.length === 0) return;
+    if (!hasUserInteraction) return; // 사용자 상호작용 없으면 처리하지 않음
 
     isProcessingRef.current = true;
     while (queueRef.current.length > 0) {
@@ -233,6 +246,11 @@ export function useTTS(options: TTSOptions = {}) {
     }
     isProcessingRef.current = false;
   }, [playSequence]);
+
+  // processQueue 참조 업데이트
+  useEffect(() => {
+    processQueueRef.current = processQueue;
+  }, [processQueue]);
 
   // 큐에 추가 (탭 간 중복 방지 + 큐 크기 제한)
   const enqueue = useCallback((files: string[]) => {
