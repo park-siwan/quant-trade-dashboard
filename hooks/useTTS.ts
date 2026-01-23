@@ -193,7 +193,15 @@ export function useTTS(options: TTSOptions = {}) {
       audioRef.current = audio;
       audio.onended = () => resolve();
       audio.onerror = () => reject(new Error(`Failed to play ${src}`));
-      audio.play().catch(reject);
+      audio.play().catch((error) => {
+        // 사용자 상호작용 없음 에러는 조용히 처리 (콘솔 에러 방지)
+        if (error.name === 'NotAllowedError') {
+          console.log('[TTS] 오디오 재생 대기 중 - 페이지 클릭 필요');
+          resolve(); // 에러 대신 정상 종료로 처리
+        } else {
+          reject(error);
+        }
+      });
     });
   }, []);
 
