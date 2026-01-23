@@ -1154,7 +1154,8 @@ export default function RealtimeChart() {
     <div className='flex flex-col gap-4 w-full overflow-hidden max-h-[calc(100vh-120px)]'>
       {/* 상단: 통계 헤더 (전체 너비) */}
       {backtestStats && (
-        <div className='flex items-center gap-3 px-4 py-2 bg-zinc-900 rounded-lg'>
+        <div className='flex items-center gap-3 px-4 py-2 bg-zinc-900 rounded-lg flex-wrap'>
+          {/* 수익 */}
           <div className='flex items-center gap-2'>
             <span className='text-zinc-500 text-xs'>수익</span>
             <span className={`text-sm font-bold ${backtestStats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -1162,11 +1163,7 @@ export default function RealtimeChart() {
             </span>
           </div>
           <div className='w-px h-4 bg-zinc-700' />
-          <div className='flex items-center gap-2'>
-            <span className='text-zinc-500 text-xs'>Sharpe</span>
-            <span className='text-zinc-300 text-sm font-bold'>{backtestStats.sharpeRatio.toFixed(2)}</span>
-          </div>
-          <div className='w-px h-4 bg-zinc-700' />
+          {/* 승률 */}
           <div className='flex items-center gap-2'>
             <span className='text-zinc-500 text-xs'>승률</span>
             <span className={`text-sm font-bold ${backtestStats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
@@ -1174,24 +1171,37 @@ export default function RealtimeChart() {
             </span>
           </div>
           <div className='w-px h-4 bg-zinc-700' />
+          {/* 소요시간 */}
           <div className='flex items-center gap-2'>
-            <span className='text-zinc-500 text-xs'>PF</span>
-            <span className='text-zinc-300 text-sm font-bold'>{backtestStats.profitFactor.toFixed(2)}</span>
+            <span className='text-zinc-500 text-xs'>소요</span>
+            <span className='text-zinc-300 text-sm font-bold'>{formatDuration(totalDuration)}</span>
           </div>
           <div className='w-px h-4 bg-zinc-700' />
-          <div className='flex items-center gap-2'>
-            <span className='text-zinc-500 text-xs'>MDD</span>
-            <span className='text-zinc-300 text-sm font-bold'>-{backtestStats.maxDrawdownPercent.toFixed(1)}%</span>
-          </div>
-          <div className='w-px h-4 bg-zinc-700' />
+          {/* 거래 횟수 */}
           <div className='flex items-center gap-2'>
             <span className='text-zinc-500 text-xs'>거래</span>
             <span className='text-zinc-300 text-sm font-bold'>{backtestStats.totalTrades}회</span>
           </div>
           <div className='w-px h-4 bg-zinc-700' />
-          <div className='flex items-center gap-2'>
-            <span className='text-zinc-500 text-xs'>소요</span>
-            <span className='text-zinc-300 text-sm font-bold'>{formatDuration(totalDuration)}</span>
+          {/* 샤프 비율 (위험 대비 수익) */}
+          <div className='flex items-center gap-1'>
+            <span className='text-zinc-500 text-xs'>샤프</span>
+            <span className='text-zinc-600 text-[10px]'>(위험대비)</span>
+            <span className='text-zinc-300 text-sm font-bold'>{backtestStats.sharpeRatio.toFixed(2)}</span>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          {/* 손익비 (Profit Factor) */}
+          <div className='flex items-center gap-1'>
+            <span className='text-zinc-500 text-xs'>손익비</span>
+            <span className='text-zinc-600 text-[10px]'>(익절/손절)</span>
+            <span className='text-zinc-300 text-sm font-bold'>{backtestStats.profitFactor.toFixed(2)}</span>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          {/* MDD (최대 낙폭) */}
+          <div className='flex items-center gap-1'>
+            <span className='text-zinc-500 text-xs'>MDD</span>
+            <span className='text-zinc-600 text-[10px]'>(최대손실)</span>
+            <span className='text-zinc-300 text-sm font-bold'>-{backtestStats.maxDrawdownPercent.toFixed(1)}%</span>
           </div>
         </div>
       )}
@@ -2025,6 +2035,236 @@ export default function RealtimeChart() {
                   <div className='text-[10px] text-zinc-600 mt-1'>
                     시간당 {hourlyReturn >= 0 ? '+' : ''}{hourlyReturn.toFixed(3)}% × 720h
                   </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* 예상 자산 곡선 */}
+        {equityCurve.length > 1 && totalDuration > 0 && backtestStats && (
+          <div className='bg-zinc-900 p-4 rounded-lg shrink-0'>
+            <div className='flex justify-between items-center mb-2'>
+              <h3 className='text-sm font-medium text-zinc-400'>예상 자산 곡선</h3>
+              <span className='text-[10px] text-zinc-600'>30일 예측</span>
+            </div>
+            {/* 라벨을 SVG 밖에 배치 */}
+            <div className='flex justify-between text-[10px] text-zinc-500 mb-1 px-2'>
+              <span>현재까지</span>
+              <span>30일 후</span>
+            </div>
+            <div className='h-24 w-full'>
+              <svg
+                viewBox='0 0 105 44'
+                className='w-full h-full'
+                preserveAspectRatio='none'
+              >
+                {(() => {
+                  const initialCapital = 1000;
+                  const hoursTraded = totalDuration / (1000 * 60 * 60);
+                  const hourlyReturn = backtestStats.totalPnlPercent / hoursTraded / 100;
+                  const monthlyHours = 30 * 24;
+
+                  // 현재 자산 곡선 데이터
+                  const currentValues = equityCurve.map(p => p.equity);
+                  const finalEquity = currentValues[currentValues.length - 1] || initialCapital;
+
+                  // 실제 시간 비율 계산 (현재 / 30일)
+                  const totalHours = hoursTraded + monthlyHours;
+                  const currentRatio = Math.max(hoursTraded / totalHours, 0.08); // 최소 8% 보장 (보이게)
+                  const currentWidth = currentRatio * 100; // X좌표 비율
+
+                  // 미래 예측 포인트 수 (30일을 세분화)
+                  const futurePointsCount = 50;
+                  const hoursPerPoint = monthlyHours / futurePointsCount;
+
+                  // MDD 기반 (실제 최대 손실폭)
+                  const mdd = Math.abs(backtestStats.maxDrawdown) / 100;
+
+                  // seeded random
+                  const seed = Math.floor(finalEquity * 100) % 1000;
+                  const seededRandom = (i: number) => {
+                    const x = Math.sin(seed + i * 12.9898) * 43758.5453;
+                    return x - Math.floor(x);
+                  };
+
+                  // 엘리어트 파동 스타일 시뮬레이션
+                  // 상승(1) → 조정(2) → 상승(3) → 조정(4) → 상승(5) → ABC 조정
+                  const futureValues: number[] = [finalEquity];
+                  let equity = finalEquity;
+
+                  // 30일을 여러 사이클로 분할 (약 5~7일 단위)
+                  const cycleLength = Math.floor(futurePointsCount / 6); // 6개 구간
+
+                  for (let i = 1; i <= futurePointsCount; i++) {
+                    const cyclePhase = Math.floor((i - 1) / cycleLength) % 6;
+                    const posInCycle = ((i - 1) % cycleLength) / cycleLength;
+
+                    let periodReturn: number;
+                    const baseReturn = hourlyReturn * hoursPerPoint;
+                    const noise = (seededRandom(i) - 0.5) * 0.015; // 기본 노이즈
+
+                    // 각 페이즈별 동작
+                    switch (cyclePhase) {
+                      case 0: // Wave 1: 초기 상승
+                        periodReturn = baseReturn * 2 + noise + 0.005;
+                        break;
+                      case 1: // Wave 2: 조정 (되돌림)
+                        periodReturn = -baseReturn * 0.5 + noise - 0.003;
+                        break;
+                      case 2: // Wave 3: 강한 상승 (가장 긴 파동)
+                        periodReturn = baseReturn * 3 + noise + 0.008;
+                        break;
+                      case 3: // Wave 4: 조정 + 연속 손절 구간
+                        // 연속 손절 시뮬레이션 (MDD 반영)
+                        if (posInCycle < 0.5) {
+                          periodReturn = -mdd * 0.15 + noise; // 드로다운
+                        } else {
+                          periodReturn = baseReturn * 0.5 + noise; // 회복 시작
+                        }
+                        break;
+                      case 4: // Wave 5: 마지막 상승
+                        periodReturn = baseReturn * 2 + noise + 0.004;
+                        break;
+                      case 5: // ABC 조정: 하락-반등-하락
+                        if (posInCycle < 0.4) {
+                          periodReturn = -mdd * 0.1 + noise; // A파 하락
+                        } else if (posInCycle < 0.7) {
+                          periodReturn = baseReturn * 1.5 + noise; // B파 반등
+                        } else {
+                          periodReturn = -mdd * 0.08 + noise; // C파 하락
+                        }
+                        break;
+                      default:
+                        periodReturn = baseReturn + noise;
+                    }
+
+                    equity = equity * (1 + periodReturn);
+                    futureValues.push(equity);
+                  }
+
+                  // 전체 값 합쳐서 통합 스케일 계산 (부드러운 J커브)
+                  const allValues = [...currentValues, ...futureValues];
+                  const globalMin = Math.min(...allValues);
+                  const globalMax = Math.max(...allValues);
+                  const padding = (globalMax - globalMin) * 0.1 || 1;
+                  const rangeMin = globalMin - padding;
+                  const rangeMax = globalMax + padding;
+                  const range = rangeMax - rangeMin || 1;
+
+                  // 통합 Y좌표 계산 함수
+                  const getY = (val: number) => 40 - ((val - rangeMin) / range) * 36;
+
+                  // 현재 곡선 포인트
+                  const currentPoints = currentValues
+                    .map((val, i) => {
+                      const x = (i / (currentValues.length - 1)) * currentWidth;
+                      return `${x},${getY(val)}`;
+                    })
+                    .join(' ');
+
+                  // 미래 곡선 포인트 (현재 끝에서 시작)
+                  const futurePointsStr = futureValues
+                    .map((val, i) => {
+                      const x = currentWidth + (i / futurePointsCount) * (100 - currentWidth);
+                      return `${x},${getY(val)}`;
+                    })
+                    .join(' ');
+
+                  const isProfit = finalEquity >= initialCapital;
+                  const junctionY = getY(finalEquity);
+                  const futureLastY = getY(futureValues[futureValues.length - 1]);
+
+                  return (
+                    <>
+                      <defs>
+                        <linearGradient id='futureGradient' x1='0' y1='0' x2='0' y2='1'>
+                          <stop offset='0%' stopColor='rgba(161, 161, 170, 0.15)' />
+                          <stop offset='100%' stopColor='rgba(161, 161, 170, 0)' />
+                        </linearGradient>
+                        <linearGradient id='currentGradientGreen' x1='0' y1='0' x2='0' y2='1'>
+                          <stop offset='0%' stopColor='rgba(34, 197, 94, 0.2)' />
+                          <stop offset='100%' stopColor='rgba(34, 197, 94, 0)' />
+                        </linearGradient>
+                        <linearGradient id='currentGradientRed' x1='0' y1='0' x2='0' y2='1'>
+                          <stop offset='0%' stopColor='rgba(239, 68, 68, 0.2)' />
+                          <stop offset='100%' stopColor='rgba(239, 68, 68, 0)' />
+                        </linearGradient>
+                      </defs>
+                      {/* 현재/미래 구분선 */}
+                      <line
+                        x1={currentWidth}
+                        y1='2'
+                        x2={currentWidth}
+                        y2='42'
+                        stroke='#3f3f46'
+                        strokeWidth='0.5'
+                        strokeDasharray='2,2'
+                      />
+                      {/* 현재 영역 채우기 */}
+                      <polygon
+                        fill={isProfit ? 'url(#currentGradientGreen)' : 'url(#currentGradientRed)'}
+                        points={`0,40 ${currentPoints} ${currentWidth},40`}
+                      />
+                      {/* 현재 자산 곡선 (실선) */}
+                      <polyline
+                        fill='none'
+                        stroke={isProfit ? '#22c55e' : '#ef4444'}
+                        strokeWidth='1.5'
+                        points={currentPoints}
+                      />
+                      {/* 미래 영역 채우기 */}
+                      <polygon
+                        fill='url(#futureGradient)'
+                        points={`${currentWidth},40 ${futurePointsStr} 100,40`}
+                      />
+                      {/* 미래 예측 곡선 (점선) - 현재 끝점에서 자연스럽게 연결 */}
+                      <polyline
+                        fill='none'
+                        stroke='#a1a1aa'
+                        strokeWidth='1'
+                        strokeDasharray='3,2'
+                        points={futurePointsStr}
+                      />
+                      {/* 연결점 (현재-미래 경계) */}
+                      <circle
+                        cx={currentWidth}
+                        cy={junctionY}
+                        r='2.5'
+                        fill={isProfit ? '#22c55e' : '#ef4444'}
+                      />
+                      {/* 미래 끝점 (점선 원) */}
+                      <circle
+                        cx='100'
+                        cy={futureLastY}
+                        r='2'
+                        fill='#27272a'
+                        stroke='#a1a1aa'
+                        strokeWidth='1'
+                      />
+                    </>
+                  );
+                })()}
+              </svg>
+            </div>
+            {/* 예상 수익 표시 */}
+            {(() => {
+              const initialCapital = 1000;
+              const hoursTraded = totalDuration / (1000 * 60 * 60);
+              const hourlyReturn = backtestStats.totalPnlPercent / hoursTraded / 100;
+              const monthlyHours = 30 * 24;
+              const finalEquity = equityCurve[equityCurve.length - 1]?.equity || initialCapital;
+              const futureEquity = finalEquity * Math.pow(1 + hourlyReturn, monthlyHours);
+              const gainFromNow = ((futureEquity - finalEquity) / finalEquity) * 100;
+
+              return (
+                <div className='mt-2 flex justify-between items-center text-[10px]'>
+                  <span className='text-zinc-500'>
+                    ${finalEquity.toFixed(0)} → ${futureEquity.toFixed(0)}
+                  </span>
+                  <span className={`font-medium ${gainFromNow >= 0 ? 'text-zinc-400' : 'text-red-400'}`}>
+                    ({gainFromNow >= 0 ? '+' : ''}{gainFromNow.toFixed(1)}%)
+                  </span>
                 </div>
               );
             })()}
