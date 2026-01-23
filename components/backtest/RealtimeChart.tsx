@@ -916,9 +916,9 @@ export default function RealtimeChart() {
           markers.push({
             time: exitTime as Time,
             position: isLong ? 'aboveBar' : 'belowBar',
-            color: isWin ? '#a1a1aa' : '#71717a', // 무채색 계열
+            color: isWin ? (isLong ? '#16a34a' : '#dc2626') : '#eab308', // 익절: 롱-초록, 숏-빨강 / 손절: 노랑
             shape: 'text',
-            text: isWin ? '●' : '✕',
+            text: '●',
             size: 0.3,
           } as unknown as SeriesMarker<Time>);
           tradeMap.set(exitTime, { trade, type: 'exit' });
@@ -1629,10 +1629,13 @@ export default function RealtimeChart() {
           <span className='text-red-400 text-[10px]'>↓</span> 숏 진입
         </span>
         <span className='flex items-center gap-1'>
-          <span className='text-zinc-400 text-[10px]'>●</span> 수익 청산
+          <span className='text-green-400 text-[10px]'>●</span> 롱 익절
         </span>
         <span className='flex items-center gap-1'>
-          <span className='text-zinc-500 text-[10px]'>✕</span> 손실 청산
+          <span className='text-red-400 text-[10px]'>●</span> 숏 익절
+        </span>
+        <span className='flex items-center gap-1'>
+          <span className='text-yellow-400 text-[10px]'>●</span> 손실 청산
         </span>
         <span className='flex items-center gap-1'>
           <span className='text-zinc-400 text-[10px]'>↑</span>/
