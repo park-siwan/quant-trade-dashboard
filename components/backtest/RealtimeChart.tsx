@@ -596,9 +596,9 @@ export default function RealtimeChart() {
         const isLong = openPosition.direction === 'long';
         coloredCandle = {
           ...newCandle,
-          color: isLong ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)',
-          borderColor: isLong ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)',
-          wickColor: isLong ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+          color: isLong ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+          borderColor: isLong ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+          wickColor: isLong ? 'rgba(34, 197, 94, 0.18)' : 'rgba(239, 68, 68, 0.18)',
         } as CandlestickData;
       }
     }
@@ -672,6 +672,18 @@ export default function RealtimeChart() {
       },
       crosshair: {
         mode: 1,
+        horzLine: {
+          color: '#e4e4e7',
+          width: 1,
+          style: 0, // Solid
+          labelBackgroundColor: '#52525b',
+        },
+        vertLine: {
+          color: '#a1a1aa',
+          width: 1,
+          style: 2, // Dashed
+          labelBackgroundColor: '#52525b',
+        },
       },
       rightPriceScale: {
         borderColor: '#3f3f46',
@@ -853,16 +865,16 @@ export default function RealtimeChart() {
         if (tradeInfo.isLong) {
           return {
             ...candle,
-            color: 'rgba(34, 197, 94, 0.25)', // 연한 초록 (롱)
-            borderColor: 'rgba(34, 197, 94, 0.4)',
-            wickColor: 'rgba(34, 197, 94, 0.3)',
+            color: 'rgba(34, 197, 94, 0.12)', // 연한 초록 (롱)
+            borderColor: 'rgba(34, 197, 94, 0.25)',
+            wickColor: 'rgba(34, 197, 94, 0.18)',
           };
         } else {
           return {
             ...candle,
-            color: 'rgba(239, 68, 68, 0.25)', // 연한 빨강 (숏)
-            borderColor: 'rgba(239, 68, 68, 0.4)',
-            wickColor: 'rgba(239, 68, 68, 0.3)',
+            color: 'rgba(239, 68, 68, 0.12)', // 연한 빨강 (숏)
+            borderColor: 'rgba(239, 68, 68, 0.25)',
+            wickColor: 'rgba(239, 68, 68, 0.18)',
           };
         }
       }
@@ -893,7 +905,7 @@ export default function RealtimeChart() {
           markers.push({
             time: entryTime as Time,
             position: isLong ? 'belowBar' : 'aboveBar',
-            color: isLong ? '#22c55e' : '#ef4444', // 롱: 초록, 숏: 빨강
+            color: isLong ? '#16a34a' : '#dc2626', // 롱: 어두운 초록, 숏: 어두운 빨강
             shape: isLong ? 'arrowUp' : 'arrowDown',
             size: 1.5,
           } as SeriesMarker<Time>);
@@ -908,7 +920,7 @@ export default function RealtimeChart() {
             shape: 'text',
             text: isWin ? '●' : '✕',
             size: 0.3,
-          } as SeriesMarker<Time>);
+          } as unknown as SeriesMarker<Time>);
           tradeMap.set(exitTime, { trade, type: 'exit' });
         }
       });
@@ -941,7 +953,7 @@ export default function RealtimeChart() {
           markers.push({
             time: signalTime as Time,
             position: isLong ? 'belowBar' : 'aboveBar',
-            color: isLong ? '#22c55e' : '#ef4444', // 롱: 초록, 숏: 빨강
+            color: isLong ? '#16a34a' : '#dc2626', // 롱: 어두운 초록, 숏: 어두운 빨강
             shape: isLong ? 'arrowUp' : 'arrowDown',
             size: 1.5,
           } as SeriesMarker<Time>);
@@ -949,21 +961,7 @@ export default function RealtimeChart() {
       });
     }
 
-    // 열린 포지션 마커 (청산 안 된 진입점) - parseTradeTime 사용
-    if (openPosition) {
-      const entryTime = parseTradeTime(openPosition.entryTime);
-      const isLong = openPosition.direction === 'long';
-      if (entryTime >= minCandleTime && entryTime <= maxCandleTime) {
-        markers.push({
-          time: entryTime as Time,
-          position: isLong ? 'belowBar' : 'aboveBar',
-          color: '#a1a1aa', // 무채색 (진행 중)
-          shape: 'text',
-          text: isLong ? '◐' : '◑', // 진행 중인 포지션 (반원)
-          size: 0.4,
-        } as SeriesMarker<Time>);
-      }
-    }
+    // 열린 포지션 마커는 DOM 오버레이로 대체 (더 큰 이모지 표시 가능)
 
     // 마커 정렬 후 추가
     if (markers.length > 0) {
@@ -998,10 +996,17 @@ export default function RealtimeChart() {
 
     // openPosition이 있을 때만 라인 그리기
     if (openPosition) {
-      // Entry 라인 (노란색 실선)
+      // 현재 손익 계산 (ticker 가격 기준)
+      const currentPrice = ticker?.price ?? openPosition.entryPrice;
+      const isLong = openPosition.direction === 'long';
+      const isProfit = isLong
+        ? currentPrice > openPosition.entryPrice
+        : currentPrice < openPosition.entryPrice;
+
+      // Entry 라인 (이익: 초록, 손해: 빨강) - 어두운 톤
       const entryLine = candleSeries.createPriceLine({
         price: openPosition.entryPrice,
-        color: '#fbbf24',
+        color: isProfit ? '#16a34a' : '#dc2626',
         lineWidth: 1,
         lineStyle: LineStyle.Solid,
         axisLabelVisible: true,
@@ -1009,23 +1014,23 @@ export default function RealtimeChart() {
       });
       priceLinesRef.current.push(entryLine);
 
-      // TP 라인 (녹색 실선)
+      // TP 라인 (어두운 녹색 점선)
       const tpLine = candleSeries.createPriceLine({
         price: openPosition.tp,
-        color: '#22c55e',
+        color: '#16a34a',
         lineWidth: 1,
-        lineStyle: LineStyle.Solid,
+        lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
         title: 'TP',
       });
       priceLinesRef.current.push(tpLine);
 
-      // SL 라인 (빨간색 실선)
+      // SL 라인 (어두운 빨간색 점선)
       const slLine = candleSeries.createPriceLine({
         price: openPosition.sl,
-        color: '#ef4444',
+        color: '#dc2626',
         lineWidth: 1,
-        lineStyle: LineStyle.Solid,
+        lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
         title: 'SL',
       });
@@ -1035,7 +1040,7 @@ export default function RealtimeChart() {
         `[Lines] Entry: $${openPosition.entryPrice}, TP: $${openPosition.tp}, SL: $${openPosition.sl}`,
       );
     }
-  }, [openPosition]);
+  }, [openPosition, ticker?.price]);
 
   return (
     <div className='bg-zinc-900 p-4 rounded-lg'>
@@ -1392,6 +1397,53 @@ export default function RealtimeChart() {
         </div>
       ) : (
         <div ref={containerRef} className='w-full relative'>
+          {/* 현재가 가로선 오버레이 (점선, 라벨 영역 제외) */}
+          {ticker && candleSeriesRef.current && (() => {
+            const y = candleSeriesRef.current.priceToCoordinate(ticker.price);
+            if (y !== null) {
+              // 포지션이 있으면 손익에 따라 색상 결정
+              let lineColor = '#a1a1aa'; // 기본 회색
+              if (openPosition) {
+                const isLong = openPosition.direction === 'long';
+                const isProfit = isLong
+                  ? ticker.price > openPosition.entryPrice
+                  : ticker.price < openPosition.entryPrice;
+                lineColor = isProfit ? '#16a34a' : '#dc2626';
+              }
+              return (
+                <div
+                  className='absolute pointer-events-none z-30 left-0'
+                  style={{
+                    top: y,
+                    right: 70, // 라벨 영역 제외
+                    borderTop: `1px dashed ${lineColor}`,
+                  }}
+                />
+              );
+            }
+            return null;
+          })()}
+          {/* 진행 중 포지션 이모지 오버레이 */}
+          {openPosition && chartRef.current && candleSeriesRef.current && (() => {
+            const entryTime = parseTradeTime(openPosition.entryTime);
+            const isLong = openPosition.direction === 'long';
+            const x = chartRef.current.timeScale().timeToCoordinate(entryTime as any);
+            const y = candleSeriesRef.current.priceToCoordinate(openPosition.entryPrice);
+            if (x !== null && y !== null) {
+              return (
+                <div
+                  className='absolute pointer-events-none z-40 text-2xl'
+                  style={{
+                    left: x - 12,
+                    top: isLong ? y + 10 : y - 40,
+                  }}
+                >
+                  {isLong ? '🚀' : '🌧️'}
+                </div>
+              );
+            }
+            return null;
+          })()}
           {/* 거래 툴팁 */}
           {hoveredTrade && tooltipPos && (
             <div
@@ -1587,10 +1639,10 @@ export default function RealtimeChart() {
           <span className='text-zinc-600 text-[10px]'>↓</span> 수수료 보호
         </span>
         <span className='flex items-center gap-1'>
-          <span className='text-zinc-400 text-[10px]'>◐</span> 롱 진행중
+          <span className='text-[10px]'>🚀</span> 롱 진행중
         </span>
         <span className='flex items-center gap-1'>
-          <span className='text-zinc-400 text-[10px]'>◑</span> 숏 진행중
+          <span className='text-[10px]'>🌧️</span> 숏 진행중
         </span>
         {backtestTrades.length > 0 && (
           <span className='text-zinc-500'>
