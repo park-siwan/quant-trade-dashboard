@@ -1349,7 +1349,7 @@ export default function RealtimeChart() {
                         </svg>
                       </button>
                       {isStrategyOpen && strategies.length > 0 && (
-                        <div className='absolute top-full left-0 right-0 mt-1 bg-zinc-700 border border-zinc-600 rounded-lg shadow-xl max-h-48 overflow-y-auto'>
+                        <div className='absolute top-full left-0 right-0 mt-1 bg-zinc-700 border border-zinc-600 rounded-lg shadow-xl max-h-48 overflow-y-auto custom-scrollbar'>
                           {strategies.map((strategy, idx) => (
                             <button
                               key={strategy.id}
@@ -1704,7 +1704,7 @@ export default function RealtimeChart() {
             <h3 className='text-sm font-medium text-zinc-400 mb-2'>
               최근 신호 ({divergenceHistory.length})
             </h3>
-            <div className='max-h-40 overflow-y-auto space-y-1'>
+            <div className='max-h-40 overflow-y-auto space-y-1 custom-scrollbar'>
               {[...divergenceHistory]
                 .reverse()
                 .slice(0, 10)
@@ -1780,7 +1780,7 @@ export default function RealtimeChart() {
           <h3 className='text-sm font-medium text-zinc-400 mb-3 shrink-0'>
             거래 히스토리 ({backtestTrades.length})
           </h3>
-          <div className='flex-1 overflow-y-auto space-y-1 min-h-0'>
+          <div className='flex-1 overflow-y-auto space-y-1 min-h-0 custom-scrollbar'>
             {backtestTrades.length > 0 ? (
               [...backtestTrades]
                 .sort(

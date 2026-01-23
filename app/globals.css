@@ -397,3 +397,31 @@ div[data-ref="tv-lightweight-charts"] a,
   scrollbar-color: rgba(113, 113, 122, 0.5) rgba(39, 39, 42, 0.5);
 }
 
+/* macOS Safari 강제 스크롤바 표시용 클래스 */
+.custom-scrollbar {
+  /* macOS에서 스크롤바 항상 표시 강제 */
+  overflow-y: scroll !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  -webkit-appearance: none !important;
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(39, 39, 42, 0.8) !important;
+  border-radius: 3px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(113, 113, 122, 0.7) !important;
+  border-radius: 3px !important;
+  min-height: 20px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(161, 161, 170, 0.8) !important;
+}
+
