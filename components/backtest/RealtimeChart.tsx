@@ -121,6 +121,9 @@ export default function RealtimeChart() {
   // 설정 패널 상태
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  // 레버리지 설정
+  const [leverage, setLeverage] = useState(20);
+
   // 백테스트 갱신 상태
   const [lastBacktestTime, setLastBacktestTime] = useState<Date | null>(null);
   const [nextCandleCountdown, setNextCandleCountdown] = useState<number>(0);
@@ -1155,12 +1158,29 @@ export default function RealtimeChart() {
       {/* 상단: 통계 헤더 (전체 너비) */}
       {backtestStats && (
         <div className='flex items-center gap-3 px-4 py-2 bg-zinc-900 rounded-lg flex-wrap'>
-          {/* 수익 */}
+          {/* 레버리지 설정 */}
+          <div className='flex items-center gap-1'>
+            <span className='text-zinc-500 text-xs'>레버리지</span>
+            <select
+              value={leverage}
+              onChange={(e) => setLeverage(Number(e.target.value))}
+              className='bg-zinc-800 text-zinc-200 text-xs font-bold px-2 py-0.5 rounded border border-zinc-700 focus:outline-none focus:border-zinc-500'
+            >
+              {[1, 2, 3, 5, 10, 15, 20, 25, 30, 50, 75, 100, 125].map((lev) => (
+                <option key={lev} value={lev}>{lev}x</option>
+              ))}
+            </select>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          {/* 수익 (레버리지 적용) */}
           <div className='flex items-center gap-2'>
             <span className='text-zinc-500 text-xs'>수익</span>
-            <span className={`text-sm font-bold ${backtestStats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {backtestStats.totalPnlPercent >= 0 ? '+' : ''}{backtestStats.totalPnlPercent.toFixed(1)}%
+            <span className={`text-sm font-bold ${backtestStats.totalPnlPercent * leverage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {backtestStats.totalPnlPercent * leverage >= 0 ? '+' : ''}{(backtestStats.totalPnlPercent * leverage).toFixed(1)}%
             </span>
+            {leverage > 1 && (
+              <span className='text-zinc-600 text-[10px]'>({backtestStats.totalPnlPercent >= 0 ? '+' : ''}{backtestStats.totalPnlPercent.toFixed(1)}% × {leverage})</span>
+            )}
           </div>
           <div className='w-px h-4 bg-zinc-700' />
           {/* 승률 */}
@@ -1197,11 +1217,16 @@ export default function RealtimeChart() {
             <span className='text-zinc-300 text-sm font-bold'>{backtestStats.profitFactor.toFixed(2)}</span>
           </div>
           <div className='w-px h-4 bg-zinc-700' />
-          {/* MDD (최대 낙폭) */}
+          {/* MDD (최대 낙폭) - 레버리지 적용 */}
           <div className='flex items-center gap-1'>
             <span className='text-zinc-500 text-xs'>MDD</span>
             <span className='text-zinc-600 text-[10px]'>(최대손실)</span>
-            <span className='text-zinc-300 text-sm font-bold'>-{backtestStats.maxDrawdownPercent.toFixed(1)}%</span>
+            <span className={`text-sm font-bold ${backtestStats.maxDrawdownPercent * leverage >= 100 ? 'text-red-500' : 'text-zinc-300'}`}>
+              -{(backtestStats.maxDrawdownPercent * leverage).toFixed(1)}%
+            </span>
+            {backtestStats.maxDrawdownPercent * leverage >= 100 && (
+              <span className='text-red-500 text-[10px]'>⚠ 청산</span>
+            )}
           </div>
         </div>
       )}
@@ -1868,20 +1893,22 @@ export default function RealtimeChart() {
           </div>
         </div>
 
-        {/* 자산 곡선 */}
+        {/* 자산 곡선 (레버리지 적용) */}
         {equityCurve.length > 0 && (
           <div className='bg-zinc-900 p-4 rounded-lg shrink-0'>
             <div className='flex justify-between items-center mb-2'>
               <h3 className='text-sm font-medium text-zinc-400'>자산 곡선</h3>
               {(() => {
                 const initialCapital = 1000;
-                const finalEquity =
+                const rawFinalEquity =
                   equityCurve[equityCurve.length - 1]?.equity || initialCapital;
-                const pnl = finalEquity - initialCapital;
-                const pnlPercent = (pnl / initialCapital) * 100;
+                const rawPnl = rawFinalEquity - initialCapital;
+                const leveragedPnl = rawPnl * leverage;
+                const finalEquity = initialCapital + leveragedPnl;
+                const pnlPercent = (leveragedPnl / initialCapital) * 100;
                 return (
                   <span
-                    className={`text-xs font-medium ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}
+                    className={`text-xs font-medium ${leveragedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}
                   >
                     ${finalEquity.toFixed(0)} ({pnlPercent >= 0 ? '+' : ''}
                     {pnlPercent.toFixed(1)}%)
@@ -1906,30 +1933,32 @@ export default function RealtimeChart() {
                   strokeWidth='0.5'
                   strokeDasharray='2,2'
                 />
-                {/* 곡선 */}
+                {/* 곡선 (레버리지 적용) */}
                 {equityCurve.length > 1 &&
                   (() => {
                     const initialCapital = 1000;
-                    const values = equityCurve.map((p) => p.equity);
-                    const dataMin = Math.min(...values);
-                    const dataMax = Math.max(...values);
+                    // 레버리지 적용된 자산 값 계산
+                    const leveragedValues = equityCurve.map((p) => {
+                      const pnl = p.equity - initialCapital;
+                      return initialCapital + (pnl * leverage);
+                    });
+                    const dataMin = Math.min(...leveragedValues);
+                    const dataMax = Math.max(...leveragedValues);
                     // 실제 데이터 범위에 5% 패딩만 추가 (더 가파르게 보임)
                     const padding = (dataMax - dataMin) * 0.05 || 1;
                     const min = dataMin - padding;
                     const max = dataMax + padding;
                     const range = max - min || 1;
 
-                    const points = equityCurve
-                      .map((p, i) => {
-                        const x = (i / (equityCurve.length - 1)) * 100;
-                        const y = 40 - ((p.equity - min) / range) * 40;
+                    const points = leveragedValues
+                      .map((val, i) => {
+                        const x = (i / (leveragedValues.length - 1)) * 100;
+                        const y = 40 - ((val - min) / range) * 40;
                         return `${x},${y}`;
                       })
                       .join(' ');
 
-                    const finalEquity =
-                      equityCurve[equityCurve.length - 1]?.equity ||
-                      initialCapital;
+                    const finalEquity = leveragedValues[leveragedValues.length - 1] || initialCapital;
                     const isProfit = finalEquity >= initialCapital;
 
                     // 마지막 점 좌표
@@ -2018,16 +2047,16 @@ export default function RealtimeChart() {
                   })()}
               </svg>
             </div>
-            {/* 월간 예상 수익률 */}
+            {/* 월간 예상 수익률 (레버리지 적용) */}
             {totalDuration > 0 && backtestStats && (() => {
               const hoursTraded = totalDuration / (1000 * 60 * 60);
-              const hourlyReturn = backtestStats.totalPnlPercent / hoursTraded;
+              const hourlyReturn = (backtestStats.totalPnlPercent * leverage) / hoursTraded;
               const monthlyHours = 30 * 24; // 720시간
               const monthlyProjection = hourlyReturn * monthlyHours;
               return (
                 <div className='mt-3 pt-3 border-t border-zinc-700'>
                   <div className='flex justify-between items-center'>
-                    <span className='text-xs text-zinc-500'>월간 예상</span>
+                    <span className='text-xs text-zinc-500'>월간 예상 ({leverage}x)</span>
                     <span className={`text-sm font-bold ${monthlyProjection >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {monthlyProjection >= 0 ? '+' : ''}{monthlyProjection.toFixed(1)}%
                     </span>
@@ -2062,11 +2091,15 @@ export default function RealtimeChart() {
                 {(() => {
                   const initialCapital = 1000;
                   const hoursTraded = totalDuration / (1000 * 60 * 60);
-                  const hourlyReturn = backtestStats.totalPnlPercent / hoursTraded / 100;
+                  // 레버리지 적용된 시간당 수익률
+                  const hourlyReturn = (backtestStats.totalPnlPercent * leverage) / hoursTraded / 100;
                   const monthlyHours = 30 * 24;
 
-                  // 현재 자산 곡선 데이터
-                  const currentValues = equityCurve.map(p => p.equity);
+                  // 현재 자산 곡선 데이터 (레버리지 적용)
+                  const currentValues = equityCurve.map(p => {
+                    const pnlFromStart = p.equity - initialCapital;
+                    return initialCapital + (pnlFromStart * leverage);
+                  });
                   const finalEquity = currentValues[currentValues.length - 1] || initialCapital;
 
                   // 실제 시간 비율 계산 (현재 / 30일)
@@ -2247,13 +2280,15 @@ export default function RealtimeChart() {
                 })()}
               </svg>
             </div>
-            {/* 예상 수익 표시 */}
+            {/* 예상 수익 표시 (레버리지 적용) */}
             {(() => {
               const initialCapital = 1000;
               const hoursTraded = totalDuration / (1000 * 60 * 60);
-              const hourlyReturn = backtestStats.totalPnlPercent / hoursTraded / 100;
+              const hourlyReturn = (backtestStats.totalPnlPercent * leverage) / hoursTraded / 100;
               const monthlyHours = 30 * 24;
-              const finalEquity = equityCurve[equityCurve.length - 1]?.equity || initialCapital;
+              const rawFinalEquity = equityCurve[equityCurve.length - 1]?.equity || initialCapital;
+              const pnlFromStart = rawFinalEquity - initialCapital;
+              const finalEquity = initialCapital + (pnlFromStart * leverage);
               const futureEquity = finalEquity * Math.pow(1 + hourlyReturn, monthlyHours);
               const gainFromNow = ((futureEquity - finalEquity) / finalEquity) * 100;
 
