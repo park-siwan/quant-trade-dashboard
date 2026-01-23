@@ -2047,26 +2047,6 @@ export default function RealtimeChart() {
                   })()}
               </svg>
             </div>
-            {/* 월간 예상 수익률 (레버리지 적용) */}
-            {totalDuration > 0 && backtestStats && (() => {
-              const hoursTraded = totalDuration / (1000 * 60 * 60);
-              const hourlyReturn = (backtestStats.totalPnlPercent * leverage) / hoursTraded;
-              const monthlyHours = 30 * 24; // 720시간
-              const monthlyProjection = hourlyReturn * monthlyHours;
-              return (
-                <div className='mt-3 pt-3 border-t border-zinc-700'>
-                  <div className='flex justify-between items-center'>
-                    <span className='text-xs text-zinc-500'>월간 예상 ({leverage}x)</span>
-                    <span className={`text-sm font-bold ${monthlyProjection >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {monthlyProjection >= 0 ? '+' : ''}{monthlyProjection.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className='text-[10px] text-zinc-600 mt-1'>
-                    시간당 {hourlyReturn >= 0 ? '+' : ''}{hourlyReturn.toFixed(3)}% × 720h
-                  </div>
-                </div>
-              );
-            })()}
           </div>
         )}
 
