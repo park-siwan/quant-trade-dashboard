@@ -1,11 +1,19 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Provider as JotaiProvider } from 'jotai';
 import { ReactNode, useState } from 'react';
 import { SocketProvider } from '@/contexts/SocketContext';
+import { useSymbolSubscription } from '@/hooks/useSymbolSubscription';
 
 interface ProvidersProps {
   children: ReactNode;
+}
+
+// 심볼 구독을 자동으로 관리하는 내부 컴포넌트
+function SymbolSubscriptionManager({ children }: { children: ReactNode }) {
+  useSymbolSubscription();
+  return <>{children}</>;
 }
 
 export function Providers({ children }: ProvidersProps) {
@@ -23,8 +31,12 @@ export function Providers({ children }: ProvidersProps) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <SocketProvider>{children}</SocketProvider>
-    </QueryClientProvider>
+    <JotaiProvider>
+      <QueryClientProvider client={queryClient}>
+        <SocketProvider>
+          <SymbolSubscriptionManager>{children}</SymbolSubscriptionManager>
+        </SocketProvider>
+      </QueryClientProvider>
+    </JotaiProvider>
   );
 }

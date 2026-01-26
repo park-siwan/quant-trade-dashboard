@@ -23,6 +23,8 @@ import {
   EquityPoint,
 } from '@/lib/backtest-api';
 import { CHART } from '@/lib/constants';
+import { useAtomValue } from 'jotai';
+import { symbolAtom } from '@/stores/symbolAtom';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -72,6 +74,9 @@ export default function RealtimeChart() {
     divergenceHistory,
     subscribeKline,
   } = useSocket();
+
+  // 현재 선택된 심볼
+  const currentSymbol = useAtomValue(symbolAtom);
 
   const [candles, setCandles] = useState<CandlestickData[]>([]);
   const [timeframe, setTimeframe] = useState('5m');
@@ -540,7 +545,7 @@ export default function RealtimeChart() {
         ? strategy.indicators.split(',').filter(Boolean)
         : ['rsi'];
       const result = await runBacktest({
-        symbol: 'BTC/USDT',
+        symbol: currentSymbol.slashFormat,
         timeframe: timeframe,
         candleCount: 500,
         rsiPeriod: strategy.rsiPeriod,
@@ -586,13 +591,25 @@ export default function RealtimeChart() {
 
   useEffect(() => {
     if (selectedStrategy && hasCandlesRef.current && !isLoading) {
-      // 전략 또는 타임프레임 변경 시 백테스트 실행
+      // 전략, 타임프레임, 심볼 변경 시 백테스트 실행
       const timer = setTimeout(() => {
         loadBacktestTrades(selectedStrategy);
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [selectedStrategy, timeframe, isLoading]);
+  }, [selectedStrategy, timeframe, isLoading, currentSymbol.id]);
+
+  // 심볼 변경 시 포지션/트레이드 데이터 즉시 초기화 (잘못된 알림 방지)
+  useEffect(() => {
+    setOpenPosition(null);
+    setBacktestTrades([]);
+    setSkippedSignals([]);
+    setBacktestStats(null);
+    setEquityCurve([]);
+    lastExitAlertRef.current = null;
+    lastEntryAlertRef.current = null;
+    console.log(`[Symbol Change] Reset position data for ${currentSymbol.id}`);
+  }, [currentSymbol.id]);
 
   // 초기 캔들 데이터 로드
   useEffect(() => {
@@ -601,7 +618,7 @@ export default function RealtimeChart() {
       initialCandlesLoadedRef.current = false;
       try {
         const response = await fetch(
-          `${API_BASE}/exchange/candles?symbol=${encodeURIComponent('BTC/USDT')}&timeframe=${timeframe}&limit=500`,
+          `${API_BASE}/exchange/candles?symbol=${encodeURIComponent(currentSymbol.slashFormat)}&timeframe=${timeframe}&limit=500`,
         );
         const data = await response.json();
         const candlesArray = data.data?.candles || data.candles;
@@ -645,7 +662,7 @@ export default function RealtimeChart() {
 
     loadCandles();
     subscribeKline(timeframe);
-  }, [timeframe, subscribeKline]);
+  }, [timeframe, subscribeKline, currentSymbol.id]);
 
   // 실시간 캔들 업데이트 (차트 시리즈에 직접 업데이트)
   useEffect(() => {

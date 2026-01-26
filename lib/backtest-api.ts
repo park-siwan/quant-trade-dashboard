@@ -120,6 +120,9 @@ export interface OptimizeParams {
   positionSizePercent?: number;
   metric?: 'sharpe' | 'profit' | 'winrate' | 'profitfactor';
   topResults?: number;
+  // Pivot 범위 설정 (그리드/베이지안 공통)
+  pivotLeftRange?: number[];   // 예: [3, 5, 7]
+  pivotRightRange?: number[];  // 예: [2, 3, 4]
 }
 
 export interface OptimizeResultItem {
@@ -238,6 +241,7 @@ export async function runOptimizationWithProgress(
 export interface BayesianOptimizeParams extends OptimizeParams {
   nTrials?: number;
   usePriorResults?: boolean;
+  // pivotLeftRange, pivotRightRange는 OptimizeParams에서 상속
 }
 
 // 베이지안 최적화 결과

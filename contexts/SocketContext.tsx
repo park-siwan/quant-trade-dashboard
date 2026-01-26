@@ -132,8 +132,10 @@ interface SocketContextValue {
   longShortRatioData: LongShortRatioData | null;
   divergenceData: RealtimeDivergenceData | null;
   divergenceHistory: RealtimeDivergenceData[];
+  currentSymbol: string;
   subscribeKline: (timeframe: string) => void;
   subscribeMtf: (symbol: string) => void;
+  subscribeSymbol: (symbol: string) => void;
 }
 
 const SocketContext = createContext<SocketContextValue>({
@@ -151,8 +153,10 @@ const SocketContext = createContext<SocketContextValue>({
   longShortRatioData: null,
   divergenceData: null,
   divergenceHistory: [],
+  currentSymbol: 'BTCUSDT',
   subscribeKline: () => {},
   subscribeMtf: () => {},
+  subscribeSymbol: () => {},
 });
 
 // 페이지가 마지막으로 숨겨진 시간
@@ -173,6 +177,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [longShortRatioData, setLongShortRatioData] = useState<LongShortRatioData | null>(null);
   const [divergenceData, setDivergenceData] = useState<RealtimeDivergenceData | null>(null);
   const [divergenceHistory, setDivergenceHistory] = useState<RealtimeDivergenceData[]>([]);
+  const [currentSymbol, setCurrentSymbol] = useState<string>('BTCUSDT');
 
   // 페이지 visibility 변경 감지 - 잠자기 복귀 시 히스토리 클리어
   useEffect(() => {
@@ -324,6 +329,30 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // 심볼 변경 시 데이터 초기화 및 재구독
+  const subscribeSymbol = useCallback((symbol: string) => {
+    console.log(`[Socket] Changing symbol to: ${symbol}`);
+    setCurrentSymbol(symbol);
+
+    // 기존 데이터 초기화
+    setTicker(null);
+    setOrderbook(null);
+    setKline(null);
+    setMtfData(null);
+    setLiquidationData(null);
+    setWhaleData(null);
+    setFundingRateData(null);
+    setCoinglassData(null);
+    setLongShortRatioData(null);
+    setDivergenceData(null);
+    setDivergenceHistory([]);
+
+    // 백엔드에 심볼 변경 요청
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('subscribe', { symbol });
+    }
+  }, []);
+
   return (
     <SocketContext.Provider
       value={{
@@ -341,8 +370,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         longShortRatioData,
         divergenceData,
         divergenceHistory,
+        currentSymbol,
         subscribeKline,
         subscribeMtf,
+        subscribeSymbol,
       }}
     >
       {children}

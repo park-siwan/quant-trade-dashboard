@@ -36,6 +36,9 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
   const [optimizeMethod, setOptimizeMethod] = useState<OptimizeMethod>('bayesian');
   const [nTrials, setNTrials] = useState(100);
   const [usePriorResults, setUsePriorResults] = useState(true);
+  // Pivot 범위 설정
+  const [pivotLeftRange, setPivotLeftRange] = useState<number[]>([3, 5, 7]);
+  const [pivotRightRange, setPivotRightRange] = useState<number[]>([2, 3, 4]);
   const [params, setParams] = useState<OptimizeParams>({
     symbol: 'BTC/USDT',
     timeframe: '5m',
@@ -61,14 +64,20 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
           ...params,
           nTrials,
           usePriorResults,
+          pivotLeftRange,
+          pivotRightRange,
         };
         optimizeResult = await runBayesianOptimization(bayesianParams, (prog) => {
           setProgress(prog);
         });
       } else {
-        optimizeResult = await runOptimizationWithProgress(params, (prog) => {
-          setProgress(prog);
-        });
+        // 그리드 서치에도 pivot 범위 전달
+        optimizeResult = await runOptimizationWithProgress(
+          { ...params, pivotLeftRange, pivotRightRange },
+          (prog) => {
+            setProgress(prog);
+          },
+        );
       }
 
       setResult(optimizeResult);
@@ -299,7 +308,7 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
           </label>
         </div>
 
-        {/* 베이지안 옵션 */}
+        {/* 베이지안 전용 옵션 */}
         {optimizeMethod === 'bayesian' && (
           <div className="mt-3 grid grid-cols-2 gap-4 bg-zinc-800/50 p-3 rounded-lg">
             <div>
@@ -330,6 +339,78 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Pivot 범위 설정 (공통 - 베이지안/그리드 모두 적용) */}
+      <div className="border-t border-zinc-700 pt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-xs text-zinc-400 font-medium">피봇 범위 설정</span>
+          <span className="text-xs text-zinc-500">(다이버전스 감지 민감도)</span>
+        </div>
+        <div className="grid grid-cols-2 gap-4 bg-zinc-800/50 p-3 rounded-lg">
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">
+              Pivot Left (좌측 캔들 수)
+            </label>
+            <div className="flex flex-wrap gap-1">
+              {[2, 3, 4, 5, 6, 7, 8, 10].map(val => (
+                <button
+                  key={val}
+                  onClick={() => {
+                    if (pivotLeftRange.includes(val)) {
+                      if (pivotLeftRange.length > 1) {
+                        setPivotLeftRange(pivotLeftRange.filter(v => v !== val));
+                      }
+                    } else {
+                      setPivotLeftRange([...pivotLeftRange, val].sort((a, b) => a - b));
+                    }
+                  }}
+                  className={`px-2 py-1 text-xs rounded transition-colors ${
+                    pivotLeftRange.includes(val)
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
+                  }`}
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-zinc-500 mt-1 block">
+              선택: [{pivotLeftRange.join(', ')}]
+            </span>
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">
+              Pivot Right (우측 캔들 수 = 컨펌)
+            </label>
+            <div className="flex flex-wrap gap-1">
+              {[1, 2, 3, 4, 5, 6].map(val => (
+                <button
+                  key={val}
+                  onClick={() => {
+                    if (pivotRightRange.includes(val)) {
+                      if (pivotRightRange.length > 1) {
+                        setPivotRightRange(pivotRightRange.filter(v => v !== val));
+                      }
+                    } else {
+                      setPivotRightRange([...pivotRightRange, val].sort((a, b) => a - b));
+                    }
+                  }}
+                  className={`px-2 py-1 text-xs rounded transition-colors ${
+                    pivotRightRange.includes(val)
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
+                  }`}
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-zinc-500 mt-1 block">
+              선택: [{pivotRightRange.join(', ')}] {pivotRightRange.includes(1) && <span className="text-yellow-400">(1 = 노이즈 주의)</span>}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* 실행 버튼 */}
