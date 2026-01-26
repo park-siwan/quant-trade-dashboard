@@ -1231,7 +1231,7 @@ export default function RealtimeChart() {
         </div>
       )}
 
-      <div className='grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px] gap-4 flex-1 min-h-0'>
+      <div className='grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px] lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px] gap-4 flex-1 min-h-0'>
       {/* 좌측: 메인 차트 영역 */}
       <div className='bg-zinc-900 p-4 rounded-lg min-w-0 flex flex-col overflow-hidden'>
         {/* 1. 헤더: 연결 상태 + 설정 */}
