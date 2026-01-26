@@ -297,11 +297,26 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // 대기 중인 kline 구독 요청 저장
+  const pendingKlineTimeframeRef = useRef<string | null>(null);
+
   const subscribeKline = useCallback((timeframe: string) => {
+    pendingKlineTimeframeRef.current = timeframe;
     if (socketRef.current?.connected) {
+      console.log(`[Socket] Subscribing to kline: ${timeframe}`);
       socketRef.current.emit('subscribe:kline', { timeframe });
+    } else {
+      console.log(`[Socket] Socket not connected, queued kline subscription: ${timeframe}`);
     }
   }, []);
+
+  // 소켓 연결 시 대기 중인 kline 구독 처리
+  useEffect(() => {
+    if (isConnected && pendingKlineTimeframeRef.current) {
+      console.log(`[Socket] Connected, subscribing to pending kline: ${pendingKlineTimeframeRef.current}`);
+      socketRef.current?.emit('subscribe:kline', { timeframe: pendingKlineTimeframeRef.current });
+    }
+  }, [isConnected]);
 
   const subscribeMtf = useCallback((symbol: string) => {
     if (socketRef.current?.connected) {
