@@ -624,9 +624,13 @@ export default function RealtimeChart() {
       lastCandleTimeRef.current > 0 &&
       newCandleTime > lastCandleTimeRef.current;
 
-    if (isNewCandle && selectedStrategy) {
-      // 새 캔들 시작! 백테스트 재실행
-      console.log('[Candle] New candle started, refreshing backtest...');
+    // 캔들 확정 시 또는 새 캔들 시작 시 백테스트 재실행
+    if (selectedStrategy && (isNewCandle || kline.isFinal)) {
+      if (isNewCandle) {
+        console.log('[Candle] New candle started, refreshing backtest...');
+      } else if (kline.isFinal) {
+        console.log('[Candle] Candle confirmed (isFinal), refreshing backtest...');
+      }
       loadBacktestTrades(selectedStrategy);
     }
 
