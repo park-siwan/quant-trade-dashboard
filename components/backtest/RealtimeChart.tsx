@@ -139,7 +139,7 @@ export default function RealtimeChart() {
   const BACKTEST_THROTTLE_MS = 2000; // 동일 전략/타임프레임으로 2초 내 재호출 방지
 
   // 8bit 스타일 소리 알림 함수 (Web Audio API)
-  const playAlertSound = (
+  const playAlertSound = async (
     direction: 'bullish' | 'bearish',
     forcePlay = false,
   ) => {
@@ -152,6 +152,11 @@ export default function RealtimeChart() {
         )();
       }
       const ctx = audioContextRef.current;
+
+      // macOS Safari: suspended 상태에서 resume 필요
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
 
       // 8bit 스타일: square wave 사용
       const playNote = (freq: number, startTime: number, duration: number) => {
@@ -214,7 +219,7 @@ export default function RealtimeChart() {
   };
 
   // 8bit 스타일 폴백 소리 (오디오 파일 재생 실패 시)
-  const playFallbackExitSound = (isProfit: boolean) => {
+  const playFallbackExitSound = async (isProfit: boolean) => {
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (
@@ -222,6 +227,11 @@ export default function RealtimeChart() {
         )();
       }
       const ctx = audioContextRef.current;
+
+      // macOS Safari: suspended 상태에서 resume 필요
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
 
       const playNote = (
         freq: number,
@@ -322,6 +332,38 @@ export default function RealtimeChart() {
     ) {
       Notification.requestPermission();
     }
+  }, []);
+
+  // macOS Safari: 사용자 상호작용 시 AudioContext 초기화 (suspended 문제 해결)
+  useEffect(() => {
+    const initAudioContext = async () => {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (
+          window.AudioContext || (window as any).webkitAudioContext
+        )();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+    };
+
+    const handleUserInteraction = () => {
+      initAudioContext();
+      // 한 번 초기화 후 이벤트 제거
+      ['click', 'touchstart', 'keydown'].forEach((event) => {
+        document.removeEventListener(event, handleUserInteraction);
+      });
+    };
+
+    ['click', 'touchstart', 'keydown'].forEach((event) => {
+      document.addEventListener(event, handleUserInteraction, { once: true });
+    });
+
+    return () => {
+      ['click', 'touchstart', 'keydown'].forEach((event) => {
+        document.removeEventListener(event, handleUserInteraction);
+      });
+    };
   }, []);
 
   // 다음 캔들까지 카운트다운 타이머
