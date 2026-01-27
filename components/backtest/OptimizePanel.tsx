@@ -36,19 +36,19 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
   const [optimizeMethod, setOptimizeMethod] = useState<OptimizeMethod>('bayesian');
   const [nTrials, setNTrials] = useState(500);  // 기본값 500으로 증가
   const [usePriorResults, setUsePriorResults] = useState(true);
-  // 파라미터 범위 설정 (기본값: 2,916개 조합)
-  const [pivotLeftRange, setPivotLeftRange] = useState<number[]>([3, 5, 7]);
-  const [pivotRightRange, setPivotRightRange] = useState<number[]>([2, 3, 4]);
-  const [rsiPeriodRange, setRsiPeriodRange] = useState<number[]>([14, 21]);
-  const [minDistanceRange, setMinDistanceRange] = useState<number[]>([5, 10, 15]);
-  const [maxDistanceRange, setMaxDistanceRange] = useState<number[]>([100, 150, 200]);
-  const [tpAtrRange, setTpAtrRange] = useState<number[]>([1.5, 2.0, 2.5]);
-  const [slAtrRange, setSlAtrRange] = useState<number[]>([1.0, 1.5]);
-  const [minDivPctRange, setMinDivPctRange] = useState<number[]>([10, 20, 30]);
+  // 파라미터 범위 설정 (최적화된 기본값)
+  const [pivotLeftRange, setPivotLeftRange] = useState<number[]>([5, 7]);
+  const [pivotRightRange, setPivotRightRange] = useState<number[]>([3, 4]);
+  const [rsiPeriodRange, setRsiPeriodRange] = useState<number[]>([21]);
+  const [minDistanceRange, setMinDistanceRange] = useState<number[]>([5, 15]);
+  const [maxDistanceRange, setMaxDistanceRange] = useState<number[]>([200]);
+  const [tpAtrRange, setTpAtrRange] = useState<number[]>([1.5]);
+  const [slAtrRange, setSlAtrRange] = useState<number[]>([1.5]);
+  const [minDivPctRange, setMinDivPctRange] = useState<number[]>([10, 30]);
   // 추가 필터 설정 (고정 사용)
   const [useTrendFilter, setUseTrendFilter] = useState(false);  // EMA 트렌드 필터
   const [trendEmaPeriod, setTrendEmaPeriod] = useState(50);     // EMA 기간
-  const [useVolatilityFilter, setUseVolatilityFilter] = useState(false);  // ATR 변동성 필터
+  const [useVolatilityFilter, setUseVolatilityFilter] = useState(true);  // ATR 변동성 필터 (기본 ON)
   const [useRsiExtremeFilter, setUseRsiExtremeFilter] = useState(false);  // RSI 극단값 필터
   const [rsiOversold, setRsiOversold] = useState(30);  // RSI 과매도
   const [rsiOverbought, setRsiOverbought] = useState(70);  // RSI 과매수
@@ -82,7 +82,7 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
 
   const [params, setParams] = useState<OptimizeParams>({
     symbol: 'BTC/USDT',
-    timeframe: '5m',
+    timeframe: '1h',  // 1시간봉 기본
     indicators: ['rsi', 'obv', 'cvd', 'oi'],
     initialCapital: 1000,
     positionSizePercent: 100,
