@@ -122,7 +122,9 @@ interface SocketContextValue {
   isConnected: boolean;
   ticker: TickerData | null;
   orderbook: OrderBookData | null;
-  kline: KlineData | null;
+  kline: KlineData | null; // deprecated, use getKline(timeframe)
+  klineMap: Map<string, KlineData>; // 타임프레임별 kline
+  getKline: (timeframe: string) => KlineData | null;
   mtfData: BackendMTFData | null;
   lastMtfUpdate: number;
   liquidationData: LiquidationData | null;
@@ -144,6 +146,8 @@ const SocketContext = createContext<SocketContextValue>({
   ticker: null,
   orderbook: null,
   kline: null,
+  klineMap: new Map(),
+  getKline: () => null,
   mtfData: null,
   lastMtfUpdate: 0,
   liquidationData: null,
@@ -168,6 +172,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [ticker, setTicker] = useState<TickerData | null>(null);
   const [orderbook, setOrderbook] = useState<OrderBookData | null>(null);
   const [kline, setKline] = useState<KlineData | null>(null);
+  // 타임프레임별 kline 저장 (5분봉, 15분봉 등 동시 지원)
+  const klineMapRef = useRef<Map<string, KlineData>>(new Map());
+  const [klineMapVersion, setKlineMapVersion] = useState(0); // Map 변경 감지용
   const [mtfData, setMtfData] = useState<BackendMTFData | null>(null);
   const [lastMtfUpdate, setLastMtfUpdate] = useState(0);
   const [liquidationData, setLiquidationData] = useState<LiquidationData | null>(null);
@@ -238,7 +245,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     });
 
     socket.on('binance:kline', (data: KlineData) => {
-      setKline(data);
+      // 타임프레임별로 kline 저장
+      klineMapRef.current.set(data.timeframe, data);
+      setKlineMapVersion(v => v + 1); // 변경 알림
+      setKline(data); // 하위 호환성 유지
     });
 
     // MTF data from backend
@@ -329,6 +339,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // 타임프레임별 kline 가져오기
+  const getKline = useCallback((timeframe: string): KlineData | null => {
+    return klineMapRef.current.get(timeframe) || null;
+  }, [klineMapVersion]); // klineMapVersion 변경 시 함수 갱신
+
   // 심볼 변경 시 데이터 초기화 및 재구독
   const subscribeSymbol = useCallback((symbol: string) => {
     console.log(`[Socket] Changing symbol to: ${symbol}`);
@@ -338,6 +353,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     setTicker(null);
     setOrderbook(null);
     setKline(null);
+    klineMapRef.current.clear();
+    setKlineMapVersion(v => v + 1);
     setMtfData(null);
     setLiquidationData(null);
     setWhaleData(null);
@@ -361,6 +378,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         ticker,
         orderbook,
         kline,
+        klineMap: klineMapRef.current,
+        getKline,
         mtfData,
         lastMtfUpdate,
         liquidationData,

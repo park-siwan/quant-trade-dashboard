@@ -68,7 +68,7 @@ export default function RealtimeChart() {
   const isChartDisposedRef = useRef(false);
   const {
     isConnected,
-    kline,
+    getKline,
     ticker,
     divergenceData,
     divergenceHistory,
@@ -673,10 +673,12 @@ export default function RealtimeChart() {
     subscribeKline(timeframe);
   }, [timeframe, subscribeKline, currentSymbol.id]);
 
+  // 현재 타임프레임의 kline 가져오기
+  const kline = getKline(timeframe);
+
   // 실시간 캔들 업데이트 (차트 시리즈에 직접 업데이트)
   useEffect(() => {
-    if (!kline || kline.timeframe !== timeframe || isChartDisposedRef.current)
-      return;
+    if (!kline || isChartDisposedRef.current) return;
 
     const newCandleTime = kline.timestamp / 1000;
     const newCandle: CandlestickData = {
@@ -755,7 +757,7 @@ export default function RealtimeChart() {
       }
       return prev;
     });
-  }, [kline, timeframe, openPosition, selectedStrategy]);
+  }, [kline, openPosition, selectedStrategy]);
 
   // 차트 초기 생성 (타임프레임 변경 또는 초기 로드 시에만)
   useEffect(() => {

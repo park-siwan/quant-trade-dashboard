@@ -38,7 +38,8 @@ export function useCandles({
   enableWebSocket = true,
 }: UseCandlesParams) {
   const queryClient = useQueryClient();
-  const { kline, subscribeKline } = useSocket();
+  const { getKline, subscribeKline } = useSocket();
+  const kline = getKline(timeframe); // 현재 타임프레임의 kline만 사용
   const lastCandleTimeRef = useRef<number>(0);
   const prevCandleCloseRef = useRef<number>(0);
   const currentCandleTimeRef = useRef<number>(0);
