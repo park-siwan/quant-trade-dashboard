@@ -706,14 +706,14 @@ export default function ChartRenderer({
     chart.timeScale().scrollToRealTime();
 
     // 모든 차트: 최근 N개 캔들만 표시 (확대 상태)
-    // 미니 차트: 50개, 메인 차트: 150개
+    // 미니 차트: 30개, 메인 차트: 100개
     // 줌이 적용될 때까지 반복 시도
-    const targetVisibleBars = mini ? 50 : 150;
+    const targetVisibleBars = mini ? 30 : 100;
     const totalBars = data.length;
     const targetFrom = Math.max(0, totalBars - targetVisibleBars);
     const targetTo = totalBars;
     let retryCount = 0;
-    const maxRetries = 20;
+    const maxRetries = 30;
 
     const applyZoomWithRetry = () => {
       if (isChartDisposedRef.current) return;
@@ -727,31 +727,29 @@ export default function ChartRenderer({
         const currentRange = chart.timeScale().getVisibleLogicalRange();
         const currentVisibleBars = currentRange ? (currentRange.to - currentRange.from) : 0;
 
+        console.log(`[Chart${mini ? '-mini' : ''}] 줌 시도 #${retryCount}: 현재 ${Math.round(currentVisibleBars)}개, 목표 ${targetVisibleBars}개`);
+
         // 목표 범위와 다르면 다시 적용
-        if (!currentRange || currentVisibleBars > targetVisibleBars + 10) {
+        if (!currentRange || currentVisibleBars > targetVisibleBars + 5) {
           chart.timeScale().setVisibleLogicalRange({
             from: targetFrom,
             to: targetTo,
           });
           retryCount++;
-          // 다음 프레임에서 다시 확인
-          requestAnimationFrame(applyZoomWithRetry);
+          // 50ms 대기 후 다시 확인
+          setTimeout(applyZoomWithRetry, 50);
         } else {
-          console.log(`[Chart${mini ? '-mini' : ''}] 줌 적용 완료 (${retryCount}회 시도, ${Math.round(currentVisibleBars)}개 캔들 표시)`);
+          console.log(`[Chart${mini ? '-mini' : ''}] 줌 적용 완료! (${retryCount}회 시도, ${Math.round(currentVisibleBars)}개 캔들 표시)`);
         }
-      } catch {
-        // disposed 상태면 무시
+      } catch (e) {
+        console.log(`[Chart${mini ? '-mini' : ''}] 줌 에러:`, e);
       }
     };
 
-    // 3프레임 대기 후 줌 적용 시작
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          applyZoomWithRetry();
-        });
-      });
-    });
+    // 100ms 대기 후 줌 적용 시작
+    setTimeout(() => {
+      applyZoomWithRetry();
+    }, 100);
 
     isFirstRenderRef.current = false;
 
