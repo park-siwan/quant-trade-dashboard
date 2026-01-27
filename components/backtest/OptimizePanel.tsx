@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   OptimizeParams,
   OptimizeResult,
@@ -26,6 +26,64 @@ function formatTime(seconds: number): string {
 
 type OptimizeMethod = 'grid' | 'bayesian';
 
+// 타임프레임별 최적화된 기본값 (2025 BTC 테스트 결과 기반)
+const TIMEFRAME_DEFAULTS: Record<string, {
+  pivotLeft: number[];
+  pivotRight: number[];
+  rsiPeriod: number[];
+  minDistance: number[];
+  maxDistance: number[];
+  tpAtr: number[];
+  slAtr: number[];
+  minDivPct: number[];
+  trendFilter: boolean;
+  trendEmaPeriod: number;
+  volFilter: boolean;
+}> = {
+  '1h': {
+    // Sharpe 3.47, 승률 65%, MDD 1%
+    pivotLeft: [7, 9],
+    pivotRight: [4, 5],
+    rsiPeriod: [21],
+    minDistance: [5, 10],
+    maxDistance: [150, 200],
+    tpAtr: [1.5],
+    slAtr: [1.5],
+    minDivPct: [30],
+    trendFilter: true,
+    trendEmaPeriod: 100,
+    volFilter: true,
+  },
+  '5m': {
+    // Sharpe 3.16, 승률 58%, MDD 0.3%
+    pivotLeft: [7],
+    pivotRight: [5],
+    rsiPeriod: [14],
+    minDistance: [10, 15],
+    maxDistance: [150],
+    tpAtr: [2.0],
+    slAtr: [1.5],
+    minDivPct: [30],
+    trendFilter: true,
+    trendEmaPeriod: 100,
+    volFilter: true,
+  },
+  '15m': {
+    // Sharpe 1.63, 승률 50%, MDD 1%
+    pivotLeft: [9],
+    pivotRight: [5],
+    rsiPeriod: [14],
+    minDistance: [5, 15],
+    maxDistance: [150],
+    tpAtr: [2.0],
+    slAtr: [1.5],
+    minDivPct: [30],
+    trendFilter: false,
+    trendEmaPeriod: 50,
+    volFilter: true,
+  },
+};
+
 export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -36,19 +94,20 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
   const [optimizeMethod, setOptimizeMethod] = useState<OptimizeMethod>('bayesian');
   const [nTrials, setNTrials] = useState(500);  // 기본값 500으로 증가
   const [usePriorResults, setUsePriorResults] = useState(true);
-  // 파라미터 범위 설정 (2025 BTC 1h 최적화 결과 기반)
-  const [pivotLeftRange, setPivotLeftRange] = useState<number[]>([7, 9]);
-  const [pivotRightRange, setPivotRightRange] = useState<number[]>([4, 5]);
-  const [rsiPeriodRange, setRsiPeriodRange] = useState<number[]>([14, 21]);
-  const [minDistanceRange, setMinDistanceRange] = useState<number[]>([5, 10]);
-  const [maxDistanceRange, setMaxDistanceRange] = useState<number[]>([150, 200]);
-  const [tpAtrRange, setTpAtrRange] = useState<number[]>([1.5, 2.0]);
-  const [slAtrRange, setSlAtrRange] = useState<number[]>([1.5]);
-  const [minDivPctRange, setMinDivPctRange] = useState<number[]>([30]);
-  // 추가 필터 설정 (고정 사용)
-  const [useTrendFilter, setUseTrendFilter] = useState(true);   // EMA 트렌드 필터 (기본 ON - 1h 최적)
-  const [trendEmaPeriod, setTrendEmaPeriod] = useState(100);    // EMA 100 (최적값)
-  const [useVolatilityFilter, setUseVolatilityFilter] = useState(true);  // ATR 변동성 필터 (기본 ON)
+  // 파라미터 범위 설정 (타임프레임별 최적화 결과 기반)
+  const defaultTf = TIMEFRAME_DEFAULTS['1h'];
+  const [pivotLeftRange, setPivotLeftRange] = useState<number[]>(defaultTf.pivotLeft);
+  const [pivotRightRange, setPivotRightRange] = useState<number[]>(defaultTf.pivotRight);
+  const [rsiPeriodRange, setRsiPeriodRange] = useState<number[]>(defaultTf.rsiPeriod);
+  const [minDistanceRange, setMinDistanceRange] = useState<number[]>(defaultTf.minDistance);
+  const [maxDistanceRange, setMaxDistanceRange] = useState<number[]>(defaultTf.maxDistance);
+  const [tpAtrRange, setTpAtrRange] = useState<number[]>(defaultTf.tpAtr);
+  const [slAtrRange, setSlAtrRange] = useState<number[]>(defaultTf.slAtr);
+  const [minDivPctRange, setMinDivPctRange] = useState<number[]>(defaultTf.minDivPct);
+  // 추가 필터 설정 (타임프레임별 최적값)
+  const [useTrendFilter, setUseTrendFilter] = useState(defaultTf.trendFilter);
+  const [trendEmaPeriod, setTrendEmaPeriod] = useState(defaultTf.trendEmaPeriod);
+  const [useVolatilityFilter, setUseVolatilityFilter] = useState(defaultTf.volFilter);
   const [useRsiExtremeFilter, setUseRsiExtremeFilter] = useState(false);  // RSI 극단값 필터
   const [rsiOversold, setRsiOversold] = useState(30);  // RSI 과매도
   const [rsiOverbought, setRsiOverbought] = useState(70);  // RSI 과매수
@@ -89,6 +148,26 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
     metric: 'sharpe',
     topResults: 10,
   });
+
+  // 타임프레임 변경 시 최적화된 기본값 적용
+  const handleTimeframeChange = useCallback((newTimeframe: string) => {
+    setParams(prev => ({ ...prev, timeframe: newTimeframe }));
+
+    const defaults = TIMEFRAME_DEFAULTS[newTimeframe];
+    if (defaults) {
+      setPivotLeftRange(defaults.pivotLeft);
+      setPivotRightRange(defaults.pivotRight);
+      setRsiPeriodRange(defaults.rsiPeriod);
+      setMinDistanceRange(defaults.minDistance);
+      setMaxDistanceRange(defaults.maxDistance);
+      setTpAtrRange(defaults.tpAtr);
+      setSlAtrRange(defaults.slAtr);
+      setMinDivPctRange(defaults.minDivPct);
+      setUseTrendFilter(defaults.trendFilter);
+      setTrendEmaPeriod(defaults.trendEmaPeriod);
+      setUseVolatilityFilter(defaults.volFilter);
+    }
+  }, []);
 
   const handleOptimize = async () => {
     setIsLoading(true);
@@ -279,7 +358,7 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
           <label className="block text-xs text-zinc-400 mb-1">타임프레임</label>
           <select
             value={params.timeframe}
-            onChange={e => setParams(p => ({ ...p, timeframe: e.target.value }))}
+            onChange={e => handleTimeframeChange(e.target.value)}
             className="w-full bg-zinc-800 text-white px-3 py-2 rounded border border-zinc-700 text-sm"
           >
             <option value="5m">5분</option>
