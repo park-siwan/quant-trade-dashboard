@@ -815,8 +815,6 @@ export default function RealtimeChart() {
         timeVisible: true,
         rightOffset: 20, // TP/SL 레이블 공간 (적당히)
         shiftVisibleRangeOnNewBar: true,
-        barSpacing: 6, // 확대된 상태
-        minBarSpacing: 0.5,
       },
       localization: {
         timeFormatter: (time: number) => formatKST(time * 1000),
@@ -907,17 +905,9 @@ export default function RealtimeChart() {
       new Date(lastCandleTime * 1000).toLocaleString('ko-KR'),
     );
 
-    // 최근 150개 캔들만 표시 후 scrollToRealTime 적용
+    // scrollToRealTime()을 사용하면 rightOffset이 적용됨
     requestAnimationFrame(() => {
       if (chartRef.current) {
-        const visibleBars = 150;
-        const totalBars = candles.length;
-        if (totalBars > visibleBars) {
-          chartRef.current.timeScale().setVisibleLogicalRange({
-            from: totalBars - visibleBars,
-            to: totalBars,
-          });
-        }
         chartRef.current.timeScale().scrollToRealTime();
         console.log('[Chart] Scrolled to realtime with rightOffset');
       }
