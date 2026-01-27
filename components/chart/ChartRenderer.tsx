@@ -330,7 +330,7 @@ export default function ChartRenderer({
         secondsVisible: false,
         rightOffset: mini ? 70 : 20, // 우측 여백 (미니 차트는 더 넓게)
         lockVisibleTimeRangeOnResize: true, // 리사이즈 시 시간 범위 유지
-        barSpacing: mini ? 3 : 4, // 초기 캔들 간격 (적당히 확대)
+        barSpacing: mini ? 3 : 8, // 초기 캔들 간격 (크게 확대)
         minBarSpacing: 0.5, // 최소 간격
       },
       kineticScroll: {
@@ -448,8 +448,8 @@ export default function ChartRenderer({
       // 메인 차트: 저장된 뷰 범위 복원
       chart.timeScale().setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
     } else {
-      // 메인 차트: 첫 렌더링 시 최근 300개 캔들만 표시 (적당히 확대)
-      const visibleBars = 300;
+      // 메인 차트: 첫 렌더링 시 최근 150개 캔들만 표시 (크게 확대)
+      const visibleBars = 150;
       const totalBars = data.length;
       if (totalBars > visibleBars) {
         chart.timeScale().setVisibleLogicalRange({
