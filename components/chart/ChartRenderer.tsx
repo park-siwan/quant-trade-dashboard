@@ -706,9 +706,8 @@ export default function ChartRenderer({
     chart.timeScale().scrollToRealTime();
 
     // 모든 차트: 최근 N개 캔들만 표시 (확대 상태)
-    // 미니 차트: 250개, 메인 차트: 250개
     // 줌이 적용될 때까지 반복 시도
-    const targetVisibleBars = 250;
+    const targetVisibleBars = 500;
     const totalBars = data.length;
     const targetFrom = Math.max(0, totalBars - targetVisibleBars);
     const targetTo = totalBars;
@@ -1601,13 +1600,11 @@ export default function ChartRenderer({
 
     const updateZoneCoords = () => {
       if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
+      if (!chartContainerRef.current) return;
 
-      // 마지막 캔들의 X 좌표 (영역 시작점)
-      const lastCandle = data[data.length - 1];
-      const lastX = chartRef.current!.timeScale().timeToCoordinate(lastCandle.time);
-      if (lastX === null) return;
-
-      const startX = lastX + 15; // 마지막 캔들 오른쪽
+      // 차트 너비에서 고정 위치 계산 (우측 끝에서 150px 지점부터 시작)
+      const chartWidth = chartContainerRef.current.clientWidth;
+      const startX = chartWidth - 150; // 우측 끝에서 150px 지점
 
       // 개별 영역 좌표 계산 (박스 렌더링용) - POC 포함
       const rawRenderData = rawZones.map((zone) => {
