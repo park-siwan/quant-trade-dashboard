@@ -208,18 +208,25 @@ const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProp
           <table className="w-full text-xs">
             <thead>
               <tr className="text-zinc-400 border-b border-zinc-700">
+                <th className="text-center py-1 px-1">심볼</th>
+                <th className="text-center py-1 px-1">TF</th>
+                <th className="text-center py-1 px-1">기간</th>
                 <th className="text-right py-1 px-1">승률</th>
                 <th className="text-right py-1 px-1">수익</th>
                 <th className="text-right py-1 px-1">MDD</th>
                 <th className="text-right py-1 px-1">SR</th>
                 <th className="text-center py-1 px-1">방식</th>
+                <th className="text-center py-1 px-1">Ind</th>
+                <th className="text-center py-1 px-1">Trnd</th>
+                <th className="text-center py-1 px-1">Vol</th>
+                <th className="text-center py-1 px-1">RSI-E</th>
                 <th className="text-center py-1 px-1">RSI</th>
                 <th className="text-center py-1 px-1">Pvt</th>
                 <th className="text-center py-1 px-1">Dist</th>
                 <th className="text-center py-1 px-1">TP/SL</th>
                 <th className="text-center py-1 px-1">Div</th>
                 <th className="text-right py-1 px-1">거래</th>
-                <th className="text-center py-1 px-1">날짜</th>
+                <th className="text-center py-1 px-1">저장</th>
                 <th className="text-center py-1 px-1"></th>
               </tr>
             </thead>
@@ -230,6 +237,30 @@ const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProp
                   onClick={() => handleRowClick(item)}
                   className="border-b border-zinc-800 hover:bg-zinc-800/50 cursor-pointer"
                 >
+                  <td className="py-1 px-1 text-center text-zinc-300 text-[10px]">
+                    {item.symbol?.replace('USDT', '') || 'BTC'}
+                  </td>
+                  <td className="py-1 px-1 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      item.timeframe === '5m' ? 'bg-green-900/50 text-green-300' :
+                      item.timeframe === '15m' ? 'bg-yellow-900/50 text-yellow-300' :
+                      item.timeframe === '1h' ? 'bg-blue-900/50 text-blue-300' :
+                      'bg-zinc-700 text-zinc-300'
+                    }`}>
+                      {item.timeframe || '?'}
+                    </span>
+                  </td>
+                  <td className="py-1 px-1 text-center text-zinc-400 text-[10px]" title={item.startDate && item.endDate ? `${item.startDate} ~ ${item.endDate}` : ''}>
+                    {item.startDate && item.endDate ? (
+                      <>
+                        {item.startDate.slice(2, 7).replace('-', '/')}
+                        <span className="text-zinc-600">~</span>
+                        {item.endDate.slice(2, 7).replace('-', '/')}
+                      </>
+                    ) : item.candleCount ? (
+                      <span className="text-zinc-500">{(item.candleCount / 1000).toFixed(0)}K</span>
+                    ) : '-'}
+                  </td>
                   <td className="py-1 px-1 text-right">{item.winRate.toFixed(0)}%</td>
                   <td className={`py-1 px-1 text-right font-medium ${
                     item.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'
@@ -250,6 +281,24 @@ const SavedResultsPanel = forwardRef<SavedResultsPanelRef, SavedResultsPanelProp
                     }`}>
                       {item.optimizeMethod === 'bayesian' ? 'B' : 'G'}
                     </span>
+                  </td>
+                  <td className="py-1 px-1 text-center text-zinc-400 text-[10px]" title={item.indicators || ''}>
+                    {item.indicatorPreset || (item.indicators ? item.indicators.split(',').length + '개' : '-')}
+                  </td>
+                  <td className="py-1 px-1 text-center text-[10px]">
+                    {item.trendFilter && item.trendFilter !== 'OFF' ? (
+                      <span className="text-cyan-400">{item.trendFilter.replace('EMA', '')}</span>
+                    ) : <span className="text-zinc-600">-</span>}
+                  </td>
+                  <td className="py-1 px-1 text-center text-[10px]">
+                    {item.volatilityFilter && item.volatilityFilter !== 'OFF' ? (
+                      <span className="text-orange-400">{item.volatilityFilter === 'ATR_AVG' ? 'AVG' : '1.5'}</span>
+                    ) : <span className="text-zinc-600">-</span>}
+                  </td>
+                  <td className="py-1 px-1 text-center text-[10px]">
+                    {item.rsiExtremeFilter && item.rsiExtremeFilter !== 'OFF' ? (
+                      <span className="text-yellow-400">{item.rsiExtremeFilter.replace('RSI_', '')}</span>
+                    ) : <span className="text-zinc-600">-</span>}
                   </td>
                   <td className="py-1 px-1 text-center">{item.rsiPeriod}</td>
                   <td className="py-1 px-1 text-center">

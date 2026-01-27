@@ -59,10 +59,30 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
   // Out-of-Sample 검증
   const [useOosValidation, setUseOosValidation] = useState(false);
   const [oosRatio, setOosRatio] = useState(30);  // 검증 데이터 비율 (%)
+  // 날짜 기반 데이터 범위
+  const currentYear = new Date().getFullYear();
+  const [dataYear, setDataYear] = useState(2025);
+  const [dateRangeType, setDateRangeType] = useState<'year' | 'quarter' | 'custom'>('year');
+  const [quarter, setQuarter] = useState<1 | 2 | 3 | 4>(1);
+  const [customStartDate, setCustomStartDate] = useState('2025-01-01');
+  const [customEndDate, setCustomEndDate] = useState('2025-12-31');
+
+  // 날짜 범위 계산
+  const getDateRange = () => {
+    if (dateRangeType === 'year') {
+      return { startDate: `${dataYear}-01-01`, endDate: `${dataYear}-12-31` };
+    } else if (dateRangeType === 'quarter') {
+      const qStart = { 1: '01-01', 2: '04-01', 3: '07-01', 4: '10-01' };
+      const qEnd = { 1: '03-31', 2: '06-30', 3: '09-30', 4: '12-31' };
+      return { startDate: `${dataYear}-${qStart[quarter]}`, endDate: `${dataYear}-${qEnd[quarter]}` };
+    } else {
+      return { startDate: customStartDate, endDate: customEndDate };
+    }
+  };
+
   const [params, setParams] = useState<OptimizeParams>({
     symbol: 'BTC/USDT',
     timeframe: '5m',
-    candleCount: 5000,
     indicators: ['rsi', 'obv', 'cvd', 'oi'],
     initialCapital: 1000,
     positionSizePercent: 100,
@@ -106,9 +126,17 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
         oosRatio,
       };
 
+      // 날짜 범위 추가
+      const dateRange = getDateRange();
+      const paramsWithDate = {
+        ...params,
+        ...dateRange,
+        year: dataYear,
+      };
+
       if (optimizeMethod === 'bayesian') {
         const bayesianParams: BayesianOptimizeParams = {
-          ...params,
+          ...paramsWithDate,
           nTrials,
           usePriorResults,
           ...rangeParams,
@@ -120,7 +148,7 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
       } else {
         // 그리드 서치에도 파라미터 범위 전달
         optimizeResult = await runOptimizationWithProgress(
-          { ...params, ...rangeParams, ...filterParams },
+          { ...paramsWithDate, ...rangeParams, ...filterParams },
           (prog) => {
             setProgress(prog);
           },
@@ -139,11 +167,13 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
   const handleSaveOne = async (item: OptimizeResultItem, rank: number) => {
     setIsSaving(true);
     setSaveMessage(null);
+    const dateRange = getDateRange();
     try {
       await saveOptimizeResult({
         symbol: params.symbol,
         timeframe: params.timeframe,
-        candleCount: params.candleCount,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
         indicators: params.indicators || [],
         metric: params.metric || 'sharpe',
         optimizeMethod,
@@ -165,11 +195,13 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
     if (!result) return;
     setIsSaving(true);
     setSaveMessage(null);
+    const dateRange = getDateRange();
     try {
       await saveMultipleOptimizeResults({
         symbol: params.symbol,
         timeframe: params.timeframe,
-        candleCount: params.candleCount,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
         indicators: params.indicators || [],
         metric: params.metric || 'sharpe',
         optimizeMethod,
@@ -185,7 +217,7 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
     }
   };
 
-  const [showGuide, setShowGuide] = useState(true);
+  const [showGuide, setShowGuide] = useState(false);
 
   return (
     <div className="bg-zinc-900 p-4 rounded-lg space-y-4">
@@ -258,18 +290,6 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
         </div>
 
         <div>
-          <label className="block text-xs text-zinc-400 mb-1">캔들 수</label>
-          <input
-            type="number"
-            value={params.candleCount}
-            onChange={e => setParams(p => ({ ...p, candleCount: parseInt(e.target.value) }))}
-            min={1000}
-            max={5000}
-            className="w-full bg-zinc-800 text-white px-3 py-2 rounded border border-zinc-700 text-sm"
-          />
-        </div>
-
-        <div>
           <label className="block text-xs text-zinc-400 mb-1">최적화 기준</label>
           <select
             value={params.metric}
@@ -294,6 +314,98 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
             className="w-full bg-zinc-800 text-white px-3 py-2 rounded border border-zinc-700 text-sm"
           />
         </div>
+      </div>
+
+      {/* 데이터 기간 설정 */}
+      <div className="bg-zinc-800/50 p-3 rounded-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-zinc-300 font-medium">데이터 기간</span>
+          <div className="flex gap-1">
+            {(['year', 'quarter', 'custom'] as const).map(type => (
+              <button
+                key={type}
+                onClick={() => setDateRangeType(type)}
+                className={`px-2 py-1 text-xs rounded transition-colors ${
+                  dateRangeType === type ? 'bg-blue-600 text-white' : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
+                }`}
+              >
+                {type === 'year' ? '연도' : type === 'quarter' ? '분기' : '직접'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-3 items-end">
+          {/* 연도 선택 */}
+          <div>
+            <label className="block text-xs text-zinc-500 mb-1">연도</label>
+            <select
+              value={dataYear}
+              onChange={e => setDataYear(parseInt(e.target.value))}
+              className="bg-zinc-700 text-white text-sm px-3 py-2 rounded border border-zinc-600"
+            >
+              {[currentYear - 1, currentYear].map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 분기 선택 (분기 모드일 때) */}
+          {dateRangeType === 'quarter' && (
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1">분기</label>
+              <select
+                value={quarter}
+                onChange={e => setQuarter(parseInt(e.target.value) as 1 | 2 | 3 | 4)}
+                className="bg-zinc-700 text-white text-sm px-3 py-2 rounded border border-zinc-600"
+              >
+                <option value={1}>Q1 (1-3월)</option>
+                <option value={2}>Q2 (4-6월)</option>
+                <option value={3}>Q3 (7-9월)</option>
+                <option value={4}>Q4 (10-12월)</option>
+              </select>
+            </div>
+          )}
+
+          {/* 직접 입력 (커스텀 모드일 때) */}
+          {dateRangeType === 'custom' && (
+            <>
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">시작일</label>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={e => setCustomStartDate(e.target.value)}
+                  className="bg-zinc-700 text-white text-sm px-3 py-2 rounded border border-zinc-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">종료일</label>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={e => setCustomEndDate(e.target.value)}
+                  className="bg-zinc-700 text-white text-sm px-3 py-2 rounded border border-zinc-600"
+                />
+              </div>
+            </>
+          )}
+
+          {/* 선택된 기간 표시 */}
+          <div className="flex-1 text-right">
+            <span className="text-xs text-zinc-500">선택 기간: </span>
+            <span className="text-sm text-green-400 font-mono">
+              {getDateRange().startDate} ~ {getDateRange().endDate}
+            </span>
+          </div>
+        </div>
+
+        {/* 학습/검증 분리 팁 */}
+        {dateRangeType === 'quarter' && (
+          <p className="text-xs text-zinc-500">
+            <span className="text-yellow-400">TIP:</span> Q1-Q3로 학습 → Q4로 검증하면 과적합 방지에 효과적
+          </p>
+        )}
       </div>
 
       {/* 지표 선택 */}
@@ -745,53 +857,57 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
             </p>
           )}
 
-          {/* 파라미터 탐색 모드 (Bayesian Only) */}
-          {optimizeMethod === 'bayesian' && (
-            <div className="border-t border-zinc-700/50 pt-3 mt-3">
-              <div className="text-sm font-medium text-purple-400 mb-2">파라미터 탐색 모드</div>
-              <p className="text-xs text-zinc-500 mb-2">Optuna가 최적 조합을 자동 탐색합니다 (권장)</p>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={searchFilters}
-                    onChange={e => setSearchFilters(e.target.checked)}
-                    className="w-4 h-4 accent-purple-500"
-                  />
-                  <span className="text-sm text-zinc-300">필터 조합 탐색</span>
-                  <span className="text-xs text-zinc-500">(트렌드/변동성/RSI 극단값)</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={searchIndicators}
-                    onChange={e => setSearchIndicators(e.target.checked)}
-                    className="w-4 h-4 accent-purple-500"
-                  />
-                  <span className="text-sm text-zinc-300">지표 조합 탐색</span>
-                  <span className="text-xs text-zinc-500">(RSI/OBV/CVD/OI 조합)</span>
-                </label>
-              </div>
-              {(searchFilters || searchIndicators) && (
-                <p className="text-xs text-yellow-500/80 mt-2 ml-6">
-                  탐색 공간이 확장됩니다. Trials를 500+ 권장
-                </p>
-              )}
-              <div className="flex items-center gap-3 mt-3">
-                <span className="text-xs text-zinc-500">최소 거래 수</span>
-                <select
-                  value={minTrades}
-                  onChange={e => setMinTrades(parseInt(e.target.value))}
-                  className="bg-zinc-700 text-white px-2 py-1 rounded border border-zinc-600 text-xs"
-                >
-                  <option value={10}>10</option>
-                  <option value={30}>30</option>
-                  <option value={50}>50 (권장)</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
+          {/* 파라미터 탐색 모드 (Bayesian & Grid 공통) */}
+          <div className="border-t border-zinc-700/50 pt-3 mt-3">
+            <div className="text-sm font-medium text-purple-400 mb-2">필터/지표 조합 탐색</div>
+            <p className="text-xs text-zinc-500 mb-2">
+              {optimizeMethod === 'bayesian'
+                ? 'Optuna가 최적 조합을 자동 탐색합니다'
+                : '모든 필터/지표 조합을 전수 탐색합니다'}
+            </p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={searchFilters}
+                  onChange={e => setSearchFilters(e.target.checked)}
+                  className="w-4 h-4 accent-purple-500"
+                />
+                <span className="text-sm text-zinc-300">필터 조합 탐색</span>
+                <span className="text-xs text-zinc-500">(트렌드/변동성/RSI 극단값)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={searchIndicators}
+                  onChange={e => setSearchIndicators(e.target.checked)}
+                  className="w-4 h-4 accent-purple-500"
+                />
+                <span className="text-sm text-zinc-300">지표 조합 탐색</span>
+                <span className="text-xs text-zinc-500">(RSI/OBV/CVD/OI 조합)</span>
+              </label>
             </div>
-          )}
+            {(searchFilters || searchIndicators) && (
+              <p className="text-xs text-yellow-500/80 mt-2 ml-6">
+                {optimizeMethod === 'bayesian'
+                  ? '탐색 공간이 확장됩니다. Trials를 500+ 권장'
+                  : '탐색 조합 수가 크게 증가합니다 (필터: x8, 지표: x15)'}
+              </p>
+            )}
+            <div className="flex items-center gap-3 mt-3">
+              <span className="text-xs text-zinc-500">최소 거래 수</span>
+              <select
+                value={minTrades}
+                onChange={e => setMinTrades(parseInt(e.target.value))}
+                className="bg-zinc-700 text-white px-2 py-1 rounded border border-zinc-600 text-xs"
+              >
+                <option value={10}>10</option>
+                <option value={30}>30</option>
+                <option value={50}>50 (권장)</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
 
           {/* OOS 검증 */}
           <div className="border-t border-zinc-700/50 pt-3 mt-3">
@@ -846,7 +962,7 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
           <div className="text-zinc-400">
             <span className="text-zinc-500">TF:</span> <span className="text-white">{params.timeframe}</span>
             <span className="mx-2">|</span>
-            <span className="text-zinc-500">캔들:</span> <span className="text-white">{params.candleCount.toLocaleString()}</span>
+            <span className="text-zinc-500">기간:</span> <span className="text-white">{getDateRange().startDate} ~ {getDateRange().endDate}</span>
             <span className="mx-2">|</span>
             <span className="text-zinc-500">방식:</span> <span className="text-yellow-400">{optimizeMethod === 'bayesian' ? 'Bay' : 'Grid'}</span>
           </div>
@@ -955,8 +1071,8 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
                 <span className="text-white">{params.timeframe}</span>
               </div>
               <div>
-                <span className="text-zinc-500">캔들 수:</span>{' '}
-                <span className="text-white">{params.candleCount.toLocaleString()}</span>
+                <span className="text-zinc-500">기간:</span>{' '}
+                <span className="text-green-400">{getDateRange().startDate} ~ {getDateRange().endDate}</span>
               </div>
               <div>
                 <span className="text-zinc-500">방식:</span>{' '}

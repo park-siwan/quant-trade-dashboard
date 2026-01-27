@@ -1,6 +1,6 @@
 'use client';
 
-type StrategySubTab = 'realtime' | 'results' | 'optimize';
+type StrategySubTab = 'realtime' | 'results' | 'optimize' | 'cache';
 
 interface StrategyLNBProps {
   activeSubTab: StrategySubTab;
@@ -11,6 +11,7 @@ const subTabs: { id: StrategySubTab; label: string }[] = [
   { id: 'realtime', label: '실시간' },
   { id: 'results', label: '결과 조회' },
   { id: 'optimize', label: '파라미터 최적화' },
+  { id: 'cache', label: '데이터 캐시' },
 ];
 
 export default function StrategyLNB({ activeSubTab, onSubTabChange }: StrategyLNBProps) {

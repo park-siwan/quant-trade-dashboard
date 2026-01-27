@@ -5,6 +5,7 @@ import { CandlestickData } from 'lightweight-charts';
 import { GNB, StrategyLNB, type StrategySubTab } from '@/components/layout';
 import RealtimeChart from '@/components/backtest/RealtimeChart';
 import OptimizePanel from '@/components/backtest/OptimizePanel';
+import DataCachePanel from '@/components/backtest/DataCachePanel';
 import SavedResultsPanel, { SavedResultsPanelRef } from '@/components/backtest/SavedResultsPanel';
 import BacktestStats from '@/components/backtest/BacktestStats';
 import BacktestChart from '@/components/backtest/BacktestChart';
@@ -31,7 +32,7 @@ export default function StrategyPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedStrategyTab = localStorage.getItem(STRATEGY_TAB_STORAGE_KEY) as StrategySubTab | null;
-      if (savedStrategyTab && ['realtime', 'results', 'optimize'].includes(savedStrategyTab)) {
+      if (savedStrategyTab && ['realtime', 'results', 'optimize', 'cache'].includes(savedStrategyTab)) {
         setStrategySubTab(savedStrategyTab);
       }
       setIsTabLoaded(true);
@@ -188,8 +189,15 @@ export default function StrategyPage() {
 
         {/* 파라미터 최적화 */}
         {strategySubTab === 'optimize' && (
-          <div className='max-w-4xl'>
+          <div className='max-w-4xl space-y-6'>
             <OptimizePanel onSaveSuccess={handleSaveSuccess} />
+          </div>
+        )}
+
+        {/* 데이터 캐시 관리 */}
+        {strategySubTab === 'cache' && (
+          <div className='max-w-4xl'>
+            <DataCachePanel />
           </div>
         )}
       </div>

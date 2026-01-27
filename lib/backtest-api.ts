@@ -114,7 +114,11 @@ export async function getTimeframes(): Promise<string[]> {
 export interface OptimizeParams {
   symbol: string;
   timeframe: string;
-  candleCount: number;
+  candleCount?: number;  // 레거시 지원
+  // 날짜 기반 데이터 범위 (캐시 연동)
+  startDate?: string;    // YYYY-MM-DD (예: 2025-01-01)
+  endDate?: string;      // YYYY-MM-DD (예: 2025-09-30)
+  year?: number;         // 단일 연도 지정 (startDate/endDate 대신 사용 가능)
   indicators?: string[];
   initialCapital?: number;
   positionSizePercent?: number;
@@ -343,6 +347,8 @@ export interface SavedOptimizeResult {
   symbol: string;
   timeframe: string;
   candleCount: number;
+  startDate?: string;
+  endDate?: string;
   indicators: string;
   metric: string;
   optimizeMethod: 'grid' | 'bayesian';
@@ -354,6 +360,10 @@ export interface SavedOptimizeResult {
   tpAtr: number;
   slAtr: number;
   minDivPct?: number;
+  trendFilter?: string;
+  volatilityFilter?: string;
+  rsiExtremeFilter?: string;
+  indicatorPreset?: string;
   totalTrades: number;
   winRate: number;
   totalPnlPercent: number;
@@ -368,7 +378,9 @@ export interface SavedOptimizeResult {
 export interface SaveOptimizeRequest {
   symbol: string;
   timeframe: string;
-  candleCount: number;
+  candleCount?: number;  // 레거시 지원
+  startDate?: string;    // YYYY-MM-DD (날짜 기반)
+  endDate?: string;      // YYYY-MM-DD
   indicators: string[];
   metric: string;
   optimizeMethod: 'grid' | 'bayesian';
@@ -381,7 +393,9 @@ export interface SaveOptimizeRequest {
 export interface SaveMultipleRequest {
   symbol: string;
   timeframe: string;
-  candleCount: number;
+  candleCount?: number;  // 레거시 지원
+  startDate?: string;    // YYYY-MM-DD (날짜 기반)
+  endDate?: string;      // YYYY-MM-DD
   indicators: string[];
   metric: string;
   optimizeMethod: 'grid' | 'bayesian';
@@ -671,4 +685,125 @@ export async function updateBacktestName(id: number, name: string): Promise<void
     const error = await response.json();
     throw new Error(error.message || 'Update failed');
   }
+}
+
+// ============== 데이터 캐시 관리 API ==============
+
+export interface CacheItem {
+  symbol: string;
+  timeframe: string;
+  year: number;
+  candleCount: number;
+  oiCount: number;
+  lastUpdated: string;
+}
+
+export interface CacheStatus {
+  cached: CacheItem[];
+  symbols: string[];
+  timeframes: string[];
+}
+
+export interface CacheDownloadProgress {
+  type: 'status' | 'complete' | 'error';
+  message?: string;
+}
+
+/**
+ * 캐시 상태 조회
+ */
+export async function getCacheStatus(): Promise<CacheStatus> {
+  const response = await fetch(`${API_BASE}/backtest/cache/status`);
+  if (!response.ok) {
+    throw new Error('Failed to get cache status');
+  }
+  return response.json();
+}
+
+/**
+ * 데이터 다운로드 (SSE 스트리밍)
+ */
+export async function downloadCacheData(
+  symbol: string,
+  timeframe: string,
+  year: number,
+  force: boolean,
+  onProgress: (data: CacheDownloadProgress) => void,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/backtest/cache/download`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol, timeframe, year, force }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to start download');
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('No response body');
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  return new Promise((resolve, reject) => {
+    const read = (): void => {
+      reader.read().then(({ done, value }) => {
+        if (done) {
+          resolve();
+          return;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data: CacheDownloadProgress = JSON.parse(line.substring(6));
+              onProgress(data);
+
+              if (data.type === 'complete') {
+                resolve();
+                return;
+              } else if (data.type === 'error') {
+                reject(new Error(data.message || 'Download failed'));
+                return;
+              }
+            } catch {
+              // ignore parse errors
+            }
+          }
+        }
+
+        read();
+      }).catch(reject);
+    };
+
+    read();
+  });
+}
+
+/**
+ * 캐시 삭제
+ */
+export async function deleteCache(
+  symbol: string,
+  timeframe: string,
+  year: number,
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(
+    `${API_BASE}/backtest/cache/${symbol}/${timeframe}/${year}`,
+    { method: 'DELETE' },
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Delete failed');
+  }
+
+  return response.json();
 }
