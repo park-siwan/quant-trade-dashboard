@@ -440,11 +440,7 @@ export default function ChartRenderer({
       candlestickSeriesRef.current = candlestickSeries;
     }
 
-    // 뷰 상태 설정 (미니 차트만 여기서 처리, 메인 차트는 scrollToRealTime 이후)
-    if (mini) {
-      // 미니 차트: 항상 전체 데이터 표시
-      chart.timeScale().fitContent();
-    }
+    // 뷰 상태 설정은 scrollToRealTime 이후에 처리
     // 가격 스케일 자동 맞춤
     chart.priceScale('right').applyOptions({ autoScale: true });
 
@@ -709,54 +705,53 @@ export default function ChartRenderer({
     // 항상 최신 캔들(오른쪽 끝)을 보여주도록 설정
     chart.timeScale().scrollToRealTime();
 
-    // 메인 차트: 최근 150개 캔들만 표시 (확대 상태)
+    // 모든 차트: 최근 N개 캔들만 표시 (확대 상태)
+    // 미니 차트: 50개, 메인 차트: 150개
     // 줌이 적용될 때까지 반복 시도
-    if (!mini) {
-      const targetVisibleBars = 150;
-      const totalBars = data.length;
-      const targetFrom = Math.max(0, totalBars - targetVisibleBars);
-      const targetTo = totalBars;
-      let retryCount = 0;
-      const maxRetries = 20;
+    const targetVisibleBars = mini ? 50 : 150;
+    const totalBars = data.length;
+    const targetFrom = Math.max(0, totalBars - targetVisibleBars);
+    const targetTo = totalBars;
+    let retryCount = 0;
+    const maxRetries = 20;
 
-      const applyZoomWithRetry = () => {
-        if (isChartDisposedRef.current) return;
-        if (retryCount >= maxRetries) {
-          console.log('[Chart] 줌 적용 최대 재시도 초과');
-          return;
+    const applyZoomWithRetry = () => {
+      if (isChartDisposedRef.current) return;
+      if (retryCount >= maxRetries) {
+        console.log(`[Chart${mini ? '-mini' : ''}] 줌 적용 최대 재시도 초과`);
+        return;
+      }
+
+      try {
+        // 현재 범위 확인
+        const currentRange = chart.timeScale().getVisibleLogicalRange();
+        const currentVisibleBars = currentRange ? (currentRange.to - currentRange.from) : 0;
+
+        // 목표 범위와 다르면 다시 적용
+        if (!currentRange || currentVisibleBars > targetVisibleBars + 10) {
+          chart.timeScale().setVisibleLogicalRange({
+            from: targetFrom,
+            to: targetTo,
+          });
+          retryCount++;
+          // 다음 프레임에서 다시 확인
+          requestAnimationFrame(applyZoomWithRetry);
+        } else {
+          console.log(`[Chart${mini ? '-mini' : ''}] 줌 적용 완료 (${retryCount}회 시도, ${Math.round(currentVisibleBars)}개 캔들 표시)`);
         }
+      } catch {
+        // disposed 상태면 무시
+      }
+    };
 
-        try {
-          // 현재 범위 확인
-          const currentRange = chart.timeScale().getVisibleLogicalRange();
-          const currentVisibleBars = currentRange ? (currentRange.to - currentRange.from) : 0;
-
-          // 목표 범위와 다르면 다시 적용
-          if (!currentRange || currentVisibleBars > targetVisibleBars + 10) {
-            chart.timeScale().setVisibleLogicalRange({
-              from: targetFrom,
-              to: targetTo,
-            });
-            retryCount++;
-            // 다음 프레임에서 다시 확인
-            requestAnimationFrame(applyZoomWithRetry);
-          } else {
-            console.log(`[Chart] 줌 적용 완료 (${retryCount}회 시도, ${Math.round(currentVisibleBars)}개 캔들 표시)`);
-          }
-        } catch {
-          // disposed 상태면 무시
-        }
-      };
-
-      // 3프레임 대기 후 줌 적용 시작
+    // 3프레임 대기 후 줌 적용 시작
+    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            applyZoomWithRetry();
-          });
+          applyZoomWithRetry();
         });
       });
-    }
+    });
 
     isFirstRenderRef.current = false;
 
