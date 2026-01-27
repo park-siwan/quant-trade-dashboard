@@ -710,27 +710,49 @@ export default function ChartRenderer({
     chart.timeScale().scrollToRealTime();
 
     // 메인 차트: 최근 150개 캔들만 표시 (확대 상태)
-    // 여러 프레임 대기 후 설정하여 차트가 완전히 렌더링된 후 적용
+    // 줌이 적용될 때까지 반복 시도
     if (!mini) {
-      const applyZoom = () => {
+      const targetVisibleBars = 150;
+      const totalBars = data.length;
+      const targetFrom = Math.max(0, totalBars - targetVisibleBars);
+      const targetTo = totalBars;
+      let retryCount = 0;
+      const maxRetries = 20;
+
+      const applyZoomWithRetry = () => {
         if (isChartDisposedRef.current) return;
-        const visibleBars = 150;
-        const totalBars = data.length;
+        if (retryCount >= maxRetries) {
+          console.log('[Chart] 줌 적용 최대 재시도 초과');
+          return;
+        }
+
         try {
-          chart.timeScale().setVisibleLogicalRange({
-            from: Math.max(0, totalBars - visibleBars),
-            to: totalBars,
-          });
+          // 현재 범위 확인
+          const currentRange = chart.timeScale().getVisibleLogicalRange();
+          const currentVisibleBars = currentRange ? (currentRange.to - currentRange.from) : 0;
+
+          // 목표 범위와 다르면 다시 적용
+          if (!currentRange || currentVisibleBars > targetVisibleBars + 10) {
+            chart.timeScale().setVisibleLogicalRange({
+              from: targetFrom,
+              to: targetTo,
+            });
+            retryCount++;
+            // 다음 프레임에서 다시 확인
+            requestAnimationFrame(applyZoomWithRetry);
+          } else {
+            console.log(`[Chart] 줌 적용 완료 (${retryCount}회 시도, ${Math.round(currentVisibleBars)}개 캔들 표시)`);
+          }
         } catch {
           // disposed 상태면 무시
         }
       };
 
-      // 3프레임 대기 후 줌 적용 (차트 완전 렌더링 보장)
+      // 3프레임 대기 후 줌 적용 시작
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            applyZoom();
+            applyZoomWithRetry();
           });
         });
       });
