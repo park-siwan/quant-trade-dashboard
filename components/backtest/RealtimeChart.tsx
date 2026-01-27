@@ -488,21 +488,30 @@ export default function RealtimeChart() {
     );
   }, [openPosition, soundEnabled]);
 
-  // 상위 전략 목록 로드
+  // 상위 전략 목록 로드 (타임프레임 필터링)
   useEffect(() => {
     const loadStrategies = async () => {
       try {
-        const results = await getTopSavedResults('sharpe', 10);
-        setStrategies(results);
-        if (results.length > 0 && !selectedStrategy) {
-          setSelectedStrategy(results[0]);
+        const results = await getTopSavedResults('sharpe', 50); // 더 많이 가져와서 필터링
+        // 현재 타임프레임과 일치하는 전략만 필터링
+        const filteredResults = results.filter(r => r.timeframe === timeframe);
+        setStrategies(filteredResults);
+        // 타임프레임에 맞는 전략 자동 선택
+        if (filteredResults.length > 0) {
+          // 현재 선택된 전략이 없거나 타임프레임이 다르면 첫 번째 선택
+          if (!selectedStrategy || selectedStrategy.timeframe !== timeframe) {
+            setSelectedStrategy(filteredResults[0]);
+          }
+        } else {
+          // 해당 타임프레임에 저장된 전략이 없으면 선택 해제
+          setSelectedStrategy(null);
         }
       } catch (err) {
         console.error('Failed to load strategies:', err);
       }
     };
     loadStrategies();
-  }, []);
+  }, [timeframe]); // 타임프레임 변경 시 재로드
 
   // 전략 변경 핸들러
   const handleStrategyChange = async (strategy: SavedOptimizeResult) => {
