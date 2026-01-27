@@ -709,13 +709,30 @@ export default function ChartRenderer({
     // 항상 최신 캔들(오른쪽 끝)을 보여주도록 설정
     chart.timeScale().scrollToRealTime();
 
-    // 메인 차트: 최근 150개 캔들만 표시 (확대 상태) - scrollToRealTime 이후에 설정해야 함
+    // 메인 차트: 최근 150개 캔들만 표시 (확대 상태)
+    // 여러 프레임 대기 후 설정하여 차트가 완전히 렌더링된 후 적용
     if (!mini) {
-      const visibleBars = 150;
-      const totalBars = data.length;
-      chart.timeScale().setVisibleLogicalRange({
-        from: Math.max(0, totalBars - visibleBars),
-        to: totalBars,
+      const applyZoom = () => {
+        if (isChartDisposedRef.current) return;
+        const visibleBars = 150;
+        const totalBars = data.length;
+        try {
+          chart.timeScale().setVisibleLogicalRange({
+            from: Math.max(0, totalBars - visibleBars),
+            to: totalBars,
+          });
+        } catch {
+          // disposed 상태면 무시
+        }
+      };
+
+      // 3프레임 대기 후 줌 적용 (차트 완전 렌더링 보장)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            applyZoom();
+          });
+        });
       });
     }
 
