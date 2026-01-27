@@ -120,9 +120,29 @@ export interface OptimizeParams {
   positionSizePercent?: number;
   metric?: 'sharpe' | 'profit' | 'winrate' | 'profitfactor';
   topResults?: number;
-  // Pivot 범위 설정 (그리드/베이지안 공통)
-  pivotLeftRange?: number[];   // 예: [3, 5, 7]
-  pivotRightRange?: number[];  // 예: [2, 3, 4]
+  // 파라미터 탐색 범위 설정 (그리드/베이지안 공통)
+  pivotLeftRange?: number[];     // 예: [3, 5, 7]
+  pivotRightRange?: number[];    // 예: [2, 3, 4]
+  rsiPeriodRange?: number[];     // 예: [10, 14, 21]
+  minDistanceRange?: number[];   // 예: [5, 10, 15]
+  maxDistanceRange?: number[];   // 예: [100, 150, 200]
+  tpAtrRange?: number[];         // 예: [1.5, 2.0, 2.5, 3.0]
+  slAtrRange?: number[];         // 예: [0.5, 1.0, 1.5]
+  minDivPctRange?: number[];     // 예: [10, 20, 30, 40]
+  // 추가 필터 (고정 사용)
+  useTrendFilter?: boolean;      // EMA 트렌드 필터
+  trendEmaPeriod?: number;       // EMA 기간 (기본: 50)
+  useVolatilityFilter?: boolean; // ATR 변동성 필터
+  useRsiExtremeFilter?: boolean; // RSI 극단값 필터
+  rsiOversold?: number;          // RSI 과매도 (기본: 30)
+  rsiOverbought?: number;        // RSI 과매수 (기본: 70)
+  // 필터/지표 파라미터 탐색 모드 (Optuna가 최적 조합 탐색)
+  searchFilters?: boolean;       // 필터 조합을 파라미터로 탐색
+  searchIndicators?: boolean;    // 지표 조합을 파라미터로 탐색
+  minTrades?: number;            // 최소 거래 수 (기본: 50)
+  // Out-of-Sample 검증
+  useOosValidation?: boolean;    // OOS 검증 사용
+  oosRatio?: number;             // 검증 데이터 비율 (기본: 30%)
 }
 
 export interface OptimizeResultItem {
@@ -135,6 +155,11 @@ export interface OptimizeResultItem {
     tp_atr: number;
     sl_atr: number;
     min_div_pct?: number;  // 최소 다이버전스 강도 (%)
+    // 필터/지표 파라미터 (탐색 모드에서만)
+    trend_filter?: string;      // 'OFF', 'EMA20', 'EMA50', 'EMA100'
+    volatility_filter?: string; // 'OFF', 'ATR_AVG', 'ATR_AVG_1_5'
+    rsi_extreme_filter?: string; // 'OFF', 'RSI_30_70', 'RSI_25_75', 'RSI_20_80'
+    indicator_preset?: string;  // 'A', 'B', 'C', 'D', 'E', 'F'
   };
   result: {
     totalTrades: number;
