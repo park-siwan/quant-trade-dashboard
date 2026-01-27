@@ -627,7 +627,7 @@ export default function RealtimeChart() {
       initialCandlesLoadedRef.current = false;
       try {
         const response = await fetch(
-          `${API_BASE}/exchange/candles?symbol=${encodeURIComponent(currentSymbol.slashFormat)}&timeframe=${timeframe}&limit=500`,
+          `${API_BASE}/exchange/candles?symbol=${encodeURIComponent(currentSymbol.slashFormat)}&timeframe=${timeframe}&limit=1500`,
         );
         const data = await response.json();
         const candlesArray = data.data?.candles || data.candles;

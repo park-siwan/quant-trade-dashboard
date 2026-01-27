@@ -112,11 +112,11 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
   const [rsiOversold, setRsiOversold] = useState(30);  // RSI 과매도
   const [rsiOverbought, setRsiOverbought] = useState(70);  // RSI 과매수
   // 필터/지표 파라미터 탐색 모드 (Optuna가 최적 조합 탐색)
-  const [searchFilters, setSearchFilters] = useState(false);  // 필터 조합 탐색
-  const [searchIndicators, setSearchIndicators] = useState(false);  // 지표 조합 탐색
+  const [searchFilters, setSearchFilters] = useState(true);  // 필터 조합 탐색 (기본 활성화)
+  const [searchIndicators, setSearchIndicators] = useState(true);  // 지표 조합 탐색 (기본 활성화)
   const [minTrades, setMinTrades] = useState(30);  // 최소 거래 수 (테스트 기준)
   // Out-of-Sample 검증
-  const [useOosValidation, setUseOosValidation] = useState(false);
+  const [useOosValidation, setUseOosValidation] = useState(true);  // 기본 활성화
   const [oosRatio, setOosRatio] = useState(30);  // 검증 데이터 비율 (%)
   // 날짜 기반 데이터 범위
   const currentYear = new Date().getFullYear();
@@ -638,9 +638,59 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
 
       {/* 파라미터 범위 설정 (공통 - 베이지안/그리드 모두 적용) */}
       <div className="border-t border-zinc-700 pt-4 space-y-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-zinc-300 font-medium">파라미터 탐색 범위</span>
-          <span className="text-xs text-zinc-500">(선택된 값들의 조합을 탐색)</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-zinc-300 font-medium">파라미터 탐색 범위</span>
+            <span className="text-xs text-zinc-500">(선택된 값들의 조합을 탐색)</span>
+          </div>
+          <button
+            onClick={() => {
+              // 전체 선택 상태 확인
+              const allPivotLeft = [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20];
+              const allPivotRight = [1, 2, 3, 4, 5, 6, 7, 8, 10];
+              const allRsiPeriod = [7, 10, 14, 21, 28];
+              const allMinDistance = [3, 5, 10, 15, 20];
+              const allMaxDistance = [50, 100, 150, 200, 300];
+              const allTpAtr = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0];
+              const allSlAtr = [0.5, 0.75, 1.0, 1.5, 2.0];
+              const allMinDivPct = [5, 10, 20, 30, 40, 50];
+
+              const isAllSelected =
+                pivotLeftRange.length === allPivotLeft.length &&
+                pivotRightRange.length === allPivotRight.length &&
+                rsiPeriodRange.length === allRsiPeriod.length &&
+                minDistanceRange.length === allMinDistance.length &&
+                maxDistanceRange.length === allMaxDistance.length &&
+                tpAtrRange.length === allTpAtr.length &&
+                slAtrRange.length === allSlAtr.length &&
+                minDivPctRange.length === allMinDivPct.length;
+
+              if (isAllSelected) {
+                // 초기화
+                setPivotLeftRange([7]);
+                setPivotRightRange([4]);
+                setRsiPeriodRange([14]);
+                setMinDistanceRange([5]);
+                setMaxDistanceRange([100]);
+                setTpAtrRange([2.0]);
+                setSlAtrRange([1.0]);
+                setMinDivPctRange([20]);
+              } else {
+                // 전체 선택
+                setPivotLeftRange(allPivotLeft);
+                setPivotRightRange(allPivotRight);
+                setRsiPeriodRange(allRsiPeriod);
+                setMinDistanceRange(allMinDistance);
+                setMaxDistanceRange(allMaxDistance);
+                setTpAtrRange(allTpAtr);
+                setSlAtrRange(allSlAtr);
+                setMinDivPctRange(allMinDivPct);
+              }
+            }}
+            className="text-xs px-2 py-1 rounded bg-zinc-700 text-zinc-300 hover:bg-zinc-600 transition-colors"
+          >
+            {pivotLeftRange.length === 12 && pivotRightRange.length === 9 && rsiPeriodRange.length === 5 ? '초기화' : '전체 선택'}
+          </button>
         </div>
 
         {/* 피봇 설정 */}
@@ -650,7 +700,7 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
             <div>
               <label className="block text-xs text-zinc-500 mb-1">Pivot Left (좌측 캔들)</label>
               <div className="flex flex-wrap gap-1">
-                {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(val => (
+                {[2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20].map(val => (
                   <button
                     key={val}
                     onClick={() => {
@@ -672,7 +722,7 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
             <div>
               <label className="block text-xs text-zinc-500 mb-1">Pivot Right (확정 캔들)</label>
               <div className="flex flex-wrap gap-1">
-                {[1, 2, 3, 4, 5, 6].map(val => (
+                {[1, 2, 3, 4, 5, 6, 7, 8, 10].map(val => (
                   <button
                     key={val}
                     onClick={() => {
