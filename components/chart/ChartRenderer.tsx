@@ -440,25 +440,18 @@ export default function ChartRenderer({
       candlestickSeriesRef.current = candlestickSeries;
     }
 
-    // 뷰 상태 복원 또는 초기 설정
+    // 뷰 상태 설정
     if (mini) {
-      // 미니 차트: 항상 전체 데이터 표시 (저장된 상태 무시)
+      // 미니 차트: 항상 전체 데이터 표시
       chart.timeScale().fitContent();
-    } else if (savedVisibleLogicalRangeRef.current) {
-      // 메인 차트: 저장된 뷰 범위 복원
-      chart.timeScale().setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
     } else {
-      // 메인 차트: 첫 렌더링 시 최근 150개 캔들만 표시 (크게 확대)
+      // 메인 차트: 항상 최근 150개 캔들만 표시 (확대 상태)
       const visibleBars = 150;
       const totalBars = data.length;
-      if (totalBars > visibleBars) {
-        chart.timeScale().setVisibleLogicalRange({
-          from: totalBars - visibleBars,
-          to: totalBars,
-        });
-      } else {
-        chart.timeScale().fitContent();
-      }
+      chart.timeScale().setVisibleLogicalRange({
+        from: Math.max(0, totalBars - visibleBars),
+        to: totalBars,
+      });
     }
     // 가격 스케일 자동 맞춤
     chart.priceScale('right').applyOptions({ autoScale: true });
