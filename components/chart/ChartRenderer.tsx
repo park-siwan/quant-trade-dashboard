@@ -440,18 +440,10 @@ export default function ChartRenderer({
       candlestickSeriesRef.current = candlestickSeries;
     }
 
-    // 뷰 상태 설정
+    // 뷰 상태 설정 (미니 차트만 여기서 처리, 메인 차트는 scrollToRealTime 이후)
     if (mini) {
       // 미니 차트: 항상 전체 데이터 표시
       chart.timeScale().fitContent();
-    } else {
-      // 메인 차트: 항상 최근 150개 캔들만 표시 (확대 상태)
-      const visibleBars = 150;
-      const totalBars = data.length;
-      chart.timeScale().setVisibleLogicalRange({
-        from: Math.max(0, totalBars - visibleBars),
-        to: totalBars,
-      });
     }
     // 가격 스케일 자동 맞춤
     chart.priceScale('right').applyOptions({ autoScale: true });
@@ -716,6 +708,17 @@ export default function ChartRenderer({
 
     // 항상 최신 캔들(오른쪽 끝)을 보여주도록 설정
     chart.timeScale().scrollToRealTime();
+
+    // 메인 차트: 최근 150개 캔들만 표시 (확대 상태) - scrollToRealTime 이후에 설정해야 함
+    if (!mini) {
+      const visibleBars = 150;
+      const totalBars = data.length;
+      chart.timeScale().setVisibleLogicalRange({
+        from: Math.max(0, totalBars - visibleBars),
+        to: totalBars,
+      });
+    }
+
     isFirstRenderRef.current = false;
 
     // 통합 툴팁 (RSI 값 + 필터링 사유 + 크로스오버 + 다이버전스)
