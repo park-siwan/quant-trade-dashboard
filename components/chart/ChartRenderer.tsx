@@ -706,9 +706,9 @@ export default function ChartRenderer({
     chart.timeScale().scrollToRealTime();
 
     // 모든 차트: 최근 N개 캔들만 표시 (확대 상태)
-    // 미니 차트: 30개, 메인 차트: 100개
+    // 미니 차트: 250개, 메인 차트: 250개
     // 줌이 적용될 때까지 반복 시도
-    const targetVisibleBars = mini ? 30 : 100;
+    const targetVisibleBars = 250;
     const totalBars = data.length;
     const targetFrom = Math.max(0, totalBars - targetVisibleBars);
     const targetTo = totalBars;
@@ -717,20 +717,15 @@ export default function ChartRenderer({
 
     const applyZoomWithRetry = () => {
       if (isChartDisposedRef.current) return;
-      if (retryCount >= maxRetries) {
-        console.log(`[Chart${mini ? '-mini' : ''}] 줌 적용 최대 재시도 초과`);
-        return;
-      }
+      if (retryCount >= maxRetries) return;
 
       try {
         // 현재 범위 확인
         const currentRange = chart.timeScale().getVisibleLogicalRange();
         const currentVisibleBars = currentRange ? (currentRange.to - currentRange.from) : 0;
 
-        console.log(`[Chart${mini ? '-mini' : ''}] 줌 시도 #${retryCount}: 현재 ${Math.round(currentVisibleBars)}개, 목표 ${targetVisibleBars}개`);
-
         // 목표 범위와 다르면 다시 적용
-        if (!currentRange || currentVisibleBars > targetVisibleBars + 5) {
+        if (!currentRange || currentVisibleBars > targetVisibleBars + 10) {
           chart.timeScale().setVisibleLogicalRange({
             from: targetFrom,
             to: targetTo,
@@ -738,11 +733,9 @@ export default function ChartRenderer({
           retryCount++;
           // 50ms 대기 후 다시 확인
           setTimeout(applyZoomWithRetry, 50);
-        } else {
-          console.log(`[Chart${mini ? '-mini' : ''}] 줌 적용 완료! (${retryCount}회 시도, ${Math.round(currentVisibleBars)}개 캔들 표시)`);
         }
-      } catch (e) {
-        console.log(`[Chart${mini ? '-mini' : ''}] 줌 에러:`, e);
+      } catch {
+        // disposed 상태면 무시
       }
     };
 
