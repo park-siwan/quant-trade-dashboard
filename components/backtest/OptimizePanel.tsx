@@ -36,18 +36,18 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
   const [optimizeMethod, setOptimizeMethod] = useState<OptimizeMethod>('bayesian');
   const [nTrials, setNTrials] = useState(500);  // 기본값 500으로 증가
   const [usePriorResults, setUsePriorResults] = useState(true);
-  // 파라미터 범위 설정 (최적화된 기본값)
-  const [pivotLeftRange, setPivotLeftRange] = useState<number[]>([5, 7]);
-  const [pivotRightRange, setPivotRightRange] = useState<number[]>([3, 4]);
-  const [rsiPeriodRange, setRsiPeriodRange] = useState<number[]>([21]);
-  const [minDistanceRange, setMinDistanceRange] = useState<number[]>([5, 15]);
-  const [maxDistanceRange, setMaxDistanceRange] = useState<number[]>([200]);
-  const [tpAtrRange, setTpAtrRange] = useState<number[]>([1.5]);
+  // 파라미터 범위 설정 (2025 BTC 1h 최적화 결과 기반)
+  const [pivotLeftRange, setPivotLeftRange] = useState<number[]>([7, 9]);
+  const [pivotRightRange, setPivotRightRange] = useState<number[]>([4, 5]);
+  const [rsiPeriodRange, setRsiPeriodRange] = useState<number[]>([14, 21]);
+  const [minDistanceRange, setMinDistanceRange] = useState<number[]>([5, 10]);
+  const [maxDistanceRange, setMaxDistanceRange] = useState<number[]>([150, 200]);
+  const [tpAtrRange, setTpAtrRange] = useState<number[]>([1.5, 2.0]);
   const [slAtrRange, setSlAtrRange] = useState<number[]>([1.5]);
-  const [minDivPctRange, setMinDivPctRange] = useState<number[]>([10, 30]);
+  const [minDivPctRange, setMinDivPctRange] = useState<number[]>([30]);
   // 추가 필터 설정 (고정 사용)
-  const [useTrendFilter, setUseTrendFilter] = useState(false);  // EMA 트렌드 필터
-  const [trendEmaPeriod, setTrendEmaPeriod] = useState(50);     // EMA 기간
+  const [useTrendFilter, setUseTrendFilter] = useState(true);   // EMA 트렌드 필터 (기본 ON - 1h 최적)
+  const [trendEmaPeriod, setTrendEmaPeriod] = useState(100);    // EMA 100 (최적값)
   const [useVolatilityFilter, setUseVolatilityFilter] = useState(true);  // ATR 변동성 필터 (기본 ON)
   const [useRsiExtremeFilter, setUseRsiExtremeFilter] = useState(false);  // RSI 극단값 필터
   const [rsiOversold, setRsiOversold] = useState(30);  // RSI 과매도
@@ -55,7 +55,7 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
   // 필터/지표 파라미터 탐색 모드 (Optuna가 최적 조합 탐색)
   const [searchFilters, setSearchFilters] = useState(false);  // 필터 조합 탐색
   const [searchIndicators, setSearchIndicators] = useState(false);  // 지표 조합 탐색
-  const [minTrades, setMinTrades] = useState(50);  // 최소 거래 수
+  const [minTrades, setMinTrades] = useState(30);  // 최소 거래 수 (테스트 기준)
   // Out-of-Sample 검증
   const [useOosValidation, setUseOosValidation] = useState(false);
   const [oosRatio, setOosRatio] = useState(30);  // 검증 데이터 비율 (%)
