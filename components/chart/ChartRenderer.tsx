@@ -330,8 +330,8 @@ export default function ChartRenderer({
         secondsVisible: false,
         rightOffset: mini ? 70 : 20, // 우측 여백 (미니 차트는 더 넓게)
         lockVisibleTimeRangeOnResize: true, // 리사이즈 시 시간 범위 유지
-        barSpacing: mini ? 3 : 1, // 초기 캔들 간격
-        minBarSpacing: 0.001, // 최소 간격 (fitContent가 1000개 다 표시하도록)
+        barSpacing: mini ? 3 : 6, // 초기 캔들 간격 (확대된 상태)
+        minBarSpacing: 0.5, // 최소 간격
       },
       kineticScroll: {
         touch: false, // 터치 스크롤 비활성화 (들썩임 방지)
@@ -448,8 +448,13 @@ export default function ChartRenderer({
       // 메인 차트: 저장된 뷰 범위 복원
       chart.timeScale().setVisibleLogicalRange(savedVisibleLogicalRangeRef.current);
     } else {
-      // 메인 차트: 첫 렌더링 시 전체 표시
-      chart.timeScale().fitContent();
+      // 메인 차트: 첫 렌더링 시 최근 150개 캔들만 표시 (확대 상태)
+      const visibleBars = 150;
+      const totalBars = data.length;
+      chart.timeScale().setVisibleLogicalRange({
+        from: totalBars - visibleBars,
+        to: totalBars,
+      });
     }
     // 가격 스케일 자동 맞춤
     chart.priceScale('right').applyOptions({ autoScale: true });

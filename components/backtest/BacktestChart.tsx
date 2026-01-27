@@ -64,6 +64,8 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
       timeScale: {
         borderColor: '#3f3f46',
         timeVisible: true,
+        barSpacing: 6, // 확대된 상태
+        minBarSpacing: 0.5,
       },
       localization: {
         timeFormatter: (time: number) => formatKST(time),
@@ -209,7 +211,17 @@ export default function BacktestChart({ result, candles, onTradeClick, selectedT
     };
 
     window.addEventListener('resize', handleResize);
-    chart.timeScale().fitContent();
+    // 최근 150개 캔들만 표시 (확대 상태)
+    const visibleBars = 150;
+    const totalBars = candles.length;
+    if (totalBars > visibleBars) {
+      chart.timeScale().setVisibleLogicalRange({
+        from: totalBars - visibleBars,
+        to: totalBars,
+      });
+    } else {
+      chart.timeScale().fitContent();
+    }
 
     return () => {
       window.removeEventListener('resize', handleResize);
