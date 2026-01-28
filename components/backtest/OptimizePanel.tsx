@@ -111,9 +111,9 @@ export default function OptimizePanel({ onSaveSuccess }: OptimizePanelProps) {
   const [useRsiExtremeFilter, setUseRsiExtremeFilter] = useState(false);  // RSI 극단값 필터
   const [rsiOversold, setRsiOversold] = useState(30);  // RSI 과매도
   const [rsiOverbought, setRsiOverbought] = useState(70);  // RSI 과매수
-  // 필터/지표 파라미터 탐색 모드 (Optuna가 최적 조합 탐색)
-  const [searchFilters, setSearchFilters] = useState(true);  // 필터 조합 탐색 (기본 활성화)
-  const [searchIndicators, setSearchIndicators] = useState(true);  // 지표 조합 탐색 (기본 활성화)
+  // 필터/지표 파라미터 탐색 모드 (Optuna가 최적 조합 탐색 - 베이지안에서만 권장)
+  const [searchFilters, setSearchFilters] = useState(false);  // 필터 조합 탐색 (그리드서치 시 조합 폭발 주의)
+  const [searchIndicators, setSearchIndicators] = useState(false);  // 지표 조합 탐색 (그리드서치 시 조합 폭발 주의)
   const [minTrades, setMinTrades] = useState(30);  // 최소 거래 수 (테스트 기준)
   // Out-of-Sample 검증
   const [useOosValidation, setUseOosValidation] = useState(true);  // 기본 활성화

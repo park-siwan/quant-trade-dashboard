@@ -14,7 +14,9 @@ import {
 import { useSocket, RealtimeDivergenceData } from '@/contexts/SocketContext';
 import {
   getTopSavedResults,
+  getRollingParams,
   SavedOptimizeResult,
+  RollingParamResult,
   runBacktest,
   TradeResult,
   SkippedSignal,
@@ -84,7 +86,8 @@ export default function RealtimeChart() {
   const [strategies, setStrategies] = useState<SavedOptimizeResult[]>([]);
   const [selectedStrategy, setSelectedStrategy] =
     useState<SavedOptimizeResult | null>(null);
-  const [isStrategyOpen, setIsStrategyOpen] = useState(false);
+  // 선택된 전략 ID 저장 (새로고침 후 복원용)
+  const savedStrategyIdRef = useRef<number | null>(null);
   const [backtestTrades, setBacktestTrades] = useState<TradeResult[]>([]);
   const [skippedSignals, setSkippedSignals] = useState<SkippedSignal[]>([]);
   const [openPosition, setOpenPosition] = useState<OpenPosition | null>(null);
@@ -142,6 +145,34 @@ export default function RealtimeChart() {
     timestamp: number;
   } | null>(null);
   const BACKTEST_THROTTLE_MS = 2000; // 동일 전략/타임프레임으로 2초 내 재호출 방지
+
+  // 수동 전략 선택 추적 (자동 선택 방지)
+  const manuallySelectedRef = useRef(false);
+
+  // localStorage에서 저장된 전략 ID 및 타임프레임 복원
+  useEffect(() => {
+    const savedId = localStorage.getItem('selectedStrategyId');
+    const savedTf = localStorage.getItem('selectedStrategyTimeframe');
+    if (savedId) {
+      savedStrategyIdRef.current = parseInt(savedId, 10);
+      manuallySelectedRef.current = true; // 저장된 선택이 있으면 수동 선택으로 간주
+      console.log('[Strategy] Restored saved strategy ID:', savedStrategyIdRef.current);
+      // 저장된 타임프레임이 있으면 해당 타임프레임으로 변경
+      if (savedTf && savedTf !== timeframe) {
+        console.log('[Strategy] Restoring saved timeframe:', savedTf);
+        setTimeframe(savedTf);
+      }
+    }
+  }, []);
+
+  // 전략별 미리보기 결과 (상위 10개 전략의 실시간 백테스트 결과)
+  const [strategyPreviews, setStrategyPreviews] = useState<Map<number, {
+    totalTrades: number;
+    winRate: number;
+    totalPnlPercent: number;
+    loading: boolean;
+  }>>(new Map());
+  const previewLoadingRef = useRef(false);
 
   // 8bit 스타일 소리 알림 함수 (Web Audio API)
   const playAlertSound = async (
@@ -488,39 +519,245 @@ export default function RealtimeChart() {
     );
   }, [openPosition, soundEnabled]);
 
-  // 상위 전략 목록 로드 (타임프레임 필터링)
+  // 전략 미리보기 백테스트 실행 (단일 전략)
+  const runPreviewBacktest = async (strategy: SavedOptimizeResult): Promise<{
+    totalTrades: number;
+    winRate: number;
+    totalPnlPercent: number;
+  } | null> => {
+    try {
+      // RSI Divergence 전략만 미리보기 백테스트 지원
+      // 다른 전략(BB Reversion, EMA+ADX)은 아직 백엔드 미지원
+      if (strategy.strategy && strategy.strategy !== 'rsi_divergence') {
+        // 롤링 최적화 결과가 있으면 Sharpe 기반 추정치 반환
+        // (실제 백테스트는 실행하지 않음)
+        return null; // UI에서 "롤링 SR" 표시
+      }
+
+      const indicators = strategy.indicators
+        ? strategy.indicators.split(',').filter(Boolean)
+        : ['rsi'];
+      const result = await runBacktest({
+        symbol: currentSymbol.slashFormat,
+        timeframe: strategy.timeframe,
+        candleCount: 5000, // 5m = ~17일, 충분한 거래 횟수 확보
+        rsiPeriod: strategy.rsiPeriod,
+        pivotLeftBars: strategy.pivotLeft,
+        pivotRightBars: strategy.pivotRight,
+        minDistance: strategy.minDistance,
+        maxDistance: strategy.maxDistance,
+        takeProfitAtr: strategy.tpAtr,
+        stopLossAtr: strategy.slAtr,
+        minDivergencePct: strategy.minDivPct,
+        initialCapital: 1000,
+        positionSizePercent: 100,
+        indicators,
+        trendFilter: strategy.trendFilter,
+        volatilityFilter: strategy.volatilityFilter,
+        rsiExtremeFilter: strategy.rsiExtremeFilter,
+        indicatorPreset: strategy.indicatorPreset,
+        useLiveData: true,
+      });
+      return {
+        totalTrades: result.totalTrades,
+        winRate: result.winRate,
+        totalPnlPercent: result.totalPnlPercent,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  // 롤링 파라미터를 SavedOptimizeResult 형식으로 변환
+  const convertRollingToSaved = (rolling: RollingParamResult, index: number): SavedOptimizeResult => {
+    const params = rolling.params as Record<string, number>;
+    const strategyType = rolling.strategy as 'rsi_divergence' | 'bb_reversion' | 'ema_adx';
+
+    // 기본 공통 필드
+    const base: SavedOptimizeResult = {
+      id: -(index + 1000), // 음수 ID로 롤링 구분
+      createdAt: rolling.savedAt,
+      symbol: rolling.symbol,
+      timeframe: rolling.timeframe,
+      candleCount: 5000,
+      indicators: 'rsi',
+      metric: 'sharpe',
+      optimizeMethod: 'bayesian',
+      strategy: strategyType,
+      // 기본값 (다른 전략에서도 호환되도록)
+      rsiPeriod: 14,
+      pivotLeft: 5,
+      pivotRight: 2,
+      minDistance: 15,
+      maxDistance: 60,
+      tpAtr: params.tp_atr || 2.0,
+      slAtr: params.sl_atr || 1.0,
+      totalTrades: 0,
+      winRate: 0,
+      totalPnlPercent: 0,
+      profitFactor: 0,
+      maxDrawdown: 0,
+      sharpeRatio: rolling.testSharpe,
+      rank: 1,
+      note: `[롤링] ${rolling.strategy} - Train: ${rolling.trainSharpe.toFixed(2)}, Test: ${rolling.testSharpe.toFixed(2)}`,
+    };
+
+    // 전략별 파라미터 설정
+    if (strategyType === 'rsi_divergence') {
+      base.rsiPeriod = params.rsi_period || 14;
+      base.pivotLeft = params.pivot_left || 5;
+      base.pivotRight = params.pivot_right || 2;
+      base.minDistance = params.min_distance || 15;
+      base.maxDistance = params.max_distance || 60;
+      base.minDivPct = params.min_rsi_diff || 5;
+      base.trendFilter = params.regime_filter ? 'regime' : 'OFF';
+      base.volatilityFilter = params.vol_filter ? 'atr' : 'OFF';
+      base.rsiExtremeFilter = params.rsi_confirm ? 'extreme' : 'OFF';
+    } else if (strategyType === 'bb_reversion') {
+      base.lookback = params.lookback || 20;
+      base.entryZ = params.entry_z || 2.0;
+      base.exitZ = params.exit_z || 0;
+      base.stopZ = params.stop_z || 3.0;
+      base.volatilityFilter = params.vol_filter ? 'atr' : 'OFF';
+      base.rsiExtremeFilter = params.rsi_confirm ? 'extreme' : 'OFF';
+    } else if (strategyType === 'ema_adx') {
+      base.smaPeriod = params.sma_period || 50;
+      base.atrPeriod = params.atr_period || 14;
+      base.compressionMult = params.compression_mult || 0.7;
+      base.breakoutPeriod = params.breakout_period || 20;
+      base.rocPeriod = params.roc_period || 10;
+      base.rocThreshold = params.roc_threshold || 2.0;
+      base.volatilityFilter = params.volume_confirm ? 'volume' : 'OFF';
+    }
+
+    return base;
+  };
+
+  // 상위 전략 목록 로드 (타임프레임 필터링) + 미리보기 백테스트
   useEffect(() => {
     const loadStrategies = async () => {
       try {
-        const results = await getTopSavedResults('sharpe', 50); // 더 많이 가져와서 필터링
-        // 현재 타임프레임과 일치하는 전략만 필터링
-        const filteredResults = results.filter(r => r.timeframe === timeframe);
-        setStrategies(filteredResults);
+        // 1. 베이지안 최적화 결과 로드
+        const bayesianResults = await getTopSavedResults('sharpe', 50);
+        const filteredBayesian = bayesianResults.filter(r => r.timeframe === timeframe);
+
+        // 2. 롤링 최적화 결과 로드
+        let rollingConverted: SavedOptimizeResult[] = [];
+        try {
+          const rollingResults = await getRollingParams(timeframe);
+          const validRolling = rollingResults.filter(r => r.isValid);
+          rollingConverted = validRolling.map((r, i) => convertRollingToSaved(r, i));
+        } catch {
+          console.log('No rolling params found');
+        }
+
+        // 3. 롤링 결과를 먼저 배치 (최신 최적화 우선)
+        const mergedResults = [...rollingConverted, ...filteredBayesian];
+        setStrategies(mergedResults);
+
+        // 미리보기 초기화 (로딩 상태로)
+        const initialPreviews = new Map<number, { totalTrades: number; winRate: number; totalPnlPercent: number; loading: boolean }>();
+        mergedResults.slice(0, 10).forEach(s => {
+          initialPreviews.set(s.id, { totalTrades: 0, winRate: 0, totalPnlPercent: 0, loading: true });
+        });
+        setStrategyPreviews(initialPreviews);
+
         // 타임프레임에 맞는 전략 자동 선택
-        if (filteredResults.length > 0) {
-          // 현재 선택된 전략이 없거나 타임프레임이 다르면 첫 번째 선택
-          if (!selectedStrategy || selectedStrategy.timeframe !== timeframe) {
-            setSelectedStrategy(filteredResults[0]);
+        if (mergedResults.length > 0) {
+          // 저장된 전략 ID가 있으면 해당 전략 복원
+          if (savedStrategyIdRef.current !== null) {
+            const savedStrategy = mergedResults.find(s => s.id === savedStrategyIdRef.current);
+            if (savedStrategy) {
+              setSelectedStrategy(savedStrategy);
+              console.log('[Strategy] Restored saved strategy:', savedStrategy.id);
+            } else {
+              // 저장된 전략이 목록에 없으면 첫 번째 선택
+              setSelectedStrategy(mergedResults[0]);
+              console.log('[Strategy] Saved strategy not found, auto-selected first:', mergedResults[0].id);
+            }
+          } else if (!manuallySelectedRef.current) {
+            // 수동 선택된 전략이 없으면 첫 번째 자동 선택
+            setSelectedStrategy(mergedResults[0]);
+            console.log('[Strategy] Auto-selected first strategy:', mergedResults[0].id);
+          } else {
+            console.log('[Strategy] Skipped auto-select (manual selection active)');
           }
         } else {
           // 해당 타임프레임에 저장된 전략이 없으면 선택 해제
           setSelectedStrategy(null);
+          manuallySelectedRef.current = false;
+          savedStrategyIdRef.current = null;
+          localStorage.removeItem('selectedStrategyId');
+          localStorage.removeItem('selectedStrategyTimeframe');
+        }
+
+        // 상위 10개 전략 미리보기 백테스트 실행 (병렬)
+        if (!previewLoadingRef.current && mergedResults.length > 0) {
+          previewLoadingRef.current = true;
+          const strategiesToPreview = mergedResults.slice(0, 10);
+
+          // 병렬 실행 - 각 결과가 완료되면 즉시 UI 업데이트
+          const previewPromises = strategiesToPreview.map(async (strategy) => {
+            try {
+              const preview = await runPreviewBacktest(strategy);
+              // 각 결과가 완료되면 즉시 상태 업데이트
+              setStrategyPreviews(prev => {
+                const newMap = new Map(prev);
+                if (preview) {
+                  newMap.set(strategy.id, { ...preview, loading: false });
+                } else {
+                  // null인 경우 (BB/EMA 전략) - 로딩 완료로 표시
+                  newMap.set(strategy.id, { totalTrades: 0, winRate: 0, totalPnlPercent: 0, loading: false });
+                }
+                return newMap;
+              });
+              return { id: strategy.id, preview };
+            } catch (err) {
+              console.error(`Preview failed for strategy ${strategy.id}:`, err);
+              setStrategyPreviews(prev => {
+                const newMap = new Map(prev);
+                newMap.set(strategy.id, { totalTrades: 0, winRate: 0, totalPnlPercent: 0, loading: false });
+                return newMap;
+              });
+              return { id: strategy.id, preview: null };
+            }
+          });
+
+          // 모든 병렬 작업 완료 대기
+          await Promise.all(previewPromises);
+          previewLoadingRef.current = false;
         }
       } catch (err) {
         console.error('Failed to load strategies:', err);
       }
     };
     loadStrategies();
-  }, [timeframe]); // 타임프레임 변경 시 재로드
+  }, [timeframe, currentSymbol.slashFormat]); // 타임프레임, 심볼 변경 시 재로드
 
   // 전략 변경 핸들러
   const handleStrategyChange = async (strategy: SavedOptimizeResult) => {
+    manuallySelectedRef.current = true; // 수동 선택 플래그 설정
+    savedStrategyIdRef.current = strategy.id;
+    localStorage.setItem('selectedStrategyId', String(strategy.id)); // 새로고침 후 복원용
+    localStorage.setItem('selectedStrategyTimeframe', strategy.timeframe); // 타임프레임도 저장
+
+    // 이전 백테스트 데이터 즉시 초기화 (이전 전략 데이터가 스며드는 것 방지)
+    setBacktestStats(null);
+    setBacktestTrades([]);
+    setSkippedSignals([]);
+    setOpenPosition(null);
+    setEquityCurve([]);
+
+    // 전략의 타임프레임으로 변경 (전략이 최적화된 타임프레임 사용)
+    if (strategy.timeframe && strategy.timeframe !== timeframe) {
+      console.log('[Strategy] Changing timeframe to match strategy:', strategy.timeframe);
+      setTimeframe(strategy.timeframe);
+    }
+
     setSelectedStrategy(strategy);
-    setIsStrategyOpen(false);
     await changeStrategy(strategy.id);
-    // 제거: loadBacktestTrades(strategy)
+    console.log('[Strategy] Manually selected:', strategy.id, 'TF:', strategy.timeframe, 'Pvt:', strategy.pivotLeft, strategy.pivotRight);
     // useEffect가 selectedStrategy 변경을 감지하여 자동으로 백테스트 실행
-    // 중복 호출 방지됨
   };
 
   // 선택된 전략으로 백테스트 실행 (재시도 포함 + throttling)
@@ -553,10 +790,17 @@ export default function RealtimeChart() {
       const indicators = strategy.indicators
         ? strategy.indicators.split(',').filter(Boolean)
         : ['rsi'];
+      console.log('[Backtest] Running with filters:', {
+        trendFilter: strategy.trendFilter,
+        volatilityFilter: strategy.volatilityFilter,
+        rsiExtremeFilter: strategy.rsiExtremeFilter,
+        indicatorPreset: strategy.indicatorPreset,
+      });
+      // 전략의 타임프레임과 동일한 candleCount 사용 (미리보기와 일치)
       const result = await runBacktest({
         symbol: currentSymbol.slashFormat,
         timeframe: timeframe,
-        candleCount: 500,
+        candleCount: 5000, // 미리보기와 동일한 데이터 범위 사용
         rsiPeriod: strategy.rsiPeriod,
         pivotLeftBars: strategy.pivotLeft,
         pivotRightBars: strategy.pivotRight,
@@ -568,6 +812,13 @@ export default function RealtimeChart() {
         initialCapital: 1000,
         positionSizePercent: 100,
         indicators,
+        // 필터 파라미터 전달 (최적화 결과에서 가져옴)
+        trendFilter: strategy.trendFilter,
+        volatilityFilter: strategy.volatilityFilter,
+        rsiExtremeFilter: strategy.rsiExtremeFilter,
+        indicatorPreset: strategy.indicatorPreset,
+        // 리얼타임 차트용: 캐시 대신 API에서 데이터 가져오기 (차트와 동일한 데이터)
+        useLiveData: true,
       });
       setBacktestTrades(result.trades);
       setSkippedSignals(result.skippedSignals || []);
@@ -617,6 +868,10 @@ export default function RealtimeChart() {
     setEquityCurve([]);
     lastExitAlertRef.current = null;
     lastEntryAlertRef.current = null;
+    manuallySelectedRef.current = false; // 심볼 변경 시 수동 선택 플래그 리셋
+    savedStrategyIdRef.current = null;
+    localStorage.removeItem('selectedStrategyId');
+    localStorage.removeItem('selectedStrategyTimeframe');
     console.log(`[Symbol Change] Reset position data for ${currentSymbol.id}`);
   }, [currentSymbol.id]);
 
@@ -783,7 +1038,7 @@ export default function RealtimeChart() {
 
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
-      height: 500,
+      height: containerRef.current.clientHeight || 500,
       layout: {
         background: { color: '#18181b' },
         textColor: '#a1a1aa',
@@ -809,6 +1064,11 @@ export default function RealtimeChart() {
       },
       rightPriceScale: {
         borderColor: '#3f3f46',
+        scaleMargins: {
+          top: 0.1,    // 상단 10% 여백
+          bottom: 0.1, // 하단 10% 여백
+        },
+        autoScale: true,
       },
       timeScale: {
         borderColor: '#3f3f46',
@@ -889,14 +1149,19 @@ export default function RealtimeChart() {
       }
     });
 
-    // 리사이즈 핸들러
-    const handleResize = () => {
-      if (containerRef.current) {
-        chart.applyOptions({ width: containerRef.current.clientWidth });
+    // ResizeObserver로 컨테이너 크기 변화 감지 (레이아웃 변경 대응)
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target === containerRef.current && chartRef.current) {
+          const { width, height } = entry.contentRect;
+          chartRef.current.applyOptions({ width, height: height || 500 });
+          // 크기 변경 시 가격 스케일 재조정
+          chartRef.current.priceScale('right').applyOptions({ autoScale: true });
+        }
       }
-    };
+    });
 
-    window.addEventListener('resize', handleResize);
+    resizeObserver.observe(containerRef.current);
 
     // 마지막 캔들 기준으로 스크롤 (rightOffset이 적용됨)
     const lastCandleTime = candles[candles.length - 1].time as number;
@@ -905,16 +1170,18 @@ export default function RealtimeChart() {
       new Date(lastCandleTime * 1000).toLocaleString('ko-KR'),
     );
 
-    // scrollToRealTime()을 사용하면 rightOffset이 적용됨
+    // scrollToRealTime() + fitContent로 차트 중앙 정렬
     requestAnimationFrame(() => {
       if (chartRef.current) {
         chartRef.current.timeScale().scrollToRealTime();
-        console.log('[Chart] Scrolled to realtime with rightOffset');
+        // 가격 스케일 자동 조정으로 세로 중앙 정렬
+        chartRef.current.priceScale('right').applyOptions({ autoScale: true });
+        console.log('[Chart] Scrolled to realtime with vertical centering');
       }
     });
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       isChartDisposedRef.current = true;
       try {
         chart.remove();
@@ -1012,6 +1279,11 @@ export default function RealtimeChart() {
     // 색상이 적용된 캔들 데이터로 업데이트
     candleSeriesRef.current.setData(coloredCandles);
 
+    // 데이터 업데이트 후 가격 스케일 재조정 (세로 중앙 정렬)
+    if (chartRef.current) {
+      chartRef.current.priceScale('right').applyOptions({ autoScale: true });
+    }
+
     console.log(
       '[Markers] Candle range:',
       new Date(minCandleTime * 1000).toLocaleString('ko-KR'),
@@ -1032,6 +1304,16 @@ export default function RealtimeChart() {
 
     // 백테스트 거래 마커 (parseTradeTime 사용 - BacktestChart와 동일)
     if (backtestTrades.length > 0) {
+      // 디버깅: 첫 거래의 시간 매칭 확인
+      if (backtestTrades.length > 0) {
+        const firstTrade = backtestTrades[0];
+        const firstEntryTime = parseTradeTime(firstTrade.entryTime);
+        console.log('[Time Debug] First trade entryTime raw:', firstTrade.entryTime);
+        console.log('[Time Debug] First trade entryTime parsed (UTC sec):', firstEntryTime);
+        console.log('[Time Debug] First trade entryTime as Date:', new Date(firstEntryTime * 1000).toISOString());
+        console.log('[Time Debug] Candle range (UTC sec):', minCandleTime, '-', maxCandleTime);
+        console.log('[Time Debug] Candle range as Date:', new Date(minCandleTime * 1000).toISOString(), '-', new Date(maxCandleTime * 1000).toISOString());
+      }
       backtestTrades.forEach((trade) => {
         const entryTime = parseTradeTime(trade.entryTime);
         const exitTime = parseTradeTime(trade.exitTime);
@@ -1228,7 +1510,7 @@ export default function RealtimeChart() {
   };
 
   return (
-    <div className='flex flex-col gap-4 w-full overflow-hidden max-h-[calc(100vh-120px)]'>
+    <div className='flex flex-col gap-4 w-full'>
       {/* 상단: 통계 헤더 (전체 너비) */}
       {backtestStats && (
         <div className='flex items-center gap-3 px-4 py-2 bg-zinc-900 rounded-lg flex-wrap'>
@@ -1274,7 +1556,14 @@ export default function RealtimeChart() {
           {/* 거래 횟수 */}
           <div className='flex items-center gap-2'>
             <span className='text-zinc-500 text-xs'>거래</span>
-            <span className='text-zinc-300 text-sm font-bold'>{backtestStats.totalTrades}회</span>
+            <span className={`text-sm font-bold ${backtestStats.totalTrades === 0 ? 'text-yellow-500' : 'text-zinc-300'}`}>
+              {backtestStats.totalTrades}회
+            </span>
+            {backtestStats.totalTrades === 0 && selectedStrategy && (
+              <span className='text-yellow-500 text-[10px]' title={`필터: ${selectedStrategy.rsiExtremeFilter || 'OFF'} / 지표: ${selectedStrategy.indicators}`}>
+                ⚠ 필터 확인
+              </span>
+            )}
           </div>
           <div className='w-px h-4 bg-zinc-700' />
           {/* 샤프 비율 (위험 대비 수익) */}
@@ -1305,7 +1594,7 @@ export default function RealtimeChart() {
         </div>
       )}
 
-      <div className='grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px] lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px] gap-4 flex-1 min-h-0'>
+      <div className='grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px] lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px] gap-4 min-h-[calc(100vh-180px)]'>
       {/* 좌측: 메인 차트 영역 */}
       <div className='bg-zinc-900 p-4 rounded-lg min-w-0 flex flex-col overflow-hidden'>
         {/* 1. 헤더: 연결 상태 + 설정 */}
@@ -1350,8 +1639,35 @@ export default function RealtimeChart() {
             </div>
           </div>
 
-          {/* 우측: 타임프레임 + 사운드 + 설정 버튼 */}
+          {/* 우측: 현재 전략 + 타임프레임 + 사운드 + 설정 버튼 */}
           <div className='flex items-center gap-2'>
+            {/* 현재 선택된 전략 표시 (하단 패널에서 선택) */}
+            <div className='px-3 py-1.5 bg-zinc-800 rounded text-xs min-w-[180px]'>
+              {selectedStrategy ? (
+                <span className='text-white'>
+                  {selectedStrategy.id < 0 ? (
+                    <span className='text-cyan-400 mr-1'>[롤링]</span>
+                  ) : (
+                    <span className='text-amber-400 mr-1'>[베이지안]</span>
+                  )}
+                  {selectedStrategy.note?.includes('ema_adx') ? (
+                    <>EMA+ADX</>
+                  ) : selectedStrategy.note?.includes('bb_reversion') ? (
+                    <>BB평균회귀</>
+                  ) : (
+                    <>RSI {selectedStrategy.rsiPeriod}</>
+                  )}
+                  {backtestStats && (
+                    <span className={`ml-2 ${backtestStats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                      {backtestStats.winRate.toFixed(0)}%
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className='text-zinc-400'>↓ 하단에서 전략 선택</span>
+              )}
+            </div>
+
             {/* 타임프레임 표시 */}
             <div className='size-9 flex items-center justify-center p-2 bg-zinc-800 rounded text-xs text-zinc-400 leading-10'>
               {timeframe}
@@ -1402,7 +1718,15 @@ export default function RealtimeChart() {
                       {['1m', '5m', '15m', '1h'].map((tf) => (
                         <button
                           key={tf}
-                          onClick={() => setTimeframe(tf)}
+                          onClick={() => {
+                            if (tf !== timeframe) {
+                              manuallySelectedRef.current = false; // 타임프레임 변경 시 수동 선택 플래그 리셋
+                              savedStrategyIdRef.current = null;
+                              localStorage.removeItem('selectedStrategyId');
+                              localStorage.removeItem('selectedStrategyTimeframe');
+                            }
+                            setTimeframe(tf);
+                          }}
                           className={`flex-1 px-2 py-1.5 text-xs rounded ${
                             timeframe === tf
                               ? 'bg-blue-600 text-white'
@@ -1412,69 +1736,6 @@ export default function RealtimeChart() {
                           {tf}
                         </button>
                       ))}
-                    </div>
-                  </div>
-
-                  {/* 전략 선택 */}
-                  <div>
-                    <div className='text-xs text-zinc-400 mb-2'>전략</div>
-                    <div className='relative'>
-                      <button
-                        onClick={() => setIsStrategyOpen(!isStrategyOpen)}
-                        className='w-full flex items-center justify-between px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-xs transition-colors'
-                      >
-                        {selectedStrategy ? (
-                          <span className='text-white'>
-                            RSI {selectedStrategy.rsiPeriod} | Pvt{' '}
-                            {selectedStrategy.pivotLeft}/
-                            {selectedStrategy.pivotRight} | SR{' '}
-                            {selectedStrategy.sharpeRatio.toFixed(2)}
-                          </span>
-                        ) : (
-                          <span className='text-zinc-400'>전략 선택...</span>
-                        )}
-                        <svg
-                          className={`w-3 h-3 text-zinc-400 transition-transform ${isStrategyOpen ? 'rotate-180' : ''}`}
-                          fill='none'
-                          stroke='currentColor'
-                          viewBox='0 0 24 24'
-                        >
-                          <path
-                            strokeLinecap='round'
-                            strokeLinejoin='round'
-                            strokeWidth={2}
-                            d='M19 9l-7 7-7-7'
-                          />
-                        </svg>
-                      </button>
-                      {isStrategyOpen && strategies.length > 0 && (
-                        <div className='absolute top-full left-0 right-0 mt-1 bg-zinc-700 border border-zinc-600 rounded-lg shadow-xl max-h-48 overflow-y-auto custom-scrollbar'>
-                          {strategies.map((strategy, idx) => (
-                            <button
-                              key={strategy.id}
-                              onClick={() => {
-                                handleStrategyChange(strategy);
-                                setIsStrategyOpen(false);
-                              }}
-                              className={`w-full px-3 py-2 text-left text-xs hover:bg-zinc-600 transition-colors ${
-                                selectedStrategy?.id === strategy.id
-                                  ? 'bg-zinc-600'
-                                  : ''
-                              }`}
-                            >
-                              <div className='flex justify-between items-center'>
-                                <span className='text-zinc-300'>
-                                  #{idx + 1} RSI {strategy.rsiPeriod} | Pvt{' '}
-                                  {strategy.pivotLeft}/{strategy.pivotRight}
-                                </span>
-                                <span className='text-green-400'>
-                                  SR {strategy.sharpeRatio.toFixed(2)}
-                                </span>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
 
@@ -1620,11 +1881,11 @@ export default function RealtimeChart() {
 
         {/* 4. 차트 */}
         {isLoading ? (
-          <div className='h-[500px] flex items-center justify-center'>
+          <div className='flex-1 min-h-[400px] flex items-center justify-center'>
             <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500'></div>
           </div>
         ) : (
-          <div ref={containerRef} className='w-full relative'>
+          <div ref={containerRef} className='w-full relative flex-1 min-h-[400px]'>
             {/* 진행 중 포지션 이모지 오버레이 */}
             {openPosition &&
               chartRef.current &&
@@ -1698,10 +1959,10 @@ export default function RealtimeChart() {
                 <div className='space-y-1 text-zinc-300'>
                   <div>
                     진입:{' '}
-                    {formatKST(new Date(hoveredTrade.entryTime).getTime())}
+                    {formatKST(new Date(hoveredTrade.entryTime + 'Z').getTime())}
                   </div>
                   <div>
-                    청산: {formatKST(new Date(hoveredTrade.exitTime).getTime())}
+                    청산: {formatKST(new Date(hoveredTrade.exitTime + 'Z').getTime())}
                   </div>
                   <div>진입가: ${hoveredTrade.entryPrice.toFixed(2)}</div>
                   <div>청산가: ${hoveredTrade.exitPrice.toFixed(2)}</div>
@@ -1872,107 +2133,111 @@ export default function RealtimeChart() {
         </div>
       </div>
 
-      {/* 우측: 거래 히스토리 + 자산곡선 */}
-      <div className='flex flex-col gap-4 min-w-0 max-h-[calc(100vh-180px)]'>
-        {/* 거래 히스토리 */}
-        <div className='bg-zinc-900 p-4 rounded-lg flex-1 min-h-0 flex flex-col'>
-          <h3 className='text-sm font-medium text-zinc-400 mb-3 shrink-0'>
-            거래 히스토리 ({backtestTrades.length})
+      {/* 우측: 전략 리스트 */}
+      <div className='flex flex-col gap-2 min-w-0 h-full'>
+        <div className='bg-zinc-900 p-3 rounded-lg flex-1 min-h-0 flex flex-col'>
+          <h3 className='text-sm font-medium text-zinc-400 mb-2 shrink-0'>
+            전략 목록 ({strategies.length})
           </h3>
           <div className='flex-1 overflow-y-auto space-y-1 min-h-0 custom-scrollbar'>
-            {backtestTrades.length > 0 ? (
-              [...backtestTrades]
-                .sort(
-                  (a, b) =>
-                    new Date(b.exitTime).getTime() -
-                    new Date(a.exitTime).getTime(),
-                )
-                .map((trade, idx) => {
-                  const isWin = trade.pnl > 0;
-                  const isSelected =
-                    selectedTrade?.entryTime === trade.entryTime;
-                  // 수익률 계산 (진입가 기준)
-                  const pnlPercent =
-                    ((trade.exitPrice - trade.entryPrice) / trade.entryPrice) *
-                    100 *
-                    (trade.direction === 'long' ? 1 : -1);
-                  // 소요시간 계산
-                  const entryDate = new Date(trade.entryTime + 'Z');
-                  const exitDate = new Date(trade.exitTime + 'Z');
-                  const durationMs = exitDate.getTime() - entryDate.getTime();
-                  const durationHours = Math.floor(
-                    durationMs / (1000 * 60 * 60),
-                  );
-                  const durationMins = Math.floor(
-                    (durationMs % (1000 * 60 * 60)) / (1000 * 60),
-                  );
-                  const durationStr =
-                    durationHours > 0
-                      ? `${durationHours}h ${durationMins}m`
-                      : `${durationMins}m`;
-                  // 날짜 포맷 YYYY-MM-DD HH:MM
-                  const formatDate = (d: Date) => {
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    const h = String(d.getHours()).padStart(2, '0');
-                    const min = String(d.getMinutes()).padStart(2, '0');
-                    return `${y}-${m}-${day} ${h}:${min}`;
-                  };
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() =>
-                        setSelectedTrade(isSelected ? null : trade)
-                      }
-                      className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${
-                        isSelected
-                          ? 'bg-zinc-700'
-                          : 'bg-zinc-800 hover:bg-zinc-750'
-                      }`}
-                    >
-                      <div className='flex items-center gap-2'>
-                        <span
-                          className={`text-xs px-1.5 py-0.5 rounded ${
-                            trade.direction === 'long'
-                              ? 'bg-green-900/50 text-green-400'
-                              : 'bg-red-900/50 text-red-400'
-                          }`}
-                        >
-                          {trade.direction === 'long' ? 'L' : 'S'}
-                        </span>
-                        <div className='flex flex-col'>
-                          <span className='text-xs text-zinc-400'>
-                            {formatDate(exitDate)}
-                          </span>
-                          <span className='text-[10px] text-zinc-500'>
-                            {durationStr}
-                          </span>
-                        </div>
-                      </div>
-                      <span
-                        className={`text-xs font-medium ${isWin ? 'text-green-400' : 'text-red-400'}`}
-                      >
-                        {isWin ? '+' : ''}
-                        {pnlPercent.toFixed(2)}%
+            {strategies.slice(0, 15).map((strategy) => {
+              const preview = strategyPreviews.get(strategy.id);
+              const isRolling = strategy.id < 0;
+              const strategyLabel = strategy.note?.includes('[롤링]')
+                ? strategy.note.match(/\[롤링\] (\w+)/)?.[1] || 'rsi_divergence'
+                : 'rsi_divergence';
+              const isSelected = selectedStrategy?.id === strategy.id;
+              return (
+                <button
+                  key={strategy.id}
+                  onClick={() => handleStrategyChange(strategy)}
+                  className={`w-full px-2 py-1.5 text-left text-xs rounded transition-colors ${
+                    isSelected
+                      ? 'bg-blue-600/30 border border-blue-500/50'
+                      : 'bg-zinc-800 hover:bg-zinc-700'
+                  }`}
+                >
+                  <div className='flex justify-between items-center'>
+                    <span className='text-zinc-300 text-[11px]'>
+                      {isRolling ? (
+                        <span className='text-cyan-400 mr-1'>[롤링]</span>
+                      ) : (
+                        <span className='text-amber-400 mr-1'>[베이지안]</span>
+                      )}
+                      {strategyLabel === 'ema_adx' ? (
+                        <>EMA+ADX</>
+                      ) : strategyLabel === 'bb_reversion' ? (
+                        <>BB평균회귀</>
+                      ) : (
+                        <>RSI {strategy.rsiPeriod} | Pvt {strategy.pivotLeft}/{strategy.pivotRight}</>
+                      )}
+                    </span>
+                    <span className='text-yellow-400 text-[9px]'>
+                      SR {strategy.sharpeRatio.toFixed(2)}
+                    </span>
+                  </div>
+                  {/* 백테스트 결과 */}
+                  <div className='flex items-center gap-1 mt-0.5'>
+                    {strategyLabel !== 'rsi_divergence' ? (
+                      <span className='text-zinc-400 text-[9px]'>
+                        {strategyLabel === 'bb_reversion' ? (
+                          <>Z:{strategy.entryZ?.toFixed(1)} | LB:{strategy.lookback}</>
+                        ) : strategyLabel === 'ema_adx' ? (
+                          <>ROC:{strategy.rocThreshold?.toFixed(1)}% | 기간:{strategy.breakoutPeriod}</>
+                        ) : null}
                       </span>
-                    </div>
-                  );
-                })
-            ) : (
-              <div className='text-center text-zinc-500 text-xs py-4'>
-                거래 내역이 없습니다
-              </div>
-            )}
+                    ) : isSelected && backtestStats ? (
+                      <>
+                        <span className='text-blue-400 text-[8px]'>●</span>
+                        <span className={`text-[10px] font-bold ${backtestStats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                          {backtestStats.winRate.toFixed(0)}%
+                        </span>
+                        <span className='text-zinc-600'>|</span>
+                        <span className={`text-[10px] ${backtestStats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {backtestStats.totalPnlPercent >= 0 ? '+' : ''}{backtestStats.totalPnlPercent.toFixed(1)}%
+                        </span>
+                        <span className='text-zinc-600'>|</span>
+                        <span className='text-[10px] text-zinc-400'>{backtestStats.totalTrades}회</span>
+                      </>
+                    ) : preview?.loading ? (
+                      <span className='text-zinc-500 text-[9px] flex items-center gap-1'>
+                        <span className='w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse' />
+                        분석중
+                      </span>
+                    ) : preview ? (
+                      <>
+                        <span className={`text-[10px] font-bold ${preview.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                          {preview.winRate.toFixed(0)}%
+                        </span>
+                        <span className='text-zinc-600'>|</span>
+                        <span className={`text-[10px] ${preview.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {preview.totalPnlPercent >= 0 ? '+' : ''}{preview.totalPnlPercent.toFixed(1)}%
+                        </span>
+                        <span className='text-zinc-600'>|</span>
+                        <span className='text-[10px] text-zinc-400'>{preview.totalTrades}회</span>
+                      </>
+                    ) : (
+                      <span className='text-zinc-500 text-[9px]'>대기중</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
+      </div>
+      </div>
 
+      {/* 하단: 자산곡선 + 거래 히스토리 */}
+      <div className='grid grid-cols-1 md:grid-cols-3 gap-4 mt-4'>
         {/* 자산 곡선 (레버리지 적용) */}
-        {equityCurve.length > 0 && (
-          <div className='bg-zinc-900 p-4 rounded-lg shrink-0'>
-            <div className='flex justify-between items-center mb-2'>
-              <h3 className='text-sm font-medium text-zinc-400'>자산 곡선</h3>
-              {(() => {
+        <div className='bg-zinc-900 p-4 rounded-lg'>
+          <div className='flex justify-between items-center mb-2'>
+            <h3 className='text-sm font-medium text-zinc-400'>자산 곡선</h3>
+            {isBacktestRunning ? (
+              <div className='w-16 h-4 bg-zinc-700 rounded animate-pulse' />
+            ) : equityCurve.length > 0 ? (
+              (() => {
                 const initialCapital = 1000;
                 const rawFinalEquity =
                   equityCurve[equityCurve.length - 1]?.equity || initialCapital;
@@ -1988,9 +2253,13 @@ export default function RealtimeChart() {
                     {pnlPercent.toFixed(1)}%)
                   </span>
                 );
-              })()}
-            </div>
-            {/* SVG 자산 곡선 */}
+              })()
+            ) : null}
+          </div>
+          {/* SVG 자산 곡선 */}
+          {isBacktestRunning ? (
+            <div className='h-24 w-full bg-zinc-800 rounded animate-pulse' />
+          ) : equityCurve.length > 0 ? (
             <div className='h-24 w-full relative'>
               {/* X축 시간 레이블 */}
               {totalDuration > 0 && (
@@ -2154,16 +2423,27 @@ export default function RealtimeChart() {
                   })()}
               </svg>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className='h-24 w-full flex items-center justify-center text-zinc-600 text-xs'>
+              전략을 선택하세요
+            </div>
+          )}
+        </div>
 
         {/* 예상 자산 곡선 */}
-        {equityCurve.length > 1 && totalDuration > 0 && backtestStats && (
-          <div className='bg-zinc-900 p-4 rounded-lg shrink-0'>
-            <div className='flex justify-between items-center mb-2'>
-              <h3 className='text-sm font-medium text-zinc-400'>예상 자산 곡선</h3>
+        <div className='bg-zinc-900 p-4 rounded-lg'>
+          <div className='flex justify-between items-center mb-2'>
+            <h3 className='text-sm font-medium text-zinc-400'>예상 자산 곡선</h3>
+            {isBacktestRunning ? (
+              <div className='w-12 h-3 bg-zinc-700 rounded animate-pulse' />
+            ) : (
               <span className='text-[10px] text-zinc-600'>30일 예측</span>
-            </div>
+            )}
+          </div>
+          {isBacktestRunning ? (
+            <div className='h-24 w-full bg-zinc-800 rounded animate-pulse' />
+          ) : equityCurve.length > 1 && totalDuration > 0 && backtestStats ? (
+            <>
             {/* X축 기간 레이블 */}
             <div className='h-24 w-full relative'>
               <div className='absolute bottom-0 left-0 right-0 flex justify-between text-[9px] text-zinc-600 px-1'>
@@ -2445,9 +2725,118 @@ export default function RealtimeChart() {
                 </div>
               );
             })()}
+            </>
+          ) : (
+            <div className='h-24 w-full flex items-center justify-center text-zinc-600 text-xs'>
+              전략을 선택하세요
+            </div>
+          )}
+        </div>
+
+        {/* 거래 히스토리 */}
+        <div className='bg-zinc-900 p-4 rounded-lg'>
+          <h3 className='text-sm font-medium text-zinc-400 mb-3'>
+            거래 히스토리 {isBacktestRunning ? '' : `(${backtestTrades.length})`}
+          </h3>
+          <div className='max-h-[200px] overflow-y-auto space-y-1 custom-scrollbar'>
+            {isBacktestRunning ? (
+              <div className='space-y-2'>
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className='flex items-center justify-between p-2 bg-zinc-800 rounded'>
+                    <div className='flex items-center gap-2'>
+                      <div className='w-6 h-5 bg-zinc-700 rounded animate-pulse' />
+                      <div className='flex flex-col gap-1'>
+                        <div className='w-24 h-3 bg-zinc-700 rounded animate-pulse' />
+                        <div className='w-12 h-2 bg-zinc-700 rounded animate-pulse' />
+                      </div>
+                    </div>
+                    <div className='w-12 h-4 bg-zinc-700 rounded animate-pulse' />
+                  </div>
+                ))}
+              </div>
+            ) : backtestTrades.length > 0 ? (
+              [...backtestTrades]
+                .sort(
+                  (a, b) =>
+                    new Date(b.exitTime).getTime() -
+                    new Date(a.exitTime).getTime(),
+                )
+                .map((trade, idx) => {
+                  const isWin = trade.pnl > 0;
+                  const isSelected =
+                    selectedTrade?.entryTime === trade.entryTime;
+                  const pnlPercent =
+                    ((trade.exitPrice - trade.entryPrice) / trade.entryPrice) *
+                    100 *
+                    (trade.direction === 'long' ? 1 : -1);
+                  const entryDate = new Date(trade.entryTime + 'Z');
+                  const exitDate = new Date(trade.exitTime + 'Z');
+                  const durationMs = exitDate.getTime() - entryDate.getTime();
+                  const durationHours = Math.floor(
+                    durationMs / (1000 * 60 * 60),
+                  );
+                  const durationMins = Math.floor(
+                    (durationMs % (1000 * 60 * 60)) / (1000 * 60),
+                  );
+                  const durationStr =
+                    durationHours > 0
+                      ? `${durationHours}h ${durationMins}m`
+                      : `${durationMins}m`;
+                  const formatDate = (d: Date) => {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const h = String(d.getHours()).padStart(2, '0');
+                    const min = String(d.getMinutes()).padStart(2, '0');
+                    return `${y}-${m}-${day} ${h}:${min}`;
+                  };
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() =>
+                        setSelectedTrade(isSelected ? null : trade)
+                      }
+                      className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${
+                        isSelected
+                          ? 'bg-zinc-700'
+                          : 'bg-zinc-800 hover:bg-zinc-750'
+                      }`}
+                    >
+                      <div className='flex items-center gap-2'>
+                        <span
+                          className={`text-xs px-1.5 py-0.5 rounded ${
+                            trade.direction === 'long'
+                              ? 'bg-green-900/50 text-green-400'
+                              : 'bg-red-900/50 text-red-400'
+                          }`}
+                        >
+                          {trade.direction === 'long' ? 'L' : 'S'}
+                        </span>
+                        <div className='flex flex-col'>
+                          <span className='text-xs text-zinc-400'>
+                            {formatDate(exitDate)}
+                          </span>
+                          <span className='text-[10px] text-zinc-500'>
+                            {durationStr}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        className={`text-xs font-medium ${isWin ? 'text-green-400' : 'text-red-400'}`}
+                      >
+                        {isWin ? '+' : ''}
+                        {pnlPercent.toFixed(2)}%
+                      </span>
+                    </div>
+                  );
+                })
+            ) : (
+              <div className='text-center text-zinc-500 text-xs py-4'>
+                거래 내역이 없습니다
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
       </div>
     </div>
   );

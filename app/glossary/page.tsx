@@ -1,19 +1,8 @@
 'use client';
 
-import { GNB } from '@/components/layout';
-
 export default function GlossaryPage() {
   return (
-    <div className='min-h-screen bg-[#0a0a0a] bg-pattern relative overflow-hidden'>
-      {/* 배경 장식 */}
-      <div className='absolute top-0 left-0 w-[500px] h-[500px] bg-gray-500/10 rounded-full blur-[120px] -translate-x-1/3 -translate-y-1/3'></div>
-      <div className='absolute bottom-0 right-0 w-[400px] h-[400px] bg-gray-600/8 rounded-full blur-[100px] translate-x-1/4 translate-y-1/4'></div>
-
-      {/* GNB */}
-      <GNB />
-
-      {/* 메인 콘텐츠 */}
-      <div className='relative z-10 p-4 md:p-8'>
+    <div className='p-4 md:p-8'>
         <div className='backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-4 space-y-4'>
           <h3 className='text-sm font-bold text-gray-400 mb-3'>용어 설명</h3>
 
@@ -101,7 +90,6 @@ export default function GlossaryPage() {
               <div><span className='text-gray-400 font-semibold'>대기</span><span className='text-gray-400'> - 명확한 신호 없음. 관망</span></div>
             </div>
           </div>
-        </div>
       </div>
     </div>
   );
