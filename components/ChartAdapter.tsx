@@ -51,6 +51,7 @@ export default function ChartAdapter({
   mini = false,
 }: ChartAdapterProps) {
   const [selectedTimeframe, setSelectedTimeframe] = useState(initialTimeframe);
+  // 심볼 구독은 useSymbolSubscription 훅에서 앱 레벨로 처리됨
 
   const { data, isLoading, error, refetch, realtimeCandle } = useCandles({
     symbol,

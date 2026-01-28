@@ -190,6 +190,13 @@ export default function ChartRenderer({
     setMeasurePoints({ start: null, end: null });
   }, [firstCandleTime]);
 
+  // 안정적인 데이터 키 - 차트를 재생성해야 하는 경우만 변경됨
+  const dataKey = useMemo(() => {
+    if (data.length === 0) return 'empty';
+    // 첫 캔들 시간 + 데이터 길이 + 타임프레임으로 고유 키 생성
+    return `${data[0].time}-${data.length}-${timeframe}`;
+  }, [data.length > 0 ? data[0].time : null, data.length, timeframe]);
+
   // 실시간 캔들 업데이트 (update 방식으로 뷰 유지)
   useEffect(() => {
     // 차트가 아직 준비되지 않았거나, realtimeCandle이 없거나, 캔들이 닫힌 경우 스킵
@@ -435,8 +442,9 @@ export default function ChartRenderer({
     }
 
     // 뷰 상태 설정은 scrollToRealTime 이후에 처리
-    // 가격 스케일 자동 맞춤
+    // 가격 스케일 자동 맞춤 + 전체 데이터에 맞게 스케일 리셋
     chart.priceScale('right').applyOptions({ autoScale: true });
+    chart.timeScale().fitContent(); // Y축 스케일을 새 데이터에 맞게 조정
 
     // 초기 가격 정보 설정 (최신 캔들)
     if (data.length > 0) {
@@ -1111,20 +1119,8 @@ export default function ChartRenderer({
       }
     };
   }, [
-    // 데이터 존재 여부만 체크 (length 변경으로 인한 불필요한 재생성 방지)
-    data.length > 0,
-    // 지표 데이터는 일반 모드에서만 의존성으로 체크 (mini 모드에서는 재생성 방지)
-    !mini && oiData != null && oiData.length > 0,
-    !mini && emaData !== undefined,
-    !mini && divergenceSignals != null && divergenceSignals.length > 0,
-    !mini && trendAnalysis !== undefined,
-    !mini && crossoverEvents != null && crossoverEvents.length > 0,
-    !mini && marketSignals != null && marketSignals.length > 0,
-    !mini && volumeProfile != null,
-    !mini && vwapAtrData != null,
-    !mini && orderBlockData != null && (orderBlockData.activeBlocks?.length ?? 0) > 0,
-    !mini && marketStructureData != null && (marketStructureData.structureBreaks?.length ?? 0) > 0,
-    timeframe, // 타임프레임 변경 시 재렌더링
+    // 안정적인 데이터 키 사용 - 첫 캔들 시간 + 길이 + 타임프레임 변경 시만 재생성
+    dataKey,
     mini, // 미니 모드 변경 시 재렌더링
   ]);
 

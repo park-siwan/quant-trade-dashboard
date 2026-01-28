@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect } from 'react';
+import { use, useLayoutEffect } from 'react';
 import { notFound } from 'next/navigation';
 import { useSetAtom } from 'jotai';
 import { getSymbolBySlug } from '@/lib/symbols';
@@ -16,8 +16,8 @@ export default function ChartPage({ params }: ChartPageProps) {
   const symbolInfo = getSymbolBySlug(symbolSlug);
   const setSymbolSlug = useSetAtom(symbolSlugAtom);
 
-  // URL 심볼을 atom에 동기화 (WebSocket 구독용)
-  useEffect(() => {
+  // URL 심볼을 atom에 동기화 (useLayoutEffect로 paint 전에 설정)
+  useLayoutEffect(() => {
     if (symbolInfo) {
       setSymbolSlug(symbolInfo.slug);
     }
@@ -57,7 +57,7 @@ export default function ChartPage({ params }: ChartPageProps) {
         {/* 차트 그리드 */}
         <div className='grid grid-cols-2 md:grid-cols-3 grid-rows-2 gap-2 flex-1'>
           {['5m', '15m', '30m', '1h', '4h', '1d'].map((tf) => (
-            <ChartAdapter key={tf} symbol={symbol} initialTimeframe={tf} limit={500} mini />
+            <ChartAdapter key={`${symbolSlug}-${tf}`} symbol={symbol} initialTimeframe={tf} limit={500} mini />
           ))}
         </div>
       </div>

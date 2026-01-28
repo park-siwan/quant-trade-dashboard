@@ -8,6 +8,8 @@ import { useSocket } from '@/contexts/SocketContext';
 /**
  * 심볼 변경 시 자동으로 WebSocket 구독을 변경하는 훅
  * App 레벨에서 한 번만 사용
+ *
+ * 깜빡임 방지: SocketContext.subscribeSymbol에서 첫 구독 시 데이터 초기화 건너뛰기
  */
 export function useSymbolSubscription() {
   const symbol = useAtomValue(symbolAtom);

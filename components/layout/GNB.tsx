@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { ChevronDown } from 'lucide-react';
 import { useAtom, useAtomValue } from 'jotai';
 import { symbolSlugAtom, symbolAtom, symbolListAtom } from '@/stores/symbolAtom';
@@ -31,6 +31,7 @@ export default function GNB() {
   const symbolList = useAtomValue(symbolListAtom);
   const priceData = usePrice();
   const pathname = usePathname();
+  const router = useRouter();
 
   // 드롭다운 상태
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -48,8 +49,14 @@ export default function GNB() {
   }, []);
 
   const handleSymbolChange = (slug: string) => {
-    setSymbolSlug(slug);
     setIsDropdownOpen(false);
+    // 차트 페이지에서는 URL만 변경 (페이지에서 atom 설정)
+    if (pathname.startsWith('/chart/')) {
+      router.push(`/chart/${slug}`);
+    } else {
+      // 다른 페이지에서는 직접 atom 설정
+      setSymbolSlug(slug);
+    }
   };
 
   return (
