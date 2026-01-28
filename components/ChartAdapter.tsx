@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useCandles } from '@/hooks/useCandles';
 import { useLongShortRatio } from '@/hooks/useLongShortRatio';
 import { useLiquidations } from '@/hooks/useLiquidations';
@@ -51,7 +51,24 @@ export default function ChartAdapter({
   mini = false,
 }: ChartAdapterProps) {
   const [selectedTimeframe, setSelectedTimeframe] = useState(initialTimeframe);
-  // 심볼 구독은 useSymbolSubscription 훅에서 앱 레벨로 처리됨
+  const prevSymbolRef = useRef<string>(symbol);
+  const [isSymbolTransitioning, setIsSymbolTransitioning] = useState(false);
+
+  // 심볼 변경 감지 및 전환 상태 관리
+  useEffect(() => {
+    if (prevSymbolRef.current !== symbol) {
+      // 심볼이 변경되면 전환 상태로 설정 (이전 심볼 데이터 잔재 방지)
+      setIsSymbolTransitioning(true);
+      prevSymbolRef.current = symbol;
+
+      // 다음 렌더 사이클에서 전환 상태 해제
+      const timer = setTimeout(() => {
+        setIsSymbolTransitioning(false);
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [symbol]);
 
   const { data, isLoading, error, refetch, realtimeCandle } = useCandles({
     symbol,
@@ -120,10 +137,11 @@ export default function ChartAdapter({
 
   // Volume Profile 계산 (가격대별 거래량 집계)
   const volumeProfile = useMemo(() => {
+    // 심볼 전환 중이면 null 반환 (이전 심볼 가격 데이터 잔재 방지)
+    if (isSymbolTransitioning) return null;
     if (!data?.data?.candles || data.data.candles.length === 0) return null;
 
     // 심볼 검증: 데이터가 현재 요청한 심볼과 일치하는지 확인
-    // (심볼 전환 시 이전 심볼의 가격 데이터로 지지/저항 박스가 생성되는 것 방지)
     const fetchedSymbol = (data as any)?._fetchedSymbol;
     if (fetchedSymbol && fetchedSymbol !== symbol) {
       return null;
@@ -219,7 +237,7 @@ export default function ChartAdapter({
       minPrice,
       maxPrice,
     };
-  }, [data]);
+  }, [data, symbol, isSymbolTransitioning]);
 
   // RSI 데이터 변환 (null 값 제외)
   const rsiData: LineData[] = useMemo(
@@ -334,9 +352,12 @@ export default function ChartAdapter({
 
   // 심볼 검증 헬퍼 (가격 기반 데이터의 잔재 방지)
   const isValidSymbolData = useMemo(() => {
+    // 심볼 전환 중이면 모든 가격 기반 데이터 무효화
+    if (isSymbolTransitioning) return false;
+
     const fetchedSymbol = (data as any)?._fetchedSymbol;
     return !fetchedSymbol || fetchedSymbol === symbol;
-  }, [data, symbol]);
+  }, [data, symbol, isSymbolTransitioning]);
 
   // 횡보 구간 데이터 (심볼 검증 포함)
   const consolidationData: ConsolidationData | null = isValidSymbolData ? (data?.data?.consolidation || null) : null;
