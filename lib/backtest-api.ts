@@ -15,6 +15,7 @@ export interface BacktestParams {
   timeframe: string;
   candleCount: number;
   indicators?: string[];
+  // RSI Divergence 파라미터
   rsiPeriod?: number;
   pivotLeftBars?: number;
   pivotRightBars?: number;
@@ -31,6 +32,22 @@ export interface BacktestParams {
   volatilityFilter?: string;
   rsiExtremeFilter?: string;
   indicatorPreset?: string;
+  // BB Reversion 파라미터
+  lookback?: number;
+  entryZ?: number;
+  exitZ?: number;
+  stopZ?: number;
+  volFilter?: number;
+  volThreshold?: number;
+  rsiConfirm?: number;
+  // EMA+ADX (Momentum Breakout) 파라미터
+  smaPeriod?: number;
+  atrPeriod?: number;
+  compressionMult?: number;
+  breakoutPeriod?: number;
+  rocPeriod?: number;
+  rocThreshold?: number;
+  volumeConfirm?: number;
   // 리얼타임 차트용: 캐시 대신 API에서 데이터 가져오기
   useLiveData?: boolean;
 }
@@ -388,6 +405,9 @@ export interface SavedOptimizeResult {
   entryZ?: number;
   exitZ?: number;
   stopZ?: number;
+  volFilter?: number;      // 변동성 필터 (0=OFF, 1=ON)
+  volThreshold?: number;   // 변동성 임계값
+  rsiConfirm?: number;     // RSI 확인 필터 (0=OFF, 1=ON)
   // EMA+ADX (Momentum Breakout) 파라미터
   smaPeriod?: number;
   atrPeriod?: number;
@@ -395,6 +415,7 @@ export interface SavedOptimizeResult {
   breakoutPeriod?: number;
   rocPeriod?: number;
   rocThreshold?: number;
+  volumeConfirm?: number;  // 볼륨 확인 필터 (0=OFF, 1=ON)
   // 공통 결과
   totalTrades: number;
   winRate: number;

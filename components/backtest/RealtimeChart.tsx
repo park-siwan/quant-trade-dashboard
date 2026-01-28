@@ -24,6 +24,7 @@ import {
   BacktestResult,
   EquityPoint,
 } from '@/lib/backtest-api';
+import { convertApiParams, getDefaultParams } from '@/lib/strategy-params';
 import { CHART } from '@/lib/constants';
 import { useAtomValue } from 'jotai';
 import { symbolAtom } from '@/stores/symbolAtom';
@@ -569,11 +570,18 @@ export default function RealtimeChart() {
   };
 
   // 롤링 파라미터를 SavedOptimizeResult 형식으로 변환
+  // param_registry.py 기반 자동 변환 사용
   const convertRollingToSaved = (rolling: RollingParamResult, index: number): SavedOptimizeResult => {
-    const params = rolling.params as Record<string, number>;
     const strategyType = rolling.strategy as 'rsi_divergence' | 'bb_reversion' | 'ema_adx';
 
-    // 기본 공통 필드
+    // 1. API 파라미터 (snake_case) → 프론트엔드 (camelCase) 자동 변환
+    const rawParams = rolling.params as Record<string, unknown>;
+    const convertedParams = convertApiParams(rawParams) as Record<string, number>;
+
+    // 2. 전략별 기본값 가져오기
+    const defaults = getDefaultParams(strategyType);
+
+    // 3. 기본 공통 필드 + 변환된 파라미터 병합
     const base: SavedOptimizeResult = {
       id: -(index + 1000), // 음수 ID로 롤링 구분
       createdAt: rolling.savedAt,
@@ -584,14 +592,14 @@ export default function RealtimeChart() {
       metric: 'sharpe',
       optimizeMethod: 'bayesian',
       strategy: strategyType,
-      // 기본값 (다른 전략에서도 호환되도록)
-      rsiPeriod: 14,
-      pivotLeft: 5,
-      pivotRight: 2,
-      minDistance: 15,
-      maxDistance: 60,
-      tpAtr: params.tp_atr || 2.0,
-      slAtr: params.sl_atr || 1.0,
+      // 기본값 (전략별 기본값에서 가져옴)
+      rsiPeriod: convertedParams.rsiPeriod ?? defaults.rsiPeriod ?? 14,
+      pivotLeft: convertedParams.pivotLeft ?? defaults.pivotLeft ?? 5,
+      pivotRight: convertedParams.pivotRight ?? defaults.pivotRight ?? 1,
+      minDistance: convertedParams.minDistance ?? defaults.minDistance ?? 8,
+      maxDistance: convertedParams.maxDistance ?? defaults.maxDistance ?? 60,
+      tpAtr: convertedParams.tpAtr ?? defaults.tpAtr ?? 2.5,
+      slAtr: convertedParams.slAtr ?? defaults.slAtr ?? 1.5,
       totalTrades: 0,
       winRate: 0,
       totalPnlPercent: 0,
@@ -602,32 +610,31 @@ export default function RealtimeChart() {
       note: `[롤링] ${rolling.strategy} - Train: ${rolling.trainSharpe.toFixed(2)}, Test: ${rolling.testSharpe.toFixed(2)}`,
     };
 
-    // 전략별 파라미터 설정
+    // 4. 전략별 추가 파라미터 및 필터 문자열 설정
     if (strategyType === 'rsi_divergence') {
-      base.rsiPeriod = params.rsi_period || 14;
-      base.pivotLeft = params.pivot_left || 5;
-      base.pivotRight = params.pivot_right || 2;
-      base.minDistance = params.min_distance || 15;
-      base.maxDistance = params.max_distance || 60;
-      base.minDivPct = params.min_rsi_diff || 5;
-      base.trendFilter = params.regime_filter ? 'regime' : 'OFF';
-      base.volatilityFilter = params.vol_filter ? 'atr' : 'OFF';
-      base.rsiExtremeFilter = params.rsi_confirm ? 'extreme' : 'OFF';
+      base.minDivPct = convertedParams.minRsiDiff ?? defaults.minRsiDiff ?? 3;
+      base.trendFilter = convertedParams.regimeFilter ? 'regime' : 'OFF';
+      base.volatilityFilter = convertedParams.volFilter ? 'atr' : 'OFF';
+      base.rsiExtremeFilter = convertedParams.volumeConfirm ? 'extreme' : 'OFF';
     } else if (strategyType === 'bb_reversion') {
-      base.lookback = params.lookback || 20;
-      base.entryZ = params.entry_z || 2.0;
-      base.exitZ = params.exit_z || 0;
-      base.stopZ = params.stop_z || 3.0;
-      base.volatilityFilter = params.vol_filter ? 'atr' : 'OFF';
-      base.rsiExtremeFilter = params.rsi_confirm ? 'extreme' : 'OFF';
+      base.lookback = convertedParams.lookback ?? defaults.lookback ?? 15;
+      base.entryZ = convertedParams.entryZ ?? defaults.entryZ ?? 1.5;
+      base.exitZ = convertedParams.exitZ ?? defaults.exitZ ?? 0;
+      base.stopZ = convertedParams.stopZ ?? defaults.stopZ ?? 2.5;
+      base.volFilter = convertedParams.volFilter ?? defaults.volFilter ?? 0;
+      base.volThreshold = convertedParams.volThreshold ?? defaults.volThreshold ?? 1.5;
+      base.rsiConfirm = convertedParams.rsiConfirm ?? defaults.rsiConfirm ?? 0;
+      base.volatilityFilter = base.volFilter ? 'atr' : 'OFF';
+      base.rsiExtremeFilter = base.rsiConfirm ? 'extreme' : 'OFF';
     } else if (strategyType === 'ema_adx') {
-      base.smaPeriod = params.sma_period || 50;
-      base.atrPeriod = params.atr_period || 14;
-      base.compressionMult = params.compression_mult || 0.7;
-      base.breakoutPeriod = params.breakout_period || 20;
-      base.rocPeriod = params.roc_period || 10;
-      base.rocThreshold = params.roc_threshold || 2.0;
-      base.volatilityFilter = params.volume_confirm ? 'volume' : 'OFF';
+      base.smaPeriod = convertedParams.smaPeriod ?? defaults.smaPeriod ?? 50;
+      base.atrPeriod = convertedParams.atrPeriod ?? defaults.atrPeriod ?? 14;
+      base.compressionMult = convertedParams.compressionMult ?? defaults.compressionMult ?? 0.8;
+      base.breakoutPeriod = convertedParams.breakoutPeriod ?? defaults.breakoutPeriod ?? 10;
+      base.rocPeriod = convertedParams.rocPeriod ?? defaults.rocPeriod ?? 5;
+      base.rocThreshold = convertedParams.rocThreshold ?? defaults.rocThreshold ?? 1.0;
+      base.volumeConfirm = convertedParams.volumeConfirm ?? defaults.volumeConfirm ?? 0;
+      base.volatilityFilter = base.volumeConfirm ? 'volume' : 'OFF';
     }
 
     return base;
@@ -736,6 +743,14 @@ export default function RealtimeChart() {
 
   // 전략 변경 핸들러
   const handleStrategyChange = async (strategy: SavedOptimizeResult) => {
+    console.log('[Strategy] User clicked strategy:', strategy.id, 'params:', {
+      rsiPeriod: strategy.rsiPeriod,
+      pivotLeft: strategy.pivotLeft,
+      pivotRight: strategy.pivotRight,
+      tpAtr: strategy.tpAtr,
+      slAtr: strategy.slAtr,
+    });
+
     manuallySelectedRef.current = true; // 수동 선택 플래그 설정
     savedStrategyIdRef.current = strategy.id;
     localStorage.setItem('selectedStrategyId', String(strategy.id)); // 새로고침 후 복원용
@@ -747,6 +762,27 @@ export default function RealtimeChart() {
     setSkippedSignals([]);
     setOpenPosition(null);
     setEquityCurve([]);
+
+    // 마커 및 라인 즉시 클리어 (상태 업데이트 전에 시각적으로 즉시 제거)
+    if (candleSeriesRef.current) {
+      console.log('[Strategy Clear] Clearing markers and candle colors...');
+      createSeriesMarkers(candleSeriesRef.current, []);
+      // 캔들 색상도 원래대로 복구
+      if (candles.length > 0) {
+        candleSeriesRef.current.setData(candles);
+        console.log('[Strategy Clear] Reset candle colors, count:', candles.length);
+      }
+      // TP/SL/Entry 라인도 즉시 제거
+      priceLinesRef.current.forEach((line) => {
+        try {
+          candleSeriesRef.current?.removePriceLine(line);
+        } catch {}
+      });
+      priceLinesRef.current = [];
+      console.log('[Strategy Clear] Cleared price lines');
+    } else {
+      console.log('[Strategy Clear] candleSeriesRef.current is null!');
+    }
 
     // 전략의 타임프레임으로 변경 (전략이 최적화된 타임프레임 사용)
     if (strategy.timeframe && strategy.timeframe !== timeframe) {
@@ -766,6 +802,9 @@ export default function RealtimeChart() {
     retryCount = 0,
     forceRun = false,
   ) => {
+    // 백테스트 시작 시 전략 ID 캡처 (완료 후 비교용)
+    const startedForStrategyId = strategy.id;
+
     // Throttling: 동일 전략/타임프레임으로 짧은 시간 내 중복 호출 방지
     const now = Date.now();
     if (
@@ -790,17 +829,28 @@ export default function RealtimeChart() {
       const indicators = strategy.indicators
         ? strategy.indicators.split(',').filter(Boolean)
         : ['rsi'];
-      console.log('[Backtest] Running with filters:', {
-        trendFilter: strategy.trendFilter,
-        volatilityFilter: strategy.volatilityFilter,
-        rsiExtremeFilter: strategy.rsiExtremeFilter,
-        indicatorPreset: strategy.indicatorPreset,
+      console.log('[Backtest] Running for strategy:', startedForStrategyId, 'type:', strategy.strategy, 'params:', {
+        rsiPeriod: strategy.rsiPeriod,
+        pivotLeft: strategy.pivotLeft,
+        pivotRight: strategy.pivotRight,
+        minDistance: strategy.minDistance,
+        maxDistance: strategy.maxDistance,
+        tpAtr: strategy.tpAtr,
+        slAtr: strategy.slAtr,
+        // BB Reversion 필터
+        volFilter: strategy.volFilter,
+        volThreshold: strategy.volThreshold,
+        rsiConfirm: strategy.rsiConfirm,
+        // EMA+ADX 필터
+        volumeConfirm: strategy.volumeConfirm,
       });
       // 전략의 타임프레임과 동일한 candleCount 사용 (미리보기와 일치)
       const result = await runBacktest({
+        strategy: strategy.strategy || 'rsi_divergence',
         symbol: currentSymbol.slashFormat,
         timeframe: timeframe,
         candleCount: 5000, // 미리보기와 동일한 데이터 범위 사용
+        // RSI Divergence 파라미터
         rsiPeriod: strategy.rsiPeriod,
         pivotLeftBars: strategy.pivotLeft,
         pivotRightBars: strategy.pivotRight,
@@ -817,16 +867,42 @@ export default function RealtimeChart() {
         volatilityFilter: strategy.volatilityFilter,
         rsiExtremeFilter: strategy.rsiExtremeFilter,
         indicatorPreset: strategy.indicatorPreset,
+        // BB Reversion 파라미터
+        lookback: strategy.lookback,
+        entryZ: strategy.entryZ,
+        exitZ: strategy.exitZ,
+        stopZ: strategy.stopZ,
+        volFilter: strategy.volFilter,
+        volThreshold: strategy.volThreshold,
+        rsiConfirm: strategy.rsiConfirm,
+        // EMA+ADX (Momentum Breakout) 파라미터
+        smaPeriod: strategy.smaPeriod,
+        atrPeriod: strategy.atrPeriod,
+        compressionMult: strategy.compressionMult,
+        breakoutPeriod: strategy.breakoutPeriod,
+        rocPeriod: strategy.rocPeriod,
+        rocThreshold: strategy.rocThreshold,
+        volumeConfirm: strategy.volumeConfirm,
         // 리얼타임 차트용: 캐시 대신 API에서 데이터 가져오기 (차트와 동일한 데이터)
         useLiveData: true,
       });
+
+      // 백테스트 완료 후 전략이 변경되었으면 결과 무시 (데이터 bleeding 방지)
+      if (savedStrategyIdRef.current !== startedForStrategyId) {
+        console.log('[Backtest] Discarding stale result - strategy changed from', startedForStrategyId, 'to', savedStrategyIdRef.current);
+        return;
+      }
+
       setBacktestTrades(result.trades);
       setSkippedSignals(result.skippedSignals || []);
       setOpenPosition(result.openPosition || null);
       setBacktestStats(result);
       setEquityCurve(result.equityCurve || []);
       setLastBacktestTime(new Date());
-      console.log('[Backtest] Open position:', result.openPosition);
+      console.log('[Backtest] Applied result for strategy:', startedForStrategyId, 'Open position:', result.openPosition);
+      // 디버그: 트레이드 목록 상세 출력
+      console.log('[Backtest] Trade entries for strategy', startedForStrategyId, ':',
+        result.trades.map(t => `${t.direction}@${t.entryTime}`).join(', '));
     } catch (err) {
       console.error('Failed to load backtest trades:', err);
       // 최대 2번 재시도
@@ -850,14 +926,25 @@ export default function RealtimeChart() {
   }, [candles.length]);
 
   useEffect(() => {
-    if (selectedStrategy && hasCandlesRef.current && !isLoading) {
-      // 전략, 타임프레임, 심볼 변경 시 백테스트 실행
+    console.log('[Backtest Trigger] Check:', {
+      hasStrategy: !!selectedStrategy,
+      strategyId: selectedStrategy?.id,
+      hasCandles: hasCandlesRef.current,
+      candlesLength: candles.length,
+      isLoading,
+    });
+
+    // candles.length로 직접 체크 (ref 타이밍 문제 방지)
+    if (selectedStrategy && candles.length > 0 && !isLoading) {
+      // 백테스트 시작 전 ref 동기화 (자동/수동 선택 모두 커버)
+      savedStrategyIdRef.current = selectedStrategy.id;
+      console.log('[Backtest Trigger] Scheduling backtest for strategy:', selectedStrategy.id);
       const timer = setTimeout(() => {
         loadBacktestTrades(selectedStrategy);
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [selectedStrategy, timeframe, isLoading, currentSymbol.id]);
+  }, [selectedStrategy, timeframe, isLoading, currentSymbol.id, candles.length > 0]); // candles.length > 0을 의존성에 추가
 
   // 심볼 변경 시 포지션/트레이드 데이터 즉시 초기화 (잘못된 알림 방지)
   useEffect(() => {
@@ -882,7 +969,7 @@ export default function RealtimeChart() {
       initialCandlesLoadedRef.current = false;
       try {
         const response = await fetch(
-          `${API_BASE}/exchange/candles?symbol=${encodeURIComponent(currentSymbol.slashFormat)}&timeframe=${timeframe}&limit=1500`,
+          `${API_BASE}/exchange/candles?symbol=${encodeURIComponent(currentSymbol.slashFormat)}&timeframe=${timeframe}&limit=5000`,
         );
         const data = await response.json();
         const candlesArray = data.data?.candles || data.candles;
@@ -1196,7 +1283,15 @@ export default function RealtimeChart() {
 
   // 마커 업데이트 + 거래 구간 캔들 색상 변경
   useEffect(() => {
+    console.log('[Markers] useEffect triggered - strategy:', selectedStrategy?.id, 'trades:', backtestTrades.length, 'openPos:', !!openPosition, 'isBacktestRunning:', isBacktestRunning);
+
     if (!candleSeriesRef.current || candles.length === 0) return;
+
+    // 백테스트 진행 중이면 색상 변경 건너뛰기 (깜빡임 방지)
+    if (isBacktestRunning) {
+      console.log('[Markers] Skipping update - backtest in progress');
+      return;
+    }
 
     const markers: SeriesMarker<Time>[] = [];
     const tradeMap = new Map<
@@ -1428,6 +1523,8 @@ export default function RealtimeChart() {
     divergenceHistory,
     openPosition,
     candles.length,
+    selectedStrategy?.id, // 전략 변경 시 마커 즉시 업데이트
+    isBacktestRunning, // 백테스트 완료 시 색상 업데이트 트리거
   ]);
 
   // TP/SL/Entry 가로선 업데이트 (Price Line 사용 - 캔들 위에 표시)
@@ -1490,7 +1587,7 @@ export default function RealtimeChart() {
         `[Lines] Entry: $${openPosition.entryPrice}, TP: $${openPosition.tp}, SL: $${openPosition.sl}`,
       );
     }
-  }, [openPosition, ticker?.price]);
+  }, [openPosition, ticker?.price, selectedStrategy?.id]); // 전략 변경 시 라인 즉시 제거/갱신
 
   // 총 소요시간 계산 (모든 거래의 소요시간 합계)
   const totalDuration = backtestTrades.reduce((acc, trade) => {
@@ -1512,7 +1609,7 @@ export default function RealtimeChart() {
   return (
     <div className='flex flex-col gap-4 w-full'>
       {/* 상단: 통계 헤더 (전체 너비) */}
-      {backtestStats && (
+      {backtestStats ? (
         <div className='flex items-center gap-3 px-4 py-2 bg-zinc-900 rounded-lg flex-wrap'>
           {/* 레버리지 설정 */}
           <div className='flex items-center gap-1'>
@@ -1590,6 +1687,49 @@ export default function RealtimeChart() {
             {backtestStats.maxDrawdownPercent * leverage >= 100 && (
               <span className='text-red-500 text-[10px]'>⚠ 청산</span>
             )}
+          </div>
+        </div>
+      ) : selectedStrategy && (
+        /* 스켈레톤 로더: 전략 선택됨 + 백테스트 결과 로딩 중 */
+        <div className='flex items-center gap-3 px-4 py-2 bg-zinc-900 rounded-lg animate-pulse'>
+          <div className='flex items-center gap-1'>
+            <span className='text-zinc-500 text-xs'>레버리지</span>
+            <div className='w-12 h-5 bg-zinc-800 rounded' />
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>수익</span>
+            <div className='w-16 h-4 bg-zinc-800 rounded' />
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>승률</span>
+            <div className='w-10 h-4 bg-zinc-800 rounded' />
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>소요</span>
+            <div className='w-14 h-4 bg-zinc-800 rounded' />
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>거래</span>
+            <div className='w-10 h-4 bg-zinc-800 rounded' />
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>샤프</span>
+            <div className='w-10 h-4 bg-zinc-800 rounded' />
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>손익비</span>
+            <div className='w-10 h-4 bg-zinc-800 rounded' />
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>MDD</span>
+            <div className='w-12 h-4 bg-zinc-800 rounded' />
           </div>
         </div>
       )}
