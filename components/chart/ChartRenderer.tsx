@@ -166,6 +166,8 @@ export default function ChartRenderer({
   const measureLineRef = useRef<ISeriesApi<'Line'> | null>(null);
   const volumeProfileLinesRef = useRef<IPriceLine[]>([]); // Volume Profile 라인 ref (Y축 라벨용)
   const isChartDisposedRef = useRef<boolean>(false); // 차트 dispose 상태 추적
+  const dataRef = useRef(data); // data를 ref로 저장 (의존성 배열에서 제거용)
+  dataRef.current = data;
 
   // Volume Profile 표시 토글 (useEffect보다 먼저 선언해야 함)
   const [showVolumeProfile, setShowVolumeProfile] = useState(true);
@@ -182,9 +184,11 @@ export default function ChartRenderer({
   }, [measurePoints]);
 
   // 데이터가 변경되면 측정 도구 초기화 (타임프레임 변경 등)
+  // data[0]?.time을 사용하여 타임프레임/심볼 변경만 감지 (배열 참조 변경 무시)
+  const firstCandleTime = data[0]?.time;
   useEffect(() => {
     setMeasurePoints({ start: null, end: null });
-  }, [data]);
+  }, [firstCandleTime]);
 
   // 실시간 캔들 업데이트 (update 방식으로 뷰 유지)
   useEffect(() => {
@@ -272,10 +276,13 @@ export default function ChartRenderer({
     const hasOi = mini ? false : (oiData && oiData.length > 0);
     const hasAtr = mini ? false : (vwapAtrData?.atr && vwapAtrData.atr.length > 0);
 
-    // 미니 모드: 컨테이너 높이 사용, 일반 모드: 패널별 고정 높이
+    // 미니 모드: 컨테이너 높이 사용 (ResizeObserver가 나중에 업데이트)
+    // 일반 모드: 패널별 고정 높이
     let chartHeight: number;
     if (mini) {
-      chartHeight = chartContainerRef.current.clientHeight || 200;
+      // clientHeight가 유효하면 사용, 아니면 충분한 기본값 (ResizeObserver가 곧 업데이트)
+      const containerHeight = chartContainerRef.current.clientHeight;
+      chartHeight = containerHeight > 100 ? containerHeight : 250;
     } else {
       const panelCount = 1 + (hasRsi ? 1 : 0) + (hasObv ? 1 : 0) + (hasCvd ? 1 : 0) + (hasOi ? 1 : 0) + (hasAtr ? 1 : 0); // 메인 + 지표들
       const panelHeight = 280; // 각 패널당 높이
@@ -1037,16 +1044,23 @@ export default function ChartRenderer({
       });
     });
 
-    // 반응형 처리
-    const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        });
+    // 반응형 처리 (ResizeObserver로 width/height 모두 업데이트)
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (isChartDisposedRef.current) return;
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          chart.applyOptions({
+            width,
+            height: mini ? height : chartHeight,
+          });
+        }
       }
-    };
+    });
 
-    window.addEventListener('resize', handleResize);
+    if (chartContainerRef.current) {
+      resizeObserver.observe(chartContainerRef.current);
+    }
 
     // 차트 스케일 변경 감지 (줌/스크롤 시 측정 박스 위치 업데이트 + visible range 저장)
     const handleScaleChange = (newRange: { from: number; to: number } | null) => {
@@ -1089,7 +1103,7 @@ export default function ChartRenderer({
       } catch {
         // disposed 상태에서 접근 시 무시
       }
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       try {
         chart.remove();
       } catch {
@@ -1097,18 +1111,19 @@ export default function ChartRenderer({
       }
     };
   }, [
-    data.length, // 캔들 개수만 체크 (데이터 내용 변경은 무시)
-    // 지표 데이터는 존재 여부만 체크 (length 변경으로 인한 불필요한 재생성 방지)
-    oiData != null && oiData.length > 0,
-    emaData !== undefined,
-    divergenceSignals != null && divergenceSignals.length > 0,
-    trendAnalysis !== undefined,
-    crossoverEvents != null && crossoverEvents.length > 0,
-    marketSignals != null && marketSignals.length > 0,
-    volumeProfile != null, // POC 값 변경은 무시, 존재 여부만 체크
-    vwapAtrData != null, // VWAP/ATR 존재 여부만 체크
-    orderBlockData != null && (orderBlockData.activeBlocks?.length ?? 0) > 0,
-    marketStructureData != null && (marketStructureData.structureBreaks?.length ?? 0) > 0,
+    // 데이터 존재 여부만 체크 (length 변경으로 인한 불필요한 재생성 방지)
+    data.length > 0,
+    // 지표 데이터는 일반 모드에서만 의존성으로 체크 (mini 모드에서는 재생성 방지)
+    !mini && oiData != null && oiData.length > 0,
+    !mini && emaData !== undefined,
+    !mini && divergenceSignals != null && divergenceSignals.length > 0,
+    !mini && trendAnalysis !== undefined,
+    !mini && crossoverEvents != null && crossoverEvents.length > 0,
+    !mini && marketSignals != null && marketSignals.length > 0,
+    !mini && volumeProfile != null,
+    !mini && vwapAtrData != null,
+    !mini && orderBlockData != null && (orderBlockData.activeBlocks?.length ?? 0) > 0,
+    !mini && marketStructureData != null && (marketStructureData.structureBreaks?.length ?? 0) > 0,
     timeframe, // 타임프레임 변경 시 재렌더링
     mini, // 미니 모드 변경 시 재렌더링
   ]);
@@ -1220,14 +1235,10 @@ export default function ChartRenderer({
     });
   }, [measurePoints, scaleUpdateTrigger, timeframe]);
 
-  // 데이터 변경 시 마커 숨기기 (로딩 중 이상한 위치 방지)
-  useEffect(() => {
-    setCrossoverMarkers([]);
-  }, [crossoverEvents, data]);
-
-  // 차트 준비 완료 후 마커 표시 (scaleUpdateTrigger로 감지)
+  // 차트 준비 완료 후 크로스오버 마커 표시 (데이터/스케일 변경 시 업데이트)
   useEffect(() => {
     if (!chartRef.current || !candlestickSeriesRef.current || !crossoverEvents || crossoverEvents.length === 0) {
+      setCrossoverMarkers([]);
       return;
     }
 
@@ -1244,7 +1255,7 @@ export default function ChartRenderer({
 
         if (x === null || x < 0 || x > 5000) return;
 
-        const candleData = data.find((c) => c.time === time);
+        const candleData = dataRef.current.find((c) => c.time === time);
         if (!candleData) return;
 
         const price = event.type === 'golden_cross' ? candleData.low : candleData.high;
@@ -1265,16 +1276,12 @@ export default function ChartRenderer({
 
     const rafId = requestAnimationFrame(updateCrossoverMarkers);
     return () => cancelAnimationFrame(rafId);
-  }, [scaleUpdateTrigger]);
+  }, [crossoverEvents, scaleUpdateTrigger]);
 
-  // 데이터 변경 시 CVD+OI 마커 숨기기
-  useEffect(() => {
-    setSignalMarkers([]);
-  }, [marketSignals, data]);
-
-  // 차트 준비 완료 후 CVD+OI 마커 표시
+  // 차트 준비 완료 후 CVD+OI 마커 표시 (데이터/스케일 변경 시 업데이트)
   useEffect(() => {
     if (!chartRef.current || !candlestickSeriesRef.current || !marketSignals || marketSignals.length === 0) {
+      setSignalMarkers([]);
       return;
     }
 
@@ -1300,7 +1307,7 @@ export default function ChartRenderer({
 
         if (x === null || x < 0 || x > 5000) return;
 
-        const candleData = data.find((c) => c.time === time);
+        const candleData = dataRef.current.find((c) => c.time === time);
         if (!candleData) return;
 
         const price = config.position === 'below' ? candleData.low : candleData.high;
@@ -1323,7 +1330,7 @@ export default function ChartRenderer({
 
     const rafId = requestAnimationFrame(updateSignalMarkers);
     return () => cancelAnimationFrame(rafId);
-  }, [scaleUpdateTrigger]);
+  }, [marketSignals, scaleUpdateTrigger]);
 
   // BOS/CHoCH 마커 좌표 계산
   useEffect(() => {
@@ -1443,7 +1450,7 @@ export default function ChartRenderer({
 
   // 가로선 좌표 계산 (scaleUpdateTrigger 변경 시 실시간 업데이트)
   useEffect(() => {
-    if (!chartRef.current || !candlestickSeriesRef.current || data.length === 0) {
+    if (!chartRef.current || !candlestickSeriesRef.current || dataRef.current.length === 0) {
       setPriceLines([]);
       return;
     }
@@ -1454,7 +1461,7 @@ export default function ChartRenderer({
       const lines: Array<{ y: number; startX: number; label: string; color: string }> = [];
 
       // 마지막 캔들의 X 좌표 (가로선 시작점)
-      const lastCandle = data[data.length - 1];
+      const lastCandle = dataRef.current[dataRef.current.length - 1];
       const lastX = chartRef.current!.timeScale().timeToCoordinate(lastCandle.time);
       if (lastX === null) return;
 
@@ -1503,7 +1510,7 @@ export default function ChartRenderer({
 
       // 오더블록 라인
       if (orderBlockData?.activeBlocks && orderBlockData.activeBlocks.length > 0) {
-        const currentPrice = data[data.length - 1]?.close || 0;
+        const currentPrice = dataRef.current[dataRef.current.length - 1]?.close || 0;
         orderBlockData.activeBlocks.forEach((block) => {
           const midPrice = (block.high + block.low) / 2;
           const isSupport = midPrice < currentPrice;
@@ -1520,11 +1527,11 @@ export default function ChartRenderer({
 
     const rafId = requestAnimationFrame(updatePriceLines);
     return () => cancelAnimationFrame(rafId);
-  }, [scaleUpdateTrigger, volumeProfile, vwapAtrData, showVolumeProfile, data, orderBlockData]);
+  }, [scaleUpdateTrigger, volumeProfile, vwapAtrData, showVolumeProfile, orderBlockData]);
 
   // 마지막 점 좌표 계산 (미니 모드 글로우 점용)
   useEffect(() => {
-    if (!mini || !chartRef.current || !candlestickSeriesRef.current || data.length === 0) {
+    if (!mini || !chartRef.current || !candlestickSeriesRef.current || dataRef.current.length === 0) {
       setLastPointCoord(null);
       return;
     }
@@ -1534,10 +1541,10 @@ export default function ChartRenderer({
 
       // 실시간 캔들이 있으면 실시간 가격 사용, 없으면 마지막 히스토리 캔들 사용
       const useRealtime = realtimeCandle && !realtimeCandle.isFinal;
-      const price = useRealtime ? realtimeCandle.close : data[data.length - 1].close;
+      const price = useRealtime ? realtimeCandle.close : dataRef.current[dataRef.current.length - 1].close;
       const time = useRealtime
-        ? (realtimeCandle.timestamp / 1000) as typeof data[0]['time']
-        : data[data.length - 1].time;
+        ? (realtimeCandle.timestamp / 1000) as typeof dataRef.current[0]['time']
+        : dataRef.current[dataRef.current.length - 1].time;
 
       const x = chartRef.current!.timeScale().timeToCoordinate(time);
       const y = candlestickSeriesRef.current!.priceToCoordinate(price);
@@ -1549,15 +1556,15 @@ export default function ChartRenderer({
 
     const rafId = requestAnimationFrame(updateLastPoint);
     return () => cancelAnimationFrame(rafId);
-  }, [mini, scaleUpdateTrigger, data, realtimeCandle]);
+  }, [mini, scaleUpdateTrigger, realtimeCandle]);
 
   // 지지/저항 영역 계산 (useMemo)
   // 원본 영역 (개별 렌더링용 - 투명도 겹침 효과)
   const rawZones = useMemo(() => {
     if (!volumeProfile && !orderBlockData) return [];
-    const currentPrice = data[data.length - 1]?.close || 0;
+    const currentPrice = dataRef.current[dataRef.current.length - 1]?.close || 0;
     return createZonesFromData(volumeProfile, orderBlockData, currentPrice);
-  }, [volumeProfile, orderBlockData, data]);
+  }, [volumeProfile, orderBlockData]);
 
   // 병합된 영역 (라벨 표시용)
   const blendedZones = useMemo(() => {
@@ -1579,7 +1586,7 @@ export default function ChartRenderer({
   }>>([]);
 
   useEffect(() => {
-    if (!chartRef.current || !candlestickSeriesRef.current || data.length === 0) {
+    if (!chartRef.current || !candlestickSeriesRef.current || dataRef.current.length === 0) {
       setRawZoneRenderData([]);
       setBlendedZoneRenderData([]);
       return;
@@ -1589,7 +1596,7 @@ export default function ChartRenderer({
       if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
 
       // 마지막 캔들 바로 옆에서 시작
-      const lastCandle = data[data.length - 1];
+      const lastCandle = dataRef.current[dataRef.current.length - 1];
       const lastX = chartRef.current!.timeScale().timeToCoordinate(lastCandle.time);
       if (lastX === null) return;
 
@@ -1624,7 +1631,7 @@ export default function ChartRenderer({
 
     const rafId = requestAnimationFrame(updateZoneCoords);
     return () => cancelAnimationFrame(rafId);
-  }, [scaleUpdateTrigger, rawZones, blendedZones, volumeProfile, data]);
+  }, [scaleUpdateTrigger, rawZones, blendedZones, volumeProfile]);
 
   // 다이버전스 라벨 렌더 데이터
   const [divergenceLabelData, setDivergenceLabelData] = useState<Array<{
@@ -1691,7 +1698,7 @@ export default function ChartRenderer({
         // 타임프레임 기반 허용 범위 (캔들 1개 시간)
         const tfSeconds = timeframeToMs(timeframe || '5m') / 1000;
         const findCandle = (targetTime: number) => {
-          return data.find(c => Math.abs((c.time as number) - targetTime) <= tfSeconds);
+          return dataRef.current.find(c => Math.abs((c.time as number) - targetTime) <= tfSeconds);
         };
         const startCandle = findCandle(startTimeSec);
         const endCandle = findCandle(endTimeSec);
@@ -1873,7 +1880,7 @@ export default function ChartRenderer({
 
     const rafId = requestAnimationFrame(updateDivergenceLabels);
     return () => cancelAnimationFrame(rafId);
-  }, [scaleUpdateTrigger, divergenceSignals, data, timeframe]);
+  }, [scaleUpdateTrigger, divergenceSignals, timeframe]);
 
   return (
     <div className='w-full' style={mini ? { height: '100%' } : undefined}>

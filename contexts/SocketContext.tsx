@@ -14,6 +14,7 @@ export interface TickerData {
   low24h: number;
   volume24h: number;
   timestamp: number;
+  symbol?: string; // 심볼 정보 (BTCUSDT 형식)
 }
 
 export interface OrderBookLevel {
@@ -38,6 +39,7 @@ export interface KlineData {
   volume: number;
   isFinal: boolean;
   timeframe: string;
+  symbol?: string; // 심볼 정보 (BTCUSDT 형식)
 }
 
 // MTF 백엔드 데이터 타입
@@ -185,6 +187,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [divergenceData, setDivergenceData] = useState<RealtimeDivergenceData | null>(null);
   const [divergenceHistory, setDivergenceHistory] = useState<RealtimeDivergenceData[]>([]);
   const [currentSymbol, setCurrentSymbol] = useState<string>('BTCUSDT');
+  const currentSymbolRef = useRef<string>('BTCUSDT'); // 이벤트 핸들러에서 최신 심볼 확인용
 
   // 페이지 visibility 변경 감지 - 잠자기 복귀 시 히스토리 클리어
   useEffect(() => {
@@ -237,6 +240,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     // Binance realtime data
     socket.on('binance:ticker', (data: TickerData) => {
+      // 다른 심볼의 데이터는 무시
+      if (data.symbol && data.symbol !== currentSymbolRef.current) {
+        return;
+      }
       setTicker(data);
     });
 
@@ -245,6 +252,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     });
 
     socket.on('binance:kline', (data: KlineData) => {
+      // 다른 심볼의 데이터는 무시 (심볼 변경 중 이전 데이터 방지)
+      if (data.symbol && data.symbol !== currentSymbolRef.current) {
+        return;
+      }
       // 타임프레임별로 kline 저장
       klineMapRef.current.set(data.timeframe, data);
       setKlineMapVersion(v => v + 1); // 변경 알림
@@ -348,6 +359,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const subscribeSymbol = useCallback((symbol: string) => {
     console.log(`[Socket] Changing symbol to: ${symbol}`);
     setCurrentSymbol(symbol);
+    currentSymbolRef.current = symbol; // ref도 업데이트 (이벤트 핸들러용)
 
     // 기존 데이터 초기화
     setTicker(null);

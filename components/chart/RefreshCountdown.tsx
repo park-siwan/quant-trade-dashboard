@@ -41,6 +41,9 @@ export default function RefreshCountdown({
   const [countdown, setCountdown] = useState<string>('00:00');
   const [showTooltip, setShowTooltip] = useState(false);
   const hasRefreshedRef = useRef(false);
+  // onRefresh를 ref로 저장하여 의존성에서 제거 (깜빡임 방지)
+  const onRefreshRef = useRef(onRefresh);
+  onRefreshRef.current = onRefresh;
 
   useEffect(() => {
     // 새로운 캔들이 들어오면 리셋
@@ -56,7 +59,7 @@ export default function RefreshCountdown({
         setCountdown('00:00');
         if (!hasRefreshedRef.current) {
           hasRefreshedRef.current = true;
-          onRefresh();
+          onRefreshRef.current();
         }
       } else {
         const minutes = Math.floor(remaining / 60000);
@@ -71,7 +74,7 @@ export default function RefreshCountdown({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timeframe, lastCandleTime, onRefresh]);
+  }, [timeframe, lastCandleTime]);
 
   // 타임프레임에 따른 설명 메시지
   const getTooltipMessage = () => {
