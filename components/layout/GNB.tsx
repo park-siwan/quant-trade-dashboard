@@ -13,6 +13,7 @@ const tabs = [
   { href: '/', label: '분석' },
   { href: '/chart', label: '차트' },
   { href: '/strategy', label: '전략' },
+  { href: '/rolling', label: '롤링' },
   { href: '/glossary', label: '용어' },
 ];
 

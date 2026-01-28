@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { CandlestickData } from 'lightweight-charts';
-import { GNB, StrategyLNB, type StrategySubTab } from '@/components/layout';
+import { StrategyLNB, type StrategySubTab } from '@/components/layout';
 import RealtimeChart from '@/components/backtest/RealtimeChart';
 import OptimizePanel from '@/components/backtest/OptimizePanel';
 import DataCachePanel from '@/components/backtest/DataCachePanel';
@@ -111,18 +111,9 @@ export default function StrategyPage() {
   };
 
   return (
-    <div className='min-h-screen bg-[#0a0a0a] bg-pattern relative overflow-hidden'>
-      {/* 배경 장식 */}
-      <div className='absolute top-0 left-0 w-[500px] h-[500px] bg-gray-500/10 rounded-full blur-[120px] -translate-x-1/3 -translate-y-1/3'></div>
-      <div className='absolute bottom-0 right-0 w-[400px] h-[400px] bg-gray-600/8 rounded-full blur-[100px] translate-x-1/4 translate-y-1/4'></div>
-
-      {/* GNB */}
-      <GNB />
-
-      {/* 메인 콘텐츠 */}
-      <div className='relative z-10 p-4 md:p-8'>
-        {/* LNB */}
-        <StrategyLNB activeSubTab={strategySubTab} onSubTabChange={setStrategySubTab} />
+    <div className='p-4 md:p-8'>
+      {/* LNB */}
+      <StrategyLNB activeSubTab={strategySubTab} onSubTabChange={setStrategySubTab} />
 
         {/* 실시간 */}
         {strategySubTab === 'realtime' && <RealtimeChart />}
@@ -194,13 +185,12 @@ export default function StrategyPage() {
           </div>
         )}
 
-        {/* 데이터 캐시 관리 */}
-        {strategySubTab === 'cache' && (
-          <div className='max-w-4xl'>
-            <DataCachePanel />
-          </div>
-        )}
-      </div>
+      {/* 데이터 캐시 관리 */}
+      {strategySubTab === 'cache' && (
+        <div className='max-w-4xl'>
+          <DataCachePanel />
+        </div>
+      )}
     </div>
   );
 }

@@ -1,20 +1,10 @@
 'use client';
 
 import ChartAdapter from '@/components/ChartAdapter';
-import { GNB } from '@/components/layout';
 
 export default function ChartPage() {
   return (
-    <div className='min-h-screen bg-[#0a0a0a] bg-pattern relative overflow-hidden'>
-      {/* 배경 장식 */}
-      <div className='absolute top-0 left-0 w-[500px] h-[500px] bg-gray-500/10 rounded-full blur-[120px] -translate-x-1/3 -translate-y-1/3'></div>
-      <div className='absolute bottom-0 right-0 w-[400px] h-[400px] bg-gray-600/8 rounded-full blur-[100px] translate-x-1/4 translate-y-1/4'></div>
-
-      {/* GNB */}
-      <GNB />
-
-      {/* 메인 콘텐츠 */}
-      <div className='relative z-10 p-4 md:p-8'>
+    <div className='p-4 md:p-8'>
         <div className='flex flex-col h-[calc(100vh-120px)]'>
           {/* 범례 */}
           <div className='overflow-hidden border-b border-white/5 pb-2 mb-2'>
@@ -44,7 +34,6 @@ export default function ChartPage() {
               <ChartAdapter key={tf} symbol='BTC/USDT' initialTimeframe={tf} limit={500} mini />
             ))}
           </div>
-        </div>
       </div>
     </div>
   );

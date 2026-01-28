@@ -1,6 +1,16 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+// ============== 전략 타입 ==============
+export type StrategyType = 'rsi_divergence' | 'bb_reversion' | 'ema_adx';
+
+export const STRATEGIES = [
+  { id: 'rsi_divergence' as const, label: 'RSI 다이버전스', desc: '가격-RSI 괴리 + 볼륨 확인 + 레짐 필터' },
+  { id: 'bb_reversion' as const, label: 'Z-Score 평균회귀', desc: 'Z-Score 기반 과매수/과매도 반전 (Sharpe ~2.3)' },
+  { id: 'ema_adx' as const, label: '모멘텀 브레이크아웃', desc: '변동성 압축 후 브레이크아웃 + 모멘텀 (Sharpe ~1.2)' },
+];
+
 export interface BacktestParams {
+  strategy?: StrategyType;
   symbol: string;
   timeframe: string;
   candleCount: number;
@@ -16,6 +26,13 @@ export interface BacktestParams {
   positionSizePercent?: number;
   slippage?: number;  // 슬리피지 (0.02% = 0.0002)
   minDivergencePct?: number;  // 최소 다이버전스 강도 (%)
+  // 필터 파라미터 (최적화 결과에서 가져옴)
+  trendFilter?: string;
+  volatilityFilter?: string;
+  rsiExtremeFilter?: string;
+  indicatorPreset?: string;
+  // 리얼타임 차트용: 캐시 대신 API에서 데이터 가져오기
+  useLiveData?: boolean;
 }
 
 export interface TradeResult {
@@ -352,6 +369,8 @@ export interface SavedOptimizeResult {
   indicators: string;
   metric: string;
   optimizeMethod: 'grid' | 'bayesian';
+  strategy?: StrategyType; // 전략 타입
+  // RSI Divergence 파라미터
   rsiPeriod: number;
   pivotLeft: number;
   pivotRight: number;
@@ -364,6 +383,19 @@ export interface SavedOptimizeResult {
   volatilityFilter?: string;
   rsiExtremeFilter?: string;
   indicatorPreset?: string;
+  // BB Reversion 파라미터
+  lookback?: number;
+  entryZ?: number;
+  exitZ?: number;
+  stopZ?: number;
+  // EMA+ADX (Momentum Breakout) 파라미터
+  smaPeriod?: number;
+  atrPeriod?: number;
+  compressionMult?: number;
+  breakoutPeriod?: number;
+  rocPeriod?: number;
+  rocThreshold?: number;
+  // 공통 결과
   totalTrades: number;
   winRate: number;
   totalPnlPercent: number;
@@ -803,6 +835,286 @@ export async function deleteCache(
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.message || 'Delete failed');
+  }
+
+  return response.json();
+}
+
+// ============== 롤링 최적화 (Walk-Forward Analysis) ==============
+
+export type DegradationGrade = 'ROBUST' | 'GOOD' | 'WARNING' | 'OVERFIT';
+
+export interface RollingOptimizeParams {
+  strategy?: StrategyType;  // 전략 선택
+  symbol: string;
+  timeframe: string;
+  trainCandles?: number;  // 학습 윈도우 (기본 5000)
+  testCandles?: number;   // 테스트 윈도우 (기본 1000)
+  stepCandles?: number;   // 롤링 스텝 (기본 1000)
+  year?: string;          // 연도
+  startDate?: string;
+  endDate?: string;
+  indicators?: string[];
+  nTrials?: number;       // Optuna 트라이얼 수
+  metric?: string;
+  // RSI Divergence 파라미터 범위
+  pivotLeftRange?: number[];
+  pivotRightRange?: number[];
+  rsiPeriodRange?: number[];
+  minDistanceRange?: number[];
+  maxDistanceRange?: number[];
+  tpAtrRange?: number[];
+  slAtrRange?: number[];
+  minDivPctRange?: number[];
+  searchFilters?: boolean;
+  initialCapital?: number;
+  positionSizePercent?: number;
+}
+
+export interface RollingWindowResult {
+  windowId: number;
+  trainStart: string;
+  trainEnd: string;
+  testStart: string;
+  testEnd: string;
+  bestParams: Record<string, number | string>;
+  trainSharpe: number;
+  trainTrades: number;
+  trainWinRate: number;
+  trainPnl: number;
+  testSharpe: number;
+  testTrades: number;
+  testWinRate: number;
+  testPnl: number;
+}
+
+export interface RollingSummary {
+  totalWindows: number;
+  avgTrainSharpe: number;
+  avgTestSharpe: number;
+  degradationRatio: number;
+  totalTrades: number;
+  totalPnl: number;
+  overallSharpe: number;
+  paramStability: number;
+  bestWindowId: number;
+  worstWindowId: number;
+  degradationGrade: DegradationGrade;
+  degradationDescription: string;
+}
+
+export interface RollingOptimizeResult {
+  windows: RollingWindowResult[];
+  summary: RollingSummary;
+}
+
+export interface RollingProgress {
+  type: 'status' | 'progress' | 'final' | 'error';
+  message?: string;
+  windowId?: number;
+  trainSharpe?: number;
+  testSharpe?: number;
+  testTrades?: number;
+  testWinRate?: number;
+  testPnl?: number;
+  params?: Record<string, number | string>;
+  windows?: RollingWindowResult[];
+  summary?: RollingSummary;
+}
+
+/**
+ * 롤링 최적화 (Walk-Forward Analysis) 실행 - SSE 스트리밍
+ */
+export async function runRollingOptimization(
+  params: RollingOptimizeParams,
+  onProgress: (progress: RollingProgress) => void,
+): Promise<RollingOptimizeResult> {
+  return new Promise((resolve, reject) => {
+    fetch(`${API_BASE}/backtest/optimize/rolling`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    }).then(response => {
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        reject(new Error('No reader available'));
+        return;
+      }
+
+      let buffer = '';
+
+      const read = (): void => {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            return;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data: RollingProgress = JSON.parse(line.substring(6));
+                onProgress(data);
+
+                if (data.type === 'final' && data.windows && data.summary) {
+                  resolve({ windows: data.windows, summary: data.summary });
+                } else if (data.type === 'error') {
+                  reject(new Error(data.message || 'Rolling optimization failed'));
+                }
+              } catch {
+                // ignore parse errors
+              }
+            }
+          }
+
+          read();
+        }).catch(reject);
+      };
+
+      read();
+    }).catch(reject);
+  });
+}
+
+/**
+ * Degradation Ratio 해석
+ */
+export function getDegradationInterpretation(ratio: number): {
+  grade: DegradationGrade;
+  description: string;
+  emoji: string;
+  color: string;
+} {
+  // 기준 완화: 실전에서는 50% 이상이면 양호한 편
+  // 헤지펀드 기준 Sharpe 1~2가 우수, 테스트에서 절반 이상 유지되면 OK
+  if (ratio >= 0.5) {
+    return {
+      grade: 'ROBUST',
+      description: '로버스트 - 과최적화 없음, 실전 적용 우수',
+      emoji: '🟢',
+      color: 'text-green-500',
+    };
+  } else if (ratio >= 0.25) {
+    return {
+      grade: 'GOOD',
+      description: '양호 - 실전 적용 가능',
+      emoji: '🟡',
+      color: 'text-yellow-500',
+    };
+  } else if (ratio >= 0) {
+    return {
+      grade: 'WARNING',
+      description: '주의 - 과최적화 의심, 신중히 검토',
+      emoji: '🟠',
+      color: 'text-orange-500',
+    };
+  } else if (ratio >= -0.5) {
+    return {
+      grade: 'OVERFIT',
+      description: '과최적화 - 테스트 성과 역전',
+      emoji: '🔴',
+      color: 'text-red-500',
+    };
+  } else {
+    return {
+      grade: 'OVERFIT',
+      description: '심각한 과최적화 - 실전 적용 불가',
+      emoji: '🔴',
+      color: 'text-red-500',
+    };
+  }
+}
+
+// ============== 현재 활성 파라미터 API ==============
+
+export interface CurrentParams {
+  params: Record<string, number | string>;
+  optimizedAt: string;
+  validUntil: string;
+  trainSharpe: number;
+  confidence: 'high' | 'medium' | 'low';
+  degradationRatio: number;
+  source?: 'rolling' | 'bayesian' | 'default';
+}
+
+/**
+ * 현재 활성 파라미터 조회 (롤링 최적화 결과 기반)
+ */
+export async function getCurrentParams(
+  symbol: string = 'BTCUSDT',
+  timeframe: string = '5m',
+): Promise<CurrentParams> {
+  const response = await fetch(
+    `${API_BASE}/backtest/strategy/current-params?symbol=${symbol}&timeframe=${timeframe}`,
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to get current params');
+  }
+
+  return response.json();
+}
+
+/**
+ * 최적화 결과 DB에 저장
+ */
+export interface SaveOptimizationParams {
+  symbol: string;
+  timeframe: string;
+  strategy: string;
+  params: Record<string, unknown>;
+  trainSharpe: number;
+  testSharpe: number;
+  degradationRatio: number;
+  totalWindows: number;
+}
+
+export async function saveOptimizationResult(data: SaveOptimizationParams): Promise<void> {
+  const response = await fetch(`${API_BASE}/backtest/strategy/save-params`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to save optimization result');
+  }
+}
+
+/**
+ * 롤링 최적화 저장 결과 목록 조회
+ */
+export interface RollingParamResult {
+  id: string;
+  symbol: string;
+  timeframe: string;
+  strategy: string;
+  params: Record<string, unknown>;
+  trainSharpe: number;
+  testSharpe: number;
+  degradationRatio: number;
+  savedAt: string;
+  validUntil: string;
+  isValid: boolean;
+}
+
+export async function getRollingParams(timeframe?: string): Promise<RollingParamResult[]> {
+  const url = timeframe
+    ? `${API_BASE}/backtest/strategy/rolling-params?timeframe=${timeframe}`
+    : `${API_BASE}/backtest/strategy/rolling-params`;
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to get rolling params');
   }
 
   return response.json();
