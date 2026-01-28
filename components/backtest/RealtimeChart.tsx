@@ -1503,7 +1503,7 @@ export default function RealtimeChart() {
   };
 
   return (
-    <div className='flex flex-col gap-4 w-full overflow-hidden h-[calc(100vh-100px)]'>
+    <div className='flex flex-col gap-4 w-full'>
       {/* 상단: 통계 헤더 (전체 너비) */}
       {backtestStats && (
         <div className='flex items-center gap-3 px-4 py-2 bg-zinc-900 rounded-lg flex-wrap'>
@@ -1587,7 +1587,7 @@ export default function RealtimeChart() {
         </div>
       )}
 
-      <div className='grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px] lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px] gap-4 flex-1 min-h-0'>
+      <div className='grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px] lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px] gap-4 min-h-[calc(100vh-180px)]'>
       {/* 좌측: 메인 차트 영역 */}
       <div className='bg-zinc-900 p-4 rounded-lg min-w-0 flex flex-col overflow-hidden'>
         {/* 1. 헤더: 연결 상태 + 설정 */}
