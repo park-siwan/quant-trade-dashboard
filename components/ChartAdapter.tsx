@@ -122,6 +122,13 @@ export default function ChartAdapter({
   const volumeProfile = useMemo(() => {
     if (!data?.data?.candles || data.data.candles.length === 0) return null;
 
+    // 심볼 검증: 데이터가 현재 요청한 심볼과 일치하는지 확인
+    // (심볼 전환 시 이전 심볼의 가격 데이터로 지지/저항 박스가 생성되는 것 방지)
+    const fetchedSymbol = (data as any)?._fetchedSymbol;
+    if (fetchedSymbol && fetchedSymbol !== symbol) {
+      return null;
+    }
+
     const candles = data.data.candles;
     // [timestamp, open, high, low, close, volume]
     const prices = candles.map(c => ({ high: c[2], low: c[3], close: c[4], volume: c[5] || 0 }));
@@ -325,14 +332,20 @@ export default function ChartAdapter({
   // CVD + OI 신호
   const marketSignals = data?.data?.cvdOi?.signals || [];
 
-  // 횡보 구간 데이터
-  const consolidationData: ConsolidationData | null = data?.data?.consolidation || null;
+  // 심볼 검증 헬퍼 (가격 기반 데이터의 잔재 방지)
+  const isValidSymbolData = useMemo(() => {
+    const fetchedSymbol = (data as any)?._fetchedSymbol;
+    return !fetchedSymbol || fetchedSymbol === symbol;
+  }, [data, symbol]);
 
-  // VWAP + ATR 데이터
-  const vwapAtrData: VwapAtrData | null = data?.data?.vwapAtr || null;
+  // 횡보 구간 데이터 (심볼 검증 포함)
+  const consolidationData: ConsolidationData | null = isValidSymbolData ? (data?.data?.consolidation || null) : null;
 
-  // 오더블록 데이터
-  const orderBlockData: OrderBlockData | null = data?.data?.orderBlocks || null;
+  // VWAP + ATR 데이터 (심볼 검증 포함)
+  const vwapAtrData: VwapAtrData | null = isValidSymbolData ? (data?.data?.vwapAtr || null) : null;
+
+  // 오더블록 데이터 (심볼 검증 포함)
+  const orderBlockData: OrderBlockData | null = isValidSymbolData ? (data?.data?.orderBlocks || null) : null;
 
   // 오더북 데이터 (매수/매도벽)
   const orderBookData: OrderBookData | null = data?.data?.orderBook || null;

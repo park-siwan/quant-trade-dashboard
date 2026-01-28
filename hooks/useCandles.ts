@@ -44,8 +44,20 @@ export function useCandles({
   const prevCandleCloseRef = useRef<number>(0);
   const currentCandleTimeRef = useRef<number>(0);
   const syncCountRef = useRef<number>(0);
+  const prevSymbolRef = useRef<string>(symbol); // 이전 심볼 추적
 
   const queryKey = ['candles', symbol, timeframe, limit];
+
+  // 심볼 변경 시 refs 초기화 (이전 데이터 잔재 방지)
+  useEffect(() => {
+    if (prevSymbolRef.current !== symbol) {
+      lastCandleTimeRef.current = 0;
+      prevCandleCloseRef.current = 0;
+      currentCandleTimeRef.current = 0;
+      syncCountRef.current = 0;
+      prevSymbolRef.current = symbol;
+    }
+  }, [symbol]);
 
   // 지표(ATR/VAH/VAL 등) 갱신을 위한 주기적 refetch 간격 (ms)
   // WebSocket이 활성화되어도 지표는 API에서만 계산되므로 주기적 refetch 필요
@@ -60,11 +72,19 @@ export function useCandles({
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchCandles({ symbol, timeframe, limit }),
+    queryFn: async () => {
+      const response = await fetchCandles({ symbol, timeframe, limit });
+      // 응답에 심볼 정보 추가 (데이터 검증용)
+      return { ...response, _fetchedSymbol: symbol };
+    },
     // WebSocket 사용 시에도 지표 갱신을 위해 주기적 refetch 활성화
     refetchInterval: enableAutoRefresh ? getIndicatorRefreshInterval(timeframe) : false,
     staleTime: 30_000,
   });
+
+  // 심볼이 일치하지 않으면 데이터를 null로 처리 (지지/저항 박스 잔재 방지)
+  const isSymbolMatched = query.data?._fetchedSymbol === symbol;
+  const validatedData = isSymbolMatched ? query.data : undefined;
 
   // refetch 함수를 ref로 저장
   const refetchRef = useRef(query.refetch);
@@ -98,15 +118,16 @@ export function useCandles({
     }
   }, [timeframe, enableWebSocket, subscribeKline]);
 
-  // API 데이터 로드 시 마지막 캔들의 close 저장
+  // API 데이터 로드 시 마지막 캔들의 close 저장 (심볼 일치할 때만)
   useEffect(() => {
-    const candles = query.data?.data?.candles;
+    if (!isSymbolMatched) return;
+    const candles = validatedData?.data?.candles;
     if (candles && candles.length > 0) {
       const lastCandle = candles[candles.length - 1];
       prevCandleCloseRef.current = lastCandle[4];
       currentCandleTimeRef.current = lastCandle[0];
     }
-  }, [query.data]);
+  }, [validatedData, isSymbolMatched]);
 
   // 실시간 캔들 데이터 처리
   const realtimeCandle: RealtimeCandle | null = (() => {
@@ -169,6 +190,9 @@ export function useCandles({
 
   return {
     ...query,
+    // 심볼이 일치하지 않으면 로딩 중으로 처리 (지지/저항 박스 잔재 방지)
+    data: validatedData,
+    isLoading: query.isLoading || !isSymbolMatched,
     realtimeCandle,
   };
 }

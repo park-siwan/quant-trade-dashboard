@@ -555,6 +555,13 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
       return { mtfData: null, volumeProfile: null, orderBlocks: undefined };
     }
 
+    // 심볼 검증: backendData.symbol이 요청된 symbol과 일치하는지 확인
+    // backendData.symbol은 "BTC/USDT" 형식, symbol은 "BTCUSDT" 형식
+    const normalizedBackendSymbol = backendData.symbol?.replace('/', '').toUpperCase();
+    if (normalizedBackendSymbol !== symbol.toUpperCase()) {
+      return { mtfData: null, volumeProfile: null, orderBlocks: undefined };
+    }
+
     const rawTimeframesData = backendData.timeframes
       .map(processBackendData)
       .filter((t): t is RawTimeframeData => t !== null);
@@ -598,7 +605,7 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
     }));
 
     return { mtfData, volumeProfile, orderBlocks };
-  }, [backendData]);
+  }, [backendData, symbol]);
 
   // 수동 새로고침 (재구독)
   const refetch = useCallback(() => {
@@ -608,9 +615,12 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
   // 특정 타임프레임의 원본 다이버전스 시그널 가져오기
   const getRawDivergences = useCallback((timeframe: string) => {
     if (!backendData?.timeframes) return [];
+    // 심볼 검증: 다른 심볼의 다이버전스 데이터 반환 방지
+    const normalizedBackendSymbol = backendData.symbol?.replace('/', '').toUpperCase();
+    if (normalizedBackendSymbol !== symbol.toUpperCase()) return [];
     const tf = backendData.timeframes.find(t => t.timeframe === timeframe);
     return tf?.signals?.divergence || [];
-  }, [backendData]);
+  }, [backendData, symbol]);
 
   return {
     data: processedData.mtfData,
