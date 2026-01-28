@@ -39,7 +39,7 @@ function ScoreBar({ data, isTotal = false, index = 0 }: { data: CategoryData; is
 
   return (
     <div
-      className={`group relative ${isTotal ? 'mb-4 pb-4 border-b border-cyan-900/30' : ''}`}
+      className={`group relative ${isTotal ? 'mb-4 pb-4 border-b border-emerald-900/30' : ''}`}
       style={{ animationDelay: animDelay }}
     >
       {/* 배경 그리드 라인 (토탈만) */}
@@ -59,7 +59,7 @@ function ScoreBar({ data, isTotal = false, index = 0 }: { data: CategoryData; is
             className={`
               font-mono tabular-nums tracking-tight
               ${isTotal ? 'text-lg font-bold' : 'text-[11px] font-medium'}
-              ${isLongWin ? 'text-cyan-400' : 'text-slate-600'}
+              ${isLongWin ? 'text-emerald-400' : 'text-slate-600'}
               transition-colors duration-300
             `}
           >
@@ -68,7 +68,7 @@ function ScoreBar({ data, isTotal = false, index = 0 }: { data: CategoryData; is
           {isLongWin && !isTie && (
             <span className={`
               ${isTotal ? 'text-[10px]' : 'text-[8px]'}
-              text-cyan-500/80 font-medium uppercase tracking-wider
+              text-emerald-500/80 font-medium uppercase tracking-wider
             `}>
               ▲
             </span>
@@ -134,12 +134,12 @@ function ScoreBar({ data, isTotal = false, index = 0 }: { data: CategoryData; is
             width: `${longPercent}%`,
             background: isLongWin
               ? `linear-gradient(90deg,
-                  rgba(6,182,212,0.15) 0%,
-                  rgba(6,182,212,0.6) 40%,
-                  rgba(34,211,238,0.9) 100%)`
+                  rgba(16,185,129,0.15) 0%,
+                  rgba(16,185,129,0.6) 40%,
+                  rgba(52,211,153,0.9) 100%)`
               : `linear-gradient(90deg,
-                  rgba(6,182,212,0.05) 0%,
-                  rgba(6,182,212,0.15) 100%)`,
+                  rgba(16,185,129,0.05) 0%,
+                  rgba(16,185,129,0.15) 100%)`,
           }}
         />
 
@@ -149,8 +149,8 @@ function ScoreBar({ data, isTotal = false, index = 0 }: { data: CategoryData; is
             className="absolute top-0 h-full w-1 transition-all duration-700"
             style={{
               left: `calc(${longPercent}% - 2px)`,
-              background: 'linear-gradient(90deg, rgba(34,211,238,0.8), rgba(34,211,238,0))',
-              boxShadow: '0 0 8px rgba(34,211,238,0.6)',
+              background: 'linear-gradient(90deg, rgba(52,211,153,0.8), rgba(52,211,153,0))',
+              boxShadow: '0 0 8px rgba(52,211,153,0.6)',
             }}
           />
         )}
@@ -189,7 +189,7 @@ function ScoreBar({ data, isTotal = false, index = 0 }: { data: CategoryData; is
             <div className="absolute left-2 top-1/2 -translate-y-1/2 z-30">
               <span className={`
                 text-[9px] font-mono font-bold
-                ${isLongWin ? 'text-cyan-300' : 'text-slate-500'}
+                ${isLongWin ? 'text-emerald-300' : 'text-slate-500'}
               `}>
                 {Math.round(longPercent)}%
               </span>
@@ -249,9 +249,9 @@ export default function RadarScoreChart({ longScores, shortScores, size = 'norma
       <div className="flex justify-between items-center text-[9px] mt-3 pt-3 border-t border-slate-800/50">
         <div className="flex items-center gap-2">
           <div className="relative w-8 h-1.5 bg-slate-900 overflow-hidden">
-            <div className="absolute inset-y-0 left-0 w-3/4 bg-gradient-to-r from-cyan-500/30 to-cyan-400/80" />
+            <div className="absolute inset-y-0 left-0 w-3/4 bg-gradient-to-r from-emerald-500/30 to-emerald-400/80" />
           </div>
-          <span className="text-cyan-500/70 uppercase tracking-wider font-medium">Long</span>
+          <span className="text-emerald-500/70 uppercase tracking-wider font-medium">Long</span>
         </div>
 
         <span className="text-slate-700 text-[8px] tracking-widest">◆ 50% ◆</span>
