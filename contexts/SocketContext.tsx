@@ -14,6 +14,7 @@ export interface TickerData {
   low24h: number;
   volume24h: number;
   timestamp: number;
+  symbol?: string; // 심볼 정보 (BTCUSDT 형식)
 }
 
 export interface OrderBookLevel {
@@ -38,6 +39,7 @@ export interface KlineData {
   volume: number;
   isFinal: boolean;
   timeframe: string;
+  symbol?: string; // 심볼 정보 (BTCUSDT 형식)
 }
 
 // MTF 백엔드 데이터 타입
@@ -157,7 +159,7 @@ const SocketContext = createContext<SocketContextValue>({
   longShortRatioData: null,
   divergenceData: null,
   divergenceHistory: [],
-  currentSymbol: 'BTCUSDT',
+  currentSymbol: '',
   subscribeKline: () => {},
   subscribeMtf: () => {},
   subscribeSymbol: () => {},
@@ -184,7 +186,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [longShortRatioData, setLongShortRatioData] = useState<LongShortRatioData | null>(null);
   const [divergenceData, setDivergenceData] = useState<RealtimeDivergenceData | null>(null);
   const [divergenceHistory, setDivergenceHistory] = useState<RealtimeDivergenceData[]>([]);
-  const [currentSymbol, setCurrentSymbol] = useState<string>('BTCUSDT');
+  const [currentSymbol, setCurrentSymbol] = useState<string>('');
+  const currentSymbolRef = useRef<string>(''); // 이벤트 핸들러에서 최신 심볼 확인용
 
   // 페이지 visibility 변경 감지 - 잠자기 복귀 시 히스토리 클리어
   useEffect(() => {
@@ -228,7 +231,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     socket.on('connect', () => {
       setIsConnected(true);
-      socket.emit('subscribe', { symbol: 'BTCUSDT' });
+      // 초기 구독은 useSymbolSubscription 훅에서 처리
+      // (URL 기반 심볼로 올바르게 구독하기 위해)
     });
 
     socket.on('disconnect', () => {
@@ -237,6 +241,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     // Binance realtime data
     socket.on('binance:ticker', (data: TickerData) => {
+      // symbol 필드가 없거나 다른 심볼이면 무시 (필수 체크)
+      if (!data.symbol || data.symbol !== currentSymbolRef.current) {
+        return;
+      }
       setTicker(data);
     });
 
@@ -245,6 +253,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     });
 
     socket.on('binance:kline', (data: KlineData) => {
+      // symbol 필드가 없거나 다른 심볼이면 무시 (필수 체크)
+      if (!data.symbol || data.symbol !== currentSymbolRef.current) {
+        return;
+      }
       // 타임프레임별로 kline 저장
       klineMapRef.current.set(data.timeframe, data);
       setKlineMapVersion(v => v + 1); // 변경 알림
@@ -253,27 +265,50 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     // MTF data from backend
     socket.on('mtf:data', (data: BackendMTFData) => {
+      // symbol 필드가 없거나 다른 심볼이면 무시 (다이버전스 잔재 방지)
+      // MTF 심볼은 "BTC/USDT" 형식, currentSymbolRef는 "BTCUSDT" 형식
+      const normalizedSymbol = data.symbol?.replace('/', '').toUpperCase();
+      if (!normalizedSymbol || normalizedSymbol !== currentSymbolRef.current) {
+        return;
+      }
       setMtfData(data);
       setLastMtfUpdate(Date.now());
     });
 
     // Liquidation data from backend
     socket.on('data:liquidation', (data: LiquidationData) => {
+      // 심볼 체크 (BTCUSDT 형식)
+      if (data.symbol && data.symbol !== currentSymbolRef.current) {
+        return;
+      }
       setLiquidationData(data);
     });
 
     // Whale data from backend
     socket.on('data:whale', (data: WhaleData) => {
+      // 심볼 체크 (BTCUSDT 형식)
+      if (data.symbol && data.symbol !== currentSymbolRef.current) {
+        return;
+      }
       setWhaleData(data);
     });
 
     // Funding rate from backend
     socket.on('data:fundingRate', (data: FundingRateData) => {
+      // 심볼 체크 (BTCUSDT 형식)
+      if (data.symbol && data.symbol !== currentSymbolRef.current) {
+        return;
+      }
       setFundingRateData(data);
     });
 
     // Coinglass data from backend
     socket.on('data:coinglass', (data: CoinglassData) => {
+      // Coinglass는 baseSymbol 사용 (BTC, ETH 등)
+      const expectedBase = currentSymbolRef.current?.replace('USDT', '');
+      if (data.symbol && data.symbol !== expectedBase) {
+        return;
+      }
       setCoinglassData(data);
     });
 
@@ -346,23 +381,33 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
   // 심볼 변경 시 데이터 초기화 및 재구독
   const subscribeSymbol = useCallback((symbol: string) => {
-    console.log(`[Socket] Changing symbol to: ${symbol}`);
-    setCurrentSymbol(symbol);
+    // 같은 심볼이면 무시 (중복 구독 방지)
+    if (symbol === currentSymbolRef.current) {
+      return;
+    }
 
-    // 기존 데이터 초기화
-    setTicker(null);
-    setOrderbook(null);
-    setKline(null);
-    klineMapRef.current.clear();
-    setKlineMapVersion(v => v + 1);
-    setMtfData(null);
-    setLiquidationData(null);
-    setWhaleData(null);
-    setFundingRateData(null);
-    setCoinglassData(null);
-    setLongShortRatioData(null);
-    setDivergenceData(null);
-    setDivergenceHistory([]);
+    const isFirstSubscription = currentSymbolRef.current === '';
+    console.log(`[Socket] ${isFirstSubscription ? 'First subscription' : 'Changing symbol'} to: ${symbol}`);
+
+    setCurrentSymbol(symbol);
+    currentSymbolRef.current = symbol; // ref도 업데이트 (이벤트 핸들러용)
+
+    // 첫 구독이 아닐 때만 기존 데이터 초기화 (깜빡임 방지)
+    if (!isFirstSubscription) {
+      setTicker(null);
+      setOrderbook(null);
+      setKline(null);
+      klineMapRef.current.clear();
+      setKlineMapVersion(v => v + 1);
+      setMtfData(null);
+      setLiquidationData(null);
+      setWhaleData(null);
+      setFundingRateData(null);
+      setCoinglassData(null);
+      setLongShortRatioData(null);
+      setDivergenceData(null);
+      setDivergenceHistory([]);
+    }
 
     // 백엔드에 심볼 변경 요청
     if (socketRef.current?.connected) {

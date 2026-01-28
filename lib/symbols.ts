@@ -13,6 +13,7 @@ export const SYMBOLS: SymbolInfo[] = [
   { id: 'ETHUSDT', slug: 'eth', label: 'ETH', name: 'Ethereum', slashFormat: 'ETH/USDT', decimals: 2 },
   { id: 'SOLUSDT', slug: 'sol', label: 'SOL', name: 'Solana', slashFormat: 'SOL/USDT', decimals: 2 },
   { id: 'XRPUSDT', slug: 'xrp', label: 'XRP', name: 'Ripple', slashFormat: 'XRP/USDT', decimals: 4 },
+  { id: 'WLDUSDT', slug: 'wld', label: 'WLD', name: 'Worldcoin', slashFormat: 'WLD/USDT', decimals: 3 },
 ];
 
 export const DEFAULT_SYMBOL = SYMBOLS[0];

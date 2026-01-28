@@ -1,12 +1,11 @@
 'use client';
 
 import { atom } from 'jotai';
-import { atomWithStorage } from 'jotai/utils';
 import { SYMBOLS, DEFAULT_SYMBOL, getSymbolBySlug, SymbolInfo } from '@/lib/symbols';
 
-// URL searchParams 대신 localStorage 사용 (SSR 호환성)
-// Next.js App Router에서 URL 동기화는 useSearchParams로 별도 처리
-export const symbolSlugAtom = atomWithStorage<string>('symbol', DEFAULT_SYMBOL.slug);
+// 순수 메모리 기반 atom (localStorage 사용 안 함)
+// URL에서 심볼을 가져와서 설정
+export const symbolSlugAtom = atom<string>(DEFAULT_SYMBOL.slug);
 
 // 파생 atom: slug -> 전체 심볼 정보
 export const symbolAtom = atom<SymbolInfo>((get) => {
