@@ -769,21 +769,6 @@ export default function MTFOverview({
         </div>
       )}
 
-      {/* 스코어 카드 (디버깅용 전체 너비) */}
-      <ScoreCard
-        mtfData={data}
-        fundingRate={fundingRate}
-        currentPrice={actualPrice}
-        orderBlocks={orderBlocks}
-        poc={poc}
-        vah={vah}
-        val={val}
-        fearGreedIndex={fearGreedIndex}
-      />
-      {/* 추천 타점 - 디버깅 위해 주석 처리
-      <RecommendationCard recommendation={recommendation} />
-      */}
-
       {/* 시간대별 분석 테이블 */}
       <div className="backdrop-blur-sm bg-white/[0.02] border border-white/10 rounded-xl p-3">
       {/* 헤더 */}
@@ -888,6 +873,18 @@ export default function MTFOverview({
         </div>
       </div>
       </div>
+
+      {/* 신호 점수 차트 (시간대별 분석 아래) */}
+      <ScoreCard
+        mtfData={data}
+        fundingRate={fundingRate}
+        currentPrice={actualPrice}
+        orderBlocks={orderBlocks}
+        poc={poc}
+        vah={vah}
+        val={val}
+        fearGreedIndex={fearGreedIndex}
+      />
     </div>
   );
 }

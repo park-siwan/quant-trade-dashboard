@@ -1,6 +1,6 @@
 'use client';
 
-import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, Tooltip } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, Cell } from 'recharts';
 
 interface RadarScoreChartProps {
   longScores: {
@@ -20,87 +20,134 @@ interface RadarScoreChartProps {
   size?: 'small' | 'normal' | 'large';
 }
 
-// 색상 정의: 초록(롱) + 빨강(숏) - 겹치면 보라색
+// 색상 정의
 const COLORS = {
   long: {
-    stroke: '#4ade80',    // green-400
-    fill: '#22c55e',      // green-500
+    main: '#22c55e',
+    light: 'rgba(34, 197, 94, 0.6)',
   },
   short: {
-    stroke: '#f87171',    // red-400
-    fill: '#ef4444',      // red-500
+    main: '#ef4444',
+    light: 'rgba(239, 68, 68, 0.6)',
   },
 };
 
+// 티어 기반 정규화
+const TIER_THRESHOLDS = {
+  divergence: [
+    [25, 1, 30],
+    [50, 31, 80],
+    [75, 81, 200],
+  ],
+  momentum: [
+    [25, 1, 5],
+    [50, 6, 12],
+    [75, 13, 20],
+  ],
+  environment: [
+    [25, 1, 8],
+    [50, 9, 18],
+    [75, 19, 28],
+  ],
+  levels: [
+    [25, 1, 4],
+    [50, 5, 8],
+    [75, 9, 12],
+  ],
+} as const;
+
+type TierCategory = keyof typeof TIER_THRESHOLDS;
+
+const TIER_LABELS = ['없음', '약함', '보통', '강함', '매우강함'] as const;
+
+function toTier(raw: number, category: TierCategory): number {
+  if (raw <= 0) return 0;
+  const tiers = TIER_THRESHOLDS[category];
+  for (const [tierBase, min, max] of tiers) {
+    if (raw >= min && raw <= max) {
+      if (min === max) return tierBase;
+      return Math.round(tierBase + ((raw - min) / (max - min)) * 25);
+    }
+  }
+  return 100;
+}
+
+function getTierLabel(raw: number, category: TierCategory): string {
+  if (raw <= 0) return TIER_LABELS[0];
+  const tiers = TIER_THRESHOLDS[category];
+  if (raw <= tiers[0][2]) return TIER_LABELS[1];
+  if (raw <= tiers[1][2]) return TIER_LABELS[2];
+  if (raw <= tiers[2][2]) return TIER_LABELS[3];
+  return TIER_LABELS[4];
+}
+
 export default function RadarScoreChart({ longScores, shortScores, size = 'normal' }: RadarScoreChartProps) {
-  // 4개 카테고리: 다이버전스, 모멘텀, 시장환경(거래량+시장심리), 지지/저항
-
-  // sqrt 스케일: 낮은 점수도 시각적으로 인식 가능 (0은 0 유지)
-  // 0→0, 4→20, 25→50, 50→71, 100→100
-  const sqrtScale = (value: number) => Math.round(Math.sqrt(Math.max(0, value) / 100) * 100);
-
-  // 다이버전스는 동적 max (둘 중 큰 값 또는 최소 400)
-  const divMax = Math.max(400, longScores.divergence, shortScores.divergence);
-
-  const normalize = (raw: number, max: number) => Math.min(100, Math.round((raw / max) * 100));
-
-  // 시장환경 = 거래량(20) + 시장심리(15) = 35점 만점
-  const envMax = 35;
   const longEnvRaw = longScores.volume + longScores.sentiment;
   const shortEnvRaw = shortScores.volume + shortScores.sentiment;
 
+  const longDiv = toTier(longScores.divergence, 'divergence');
+  const shortDiv = toTier(shortScores.divergence, 'divergence');
+  const longMom = toTier(longScores.momentum, 'momentum');
+  const shortMom = toTier(shortScores.momentum, 'momentum');
+  const longEnv = toTier(longEnvRaw, 'environment');
+  const shortEnv = toTier(shortEnvRaw, 'environment');
+  const longLev = toTier(longScores.levels, 'levels');
+  const shortLev = toTier(shortScores.levels, 'levels');
+
   const data = [
     {
-      category: '다이버전스',
-      fullName: '다이버전스',
-      long: sqrtScale(normalize(longScores.divergence, divMax)),
-      short: sqrtScale(normalize(shortScores.divergence, divMax)),
+      name: '다이버전스',
+      long: longDiv,
+      short: shortDiv,
       longRaw: longScores.divergence,
       shortRaw: shortScores.divergence,
-      max: divMax,
+      longTier: getTierLabel(longScores.divergence, 'divergence'),
+      shortTier: getTierLabel(shortScores.divergence, 'divergence'),
     },
     {
-      category: '모멘텀',
-      fullName: '모멘텀/RSI+ADX',
-      long: sqrtScale(normalize(longScores.momentum, 25)),
-      short: sqrtScale(normalize(shortScores.momentum, 25)),
+      name: '모멘텀',
+      long: longMom,
+      short: shortMom,
       longRaw: longScores.momentum,
       shortRaw: shortScores.momentum,
-      max: 25,
+      longTier: getTierLabel(longScores.momentum, 'momentum'),
+      shortTier: getTierLabel(shortScores.momentum, 'momentum'),
     },
     {
-      category: '시장환경',
-      fullName: '시장환경 (CVD+ATR+펀딩+OI)',
-      long: sqrtScale(normalize(longEnvRaw, envMax)),
-      short: sqrtScale(normalize(shortEnvRaw, envMax)),
+      name: '시장환경',
+      long: longEnv,
+      short: shortEnv,
       longRaw: longEnvRaw,
       shortRaw: shortEnvRaw,
-      max: envMax,
+      longTier: getTierLabel(longEnvRaw, 'environment'),
+      shortTier: getTierLabel(shortEnvRaw, 'environment'),
     },
     {
-      category: '지지/저항',
-      fullName: '지지/저항 (OB+POC+VA)',
-      long: sqrtScale(normalize(longScores.levels, 15)),
-      short: sqrtScale(normalize(shortScores.levels, 15)),
+      name: '지지/저항',
+      long: longLev,
+      short: shortLev,
       longRaw: longScores.levels,
       shortRaw: shortScores.levels,
-      max: 15,
+      longTier: getTierLabel(longScores.levels, 'levels'),
+      shortTier: getTierLabel(shortScores.levels, 'levels'),
     },
   ];
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload;
+      const d = payload[0].payload;
       return (
         <div className="bg-gray-900/95 backdrop-blur-sm border border-white/20 rounded-lg p-2.5 text-xs shadow-xl">
-          <p className="text-white font-medium mb-1.5">{data.fullName}</p>
+          <p className="text-white font-medium mb-1.5">{label}</p>
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-2 h-2 rounded-full bg-green-400" />
-            <span className="text-green-400">롱: {data.longRaw}/{data.max}</span>
+            <span className="w-2 h-2 rounded-full bg-green-500" />
+            <span className="text-green-400">롱: {d.longRaw}점</span>
+            <span className="text-gray-400">({d.longTier})</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-red-400" />
-            <span className="text-red-400">숏: {data.shortRaw}/{data.max}</span>
+            <span className="w-2 h-2 rounded-full bg-red-500" />
+            <span className="text-red-400">숏: {d.shortRaw}점</span>
+            <span className="text-gray-400">({d.shortTier})</span>
           </div>
         </div>
       );
@@ -108,78 +155,70 @@ export default function RadarScoreChart({ longScores, shortScores, size = 'norma
     return null;
   };
 
-  const height = size === 'large' ? 'h-[300px]' : size === 'small' ? 'h-[130px]' : 'h-[200px]';
-  const outerRadius = size === 'large' ? '85%' : size === 'small' ? '70%' : '75%';
+  const height = size === 'large' ? 'h-[200px]' : size === 'small' ? 'h-[80px]' : 'h-[150px]';
+  const fontSize = size === 'small' ? 8 : size === 'large' ? 11 : 9;
+  const barSize = size === 'large' ? 16 : size === 'small' ? 8 : 12;
 
   return (
-    <div className={`w-full ${height} relative`}>
-      {/* 그라디언트 & 글로우 효과를 위한 SVG Defs */}
-      <svg width="0" height="0" className="absolute">
-        <defs>
-          {/* 롱 그라디언트 */}
-          <linearGradient id="longGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor={COLORS.long.stroke} stopOpacity={0.7} />
-            <stop offset="100%" stopColor={COLORS.long.fill} stopOpacity={0.3} />
-          </linearGradient>
-          {/* 숏 그라디언트 */}
-          <linearGradient id="shortGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor={COLORS.short.stroke} stopOpacity={0.7} />
-            <stop offset="100%" stopColor={COLORS.short.fill} stopOpacity={0.3} />
-          </linearGradient>
-          {/* 글로우 필터 */}
-          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="2" result="coloredBlur" />
-            <feMerge>
-              <feMergeNode in="coloredBlur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-      </svg>
-
+    <div className={`w-full ${height}`}>
       <ResponsiveContainer width="100%" height="100%">
-        <RadarChart cx="50%" cy="50%" outerRadius={outerRadius} data={data}>
-          {/* 배경 그리드 */}
-          <PolarGrid
-            stroke="rgba(255,255,255,0.08)"
-            strokeDasharray="none"
-            gridType="polygon"
-          />
-          <PolarAngleAxis
-            dataKey="category"
-            tick={{ fill: '#9ca3af', fontSize: size === 'large' ? 11 : size === 'small' ? 7 : 9 }}
+        <BarChart data={data} margin={{ top: 10, right: 10, bottom: 5, left: -15 }} barGap={2}>
+          {/* 티어 기준선 */}
+          <ReferenceLine y={25} stroke="rgba(255,255,255,0.08)" strokeDasharray="2 2" />
+          <ReferenceLine y={50} stroke="rgba(255,255,255,0.12)" strokeDasharray="2 2" />
+          <ReferenceLine y={75} stroke="rgba(255,255,255,0.08)" strokeDasharray="2 2" />
+
+          <XAxis
+            dataKey="name"
+            axisLine={false}
             tickLine={false}
-            axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+            tick={{ fill: '#9ca3af', fontSize }}
+          />
+          <YAxis
+            domain={[0, 100]}
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: '#6b7280', fontSize: fontSize - 1 }}
+            ticks={[0, 50, 100]}
+            width={30}
           />
 
-          {/* 숏 레이더 (먼저 그려서 뒤에) */}
-          <Radar
-            name="숏"
-            dataKey="short"
-            stroke={COLORS.short.stroke}
-            fill="url(#shortGradient)"
-            fillOpacity={0.6}
-            strokeWidth={2}
-            strokeOpacity={0.9}
-            style={{ filter: 'url(#glow)', mixBlendMode: 'overlay' }}
-          />
+          {/* 롱 바 */}
+          <Bar dataKey="long" fill={COLORS.long.main} radius={[4, 4, 0, 0]} barSize={barSize}>
+            {data.map((entry, index) => (
+              <Cell
+                key={`long-${index}`}
+                fill={entry.long > entry.short ? COLORS.long.main : COLORS.long.light}
+              />
+            ))}
+          </Bar>
 
-          {/* 롱 레이더 (나중에 그려서 앞에) - 블렌드 모드로 겹침 시 색상 혼합 */}
-          <Radar
-            name="롱"
-            dataKey="long"
-            stroke={COLORS.long.stroke}
-            fill="url(#longGradient)"
-            fillOpacity={0.6}
-            strokeWidth={2}
-            strokeOpacity={0.9}
-            style={{ filter: 'url(#glow)', mixBlendMode: 'overlay' }}
-          />
+          {/* 숏 바 */}
+          <Bar dataKey="short" fill={COLORS.short.main} radius={[4, 4, 0, 0]} barSize={barSize}>
+            {data.map((entry, index) => (
+              <Cell
+                key={`short-${index}`}
+                fill={entry.short > entry.long ? COLORS.short.main : COLORS.short.light}
+              />
+            ))}
+          </Bar>
 
-          <Tooltip content={<CustomTooltip />} />
-        </RadarChart>
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+        </BarChart>
       </ResponsiveContainer>
 
+      {/* 범례 */}
+      <div className="flex justify-center gap-4 text-[10px] mt-1">
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-sm bg-green-500" />
+          <span className="text-gray-400">롱</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-sm bg-red-500" />
+          <span className="text-gray-400">숏</span>
+        </span>
+        <span className="text-gray-500">| 진한색 = 우세</span>
+      </div>
     </div>
   );
 }
