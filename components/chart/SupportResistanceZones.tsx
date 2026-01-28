@@ -85,9 +85,9 @@ export default function SupportResistanceZones({
         );
       })}
 
-      {/* 병합된 라벨 표시 */}
+      {/* 병합된 라벨 표시 - 박스 안에 배치 */}
       {showLabels && blendedZones.map((item, index) => {
-        const { zone, topY, bottomY, startX } = item;
+        const { zone, topY, bottomY } = item;
         const minHeight = 14;
         const rawHeight = Math.abs(bottomY - topY);
         const height = Math.max(rawHeight, minHeight);
@@ -128,7 +128,7 @@ export default function SupportResistanceZones({
             key={`label-${index}`}
             style={{
               position: 'absolute',
-              left: `${startX + 3}px`,
+              right: `${rightPadding + boxWidth - 3}px`,
               top: `${top + height / 2}px`,
               transform: 'translateY(-50%)',
               fontSize: '8px',
