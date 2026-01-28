@@ -741,6 +741,13 @@ export default function RealtimeChart() {
     localStorage.setItem('selectedStrategyId', String(strategy.id)); // 새로고침 후 복원용
     localStorage.setItem('selectedStrategyTimeframe', strategy.timeframe); // 타임프레임도 저장
 
+    // 이전 백테스트 데이터 즉시 초기화 (이전 전략 데이터가 스며드는 것 방지)
+    setBacktestStats(null);
+    setBacktestTrades([]);
+    setSkippedSignals([]);
+    setOpenPosition(null);
+    setEquityCurve([]);
+
     // 전략의 타임프레임으로 변경 (전략이 최적화된 타임프레임 사용)
     if (strategy.timeframe && strategy.timeframe !== timeframe) {
       console.log('[Strategy] Changing timeframe to match strategy:', strategy.timeframe);
