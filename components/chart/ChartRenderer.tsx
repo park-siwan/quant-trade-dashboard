@@ -330,7 +330,7 @@ export default function ChartRenderer({
       timeScale: {
         timeVisible: !mini, // 미니 모드에서 시간 숨김
         secondsVisible: false,
-        rightOffset: mini ? 25 : 20, // 우측 여백 (박스 공간 확보)
+        rightOffset: mini ? 80 : 60, // 우측 여백 (박스 공간 확보)
         lockVisibleTimeRangeOnResize: true, // 리사이즈 시 시간 범위 유지
         barSpacing: mini ? 3 : 8, // 초기 캔들 간격 (크게 확대)
         minBarSpacing: 0.5, // 최소 간격
@@ -711,8 +711,9 @@ export default function ChartRenderer({
     // 줌이 적용될 때까지 반복 시도
     const targetVisibleBars = 500;
     const totalBars = data.length;
+    const rightMargin = mini ? 80 : 60; // 우측 여백 (캔들 개수 기준)
     const targetFrom = Math.max(0, totalBars - targetVisibleBars);
-    const targetTo = totalBars;
+    const targetTo = totalBars + rightMargin; // 우측에 빈 공간 추가
     let retryCount = 0;
     const maxRetries = 30;
 
@@ -726,7 +727,7 @@ export default function ChartRenderer({
         const currentVisibleBars = currentRange ? (currentRange.to - currentRange.from) : 0;
 
         // 목표 범위와 다르면 다시 적용
-        if (!currentRange || currentVisibleBars > targetVisibleBars + 10) {
+        if (!currentRange || currentVisibleBars > targetVisibleBars + rightMargin + 10) {
           chart.timeScale().setVisibleLogicalRange({
             from: targetFrom,
             to: targetTo,

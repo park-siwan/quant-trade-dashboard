@@ -38,7 +38,7 @@ export const PANEL_CONFIG = {
 export const MINI_CONFIG = {
   fontSize: 9,
   priceScaleWidth: 50,
-  rightOffset: 15,
+  rightOffset: 30,
   scaleMargins: { top: 0.15, bottom: 0.15 },
 } as const;
 
@@ -46,7 +46,7 @@ export const MINI_CONFIG = {
 export const NORMAL_CONFIG = {
   fontSize: 12,
   priceScaleWidth: 80,
-  rightOffset: 20,
+  rightOffset: 40,
   scaleMargins: { top: 0.1, bottom: 0.1 },
 } as const;
 
