@@ -1031,7 +1031,7 @@ export default function RealtimeChart() {
 
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
-      height: 500,
+      height: containerRef.current.clientHeight || 500,
       layout: {
         background: { color: '#18181b' },
         textColor: '#a1a1aa',
@@ -1146,8 +1146,8 @@ export default function RealtimeChart() {
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.target === containerRef.current && chartRef.current) {
-          const { width } = entry.contentRect;
-          chartRef.current.applyOptions({ width });
+          const { width, height } = entry.contentRect;
+          chartRef.current.applyOptions({ width, height: height || 500 });
           // 크기 변경 시 가격 스케일 재조정
           chartRef.current.priceScale('right').applyOptions({ autoScale: true });
         }
@@ -1503,7 +1503,7 @@ export default function RealtimeChart() {
   };
 
   return (
-    <div className='flex flex-col gap-4 w-full overflow-hidden max-h-[calc(100vh-120px)]'>
+    <div className='flex flex-col gap-4 w-full overflow-hidden h-[calc(100vh-100px)]'>
       {/* 상단: 통계 헤더 (전체 너비) */}
       {backtestStats && (
         <div className='flex items-center gap-3 px-4 py-2 bg-zinc-900 rounded-lg flex-wrap'>
@@ -1874,11 +1874,11 @@ export default function RealtimeChart() {
 
         {/* 4. 차트 */}
         {isLoading ? (
-          <div className='h-[500px] flex items-center justify-center'>
+          <div className='flex-1 min-h-[400px] flex items-center justify-center'>
             <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500'></div>
           </div>
         ) : (
-          <div ref={containerRef} className='w-full relative h-[500px]'>
+          <div ref={containerRef} className='w-full relative flex-1 min-h-[400px]'>
             {/* 진행 중 포지션 이모지 오버레이 */}
             {openPosition &&
               chartRef.current &&
@@ -2127,7 +2127,7 @@ export default function RealtimeChart() {
       </div>
 
       {/* 우측: 전략 리스트 */}
-      <div className='flex flex-col gap-2 min-w-0 max-h-[calc(100vh-180px)]'>
+      <div className='flex flex-col gap-2 min-w-0 h-full'>
         <div className='bg-zinc-900 p-3 rounded-lg flex-1 min-h-0 flex flex-col'>
           <h3 className='text-sm font-medium text-zinc-400 mb-2 shrink-0'>
             전략 목록 ({strategies.length})
