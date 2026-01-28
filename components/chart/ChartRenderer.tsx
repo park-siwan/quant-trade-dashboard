@@ -1600,13 +1600,13 @@ export default function ChartRenderer({
 
     const updateZoneCoords = () => {
       if (!chartRef.current || !candlestickSeriesRef.current || isChartDisposedRef.current) return;
+      if (!chartContainerRef.current) return;
 
-      // 마지막 캔들의 X 좌표 (영역 시작점)
-      const lastCandle = data[data.length - 1];
-      const lastX = chartRef.current!.timeScale().timeToCoordinate(lastCandle.time);
-      if (lastX === null) return;
-
-      const startX = lastX + 10; // 마지막 캔들 바로 오른쪽
+      // 박스 폭을 좁게 (약 40px) - 우측 끝에서 계산
+      const chartWidth = chartContainerRef.current.clientWidth;
+      const rightPadding = mini ? 55 : 85;
+      const boxWidth = 40; // 박스 폭 40px
+      const startX = chartWidth - rightPadding - boxWidth;
 
       // 개별 영역 좌표 계산 (박스 렌더링용) - POC 포함
       const rawRenderData = rawZones.map((zone) => {
