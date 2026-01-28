@@ -9,7 +9,6 @@ import {
   CandlestickData,
   LineData,
   LineSeries,
-  AreaSeries,
   IChartApi,
   ISeriesApi,
   IPriceLine,
@@ -30,7 +29,6 @@ import {
   createChartOptions,
   calculateChartHeight,
   getCandlestickOptions,
-  getAreaSeriesOptions,
   PANEL_CONFIG,
 } from '@/lib/chart/chartConfig';
 import { debug } from '@/lib/debug';
@@ -218,31 +216,21 @@ export default function ChartRenderer({
     try {
       // 차트가 dispose되지 않았는지 확인
       if (candlestickSeriesRef.current && !isChartDisposedRef.current) {
-        // 미니 모드 (AreaSeries)와 일반 모드 (CandlestickSeries) 구분
-        if (mini) {
-          // AreaSeries는 { time, value } 형식 사용
-          const areaUpdate = {
-            time: (realtimeCandle.timestamp / 1000) as LineData['time'],
-            value: realtimeCandle.close,
-          };
-          (candlestickSeriesRef.current as ISeriesApi<'Area'>).update(areaUpdate);
-        } else {
-          // CandlestickSeries는 전체 OHLC 데이터 사용 - 무채색
-          const isUp = realtimeCandle.close >= realtimeCandle.open;
-          const candleColor = isUp ? GRAY_UP : GRAY_DOWN;
+        // 미니 모드와 일반 모드 모두 CandlestickSeries 사용
+        const isUp = realtimeCandle.close >= realtimeCandle.open;
+        const candleColor = isUp ? GRAY_UP : GRAY_DOWN;
 
-          const candleUpdate: CandlestickData = {
-            time: (realtimeCandle.timestamp / 1000) as CandlestickData['time'],
-            open: realtimeCandle.open,
-            high: realtimeCandle.high,
-            low: realtimeCandle.low,
-            close: realtimeCandle.close,
-            color: candleColor,
-            borderColor: candleColor,
-            wickColor: candleColor,
-          };
-          (candlestickSeriesRef.current as ISeriesApi<'Candlestick'>).update(candleUpdate);
-        }
+        const candleUpdate: CandlestickData = {
+          time: (realtimeCandle.timestamp / 1000) as CandlestickData['time'],
+          open: realtimeCandle.open,
+          high: realtimeCandle.high,
+          low: realtimeCandle.low,
+          close: realtimeCandle.close,
+          color: candleColor,
+          borderColor: candleColor,
+          wickColor: candleColor,
+        };
+        (candlestickSeriesRef.current as ISeriesApi<'Candlestick'>).update(candleUpdate);
 
         // 가격 정보 업데이트
         const change = realtimeCandle.close - realtimeCandle.open;
@@ -265,7 +253,7 @@ export default function ChartRenderer({
         debug.chart('❌ 캔들 업데이트 에러:', err);
       }
     }
-  }, [realtimeCandle, mini]);
+  }, [realtimeCandle]);
 
   // 차트 스케일 변경 감지를 위한 state (줌/스크롤 시 박스 위치 업데이트용)
   const [scaleUpdateTrigger, setScaleUpdateTrigger] = useState(0);
@@ -373,38 +361,41 @@ export default function ChartRenderer({
       return candle.time !== arr[index - 1].time;
     });
 
-    // 미니 모드: 영역 차트 (그라데이션 채우기)
-    // 일반 모드: 캔들스틱 차트
+    // 미니 모드와 일반 모드 모두 캔들스틱 차트 사용
     if (mini) {
       // 글로우 점 색상 - 무채색 통일
       setChartColor('gray');
 
-      // 영역 시리즈 추가 (무채색 - 다이버전스 라인 강조용)
-      const areaSeries = chart.addSeries(
-        AreaSeries,
+      // 캔들스틱 시리즈 추가 (무채색)
+      const candlestickSeries = chart.addSeries(
+        CandlestickSeries,
         {
-          lineColor: CHART_COLORS.MINI_LINE,
-          lineWidth: 1,
-          topColor: CHART_COLORS.MINI_TOP,
-          bottomColor: CHART_COLORS.MINI_BOTTOM,
-          crosshairMarkerVisible: true,
-          crosshairMarkerRadius: 4,
-          crosshairMarkerBorderColor: COLORS.WHITE,
-          crosshairMarkerBackgroundColor: COLORS.NEUTRAL,
+          upColor: rgba(GRAY_UP, CANDLE_OPACITY),
+          downColor: rgba(GRAY_DOWN, CANDLE_OPACITY),
+          borderUpColor: rgba(GRAY_UP, CANDLE_OPACITY),
+          borderDownColor: rgba(GRAY_DOWN, CANDLE_OPACITY),
+          wickUpColor: rgba(GRAY_UP, CANDLE_OPACITY),
+          wickDownColor: rgba(GRAY_DOWN, CANDLE_OPACITY),
           lastValueVisible: true,
           priceLineVisible: false,
         },
         0,
       );
 
-      // 종가 데이터로 변환
-      const lineData: LineData[] = uniqueData.map(candle => ({
-        time: candle.time,
-        value: candle.close,
-      }));
+      // 모든 캔들 동일 투명도
+      const candleDataWithColors = uniqueData.map((candle) => {
+        const isUp = candle.close >= candle.open;
 
-      areaSeries.setData(lineData);
-      candlestickSeriesRef.current = areaSeries;
+        return {
+          ...candle,
+          color: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
+          borderColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
+          wickColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
+        };
+      });
+
+      candlestickSeries.setData(candleDataWithColors);
+      candlestickSeriesRef.current = candlestickSeries;
     } else {
       // 캔들스틱 시리즈 추가 (메인 패널 - paneIndex: 0) - 무채색
       const candlestickSeries = chart.addSeries(
@@ -420,19 +411,15 @@ export default function ChartRenderer({
         0,
       );
 
-      // 최근 60개 캔들은 투명도 없이, 나머지는 CANDLE_OPACITY로 표시
-      const recentThreshold = uniqueData.length - 60;
-      const RECENT_OPACITY = 1.0; // 최근 캔들 투명도 (완전 불투명)
-      const candleDataWithColors = uniqueData.map((candle, index) => {
-        const isRecent = index >= recentThreshold;
-        const opacity = isRecent ? RECENT_OPACITY : CANDLE_OPACITY;
+      // 모든 캔들 동일 투명도
+      const candleDataWithColors = uniqueData.map((candle) => {
         const isUp = candle.close >= candle.open;
 
         return {
           ...candle,
-          color: rgba(isUp ? GRAY_UP : GRAY_DOWN, opacity),
-          borderColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, opacity),
-          wickColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, opacity),
+          color: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
+          borderColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
+          wickColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
         };
       });
 
@@ -559,7 +546,7 @@ export default function ChartRenderer({
           cvd: cvdPaneIndex || undefined,
           oi: oiPaneIndex || undefined,
         },
-        mini, // 미니 모드(라인 차트)면 종가 기준으로 선 그림
+        false, // 캔들 차트: 항상 고점/저점(꼬리) 기준으로 선 그림
       );
     }
 
