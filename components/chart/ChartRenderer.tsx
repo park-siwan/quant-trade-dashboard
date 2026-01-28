@@ -328,7 +328,7 @@ export default function ChartRenderer({
       timeScale: {
         timeVisible: !mini, // 미니 모드에서 시간 숨김
         secondsVisible: false,
-        rightOffset: mini ? 10 : 10, // 우측 여백 최소화
+        rightOffset: mini ? 25 : 20, // 우측 여백 (박스 공간 확보)
         lockVisibleTimeRangeOnResize: true, // 리사이즈 시 시간 범위 유지
         barSpacing: mini ? 3 : 8, // 초기 캔들 간격 (크게 확대)
         minBarSpacing: 0.5, // 최소 간격

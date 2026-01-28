@@ -128,7 +128,7 @@ export default function SupportResistanceZones({
             key={`label-${index}`}
             style={{
               position: 'absolute',
-              right: `${rightPadding + boxWidth - 3}px`,
+              right: `${rightPadding + 3}px`,
               top: `${top + height / 2}px`,
               transform: 'translateY(-50%)',
               fontSize: '8px',
