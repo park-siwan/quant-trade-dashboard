@@ -47,9 +47,9 @@ function ScoreBar({ data, thick = false }: { data: CategoryData; thick?: boolean
   const isLongWin = data.long > data.short;
   const isShortWin = data.short > data.long;
 
-  const barHeight = thick ? 'h-7' : 'h-3';
-  const fontSize = thick ? 'text-sm' : 'text-[10px]';
-  const innerFontSize = thick ? 'text-xs' : 'text-[8px]';
+  const barHeight = thick ? 'h-4' : 'h-2';
+  const fontSize = thick ? 'text-xs' : 'text-[10px]';
+  const innerFontSize = thick ? 'text-[10px]' : 'text-[8px]';
 
   return (
     <div className="space-y-0.5">
