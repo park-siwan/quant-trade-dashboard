@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { MTFOverviewData, OrderBlock } from '@/lib/types';
 import { calculateSignalScore, confidenceLabels, SignalScore, MarketStructureData } from '@/lib/scoring';
 import { TrendingUp, TrendingDown, Activity, BarChart3, Layers, ArrowUpDown, Zap, ChevronDown, ChevronRight, Clock } from 'lucide-react';
@@ -34,7 +34,6 @@ const categoryConfig: { key: string; name: string; icon: React.ElementType }[] =
 export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlocks, poc, vah, val, fearGreedIndex }: ScoreCardProps) {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(true);
   const { history, saveScore, isLoading: historyLoading } = useScoreHistory({ limit: 60, saveInterval: 60000 });
 
   const { longScore, shortScore } = useMemo(() => {
@@ -106,48 +105,41 @@ export default function ScoreCard({ mtfData, fundingRate, currentPrice, orderBlo
         </div>
       </div>
 
-      {/* 메인 차트 (크게) */}
-      <div className="w-full">
-        <ScoreLineChart
-          longScores={{
-            divergence: longScore.divergence.score,
-            momentum: longScore.momentum.score,
-            volume: longScore.volume.score,
-            levels: longScore.levels.score,
-            sentiment: longScore.sentiment.score,
-          }}
-          shortScores={{
-            divergence: shortScore.divergence.score,
-            momentum: shortScore.momentum.score,
-            volume: shortScore.volume.score,
-            levels: shortScore.levels.score,
-            sentiment: shortScore.sentiment.score,
-          }}
-          size="large"
-        />
-      </div>
+      {/* 2컬럼: 신호점수 차트 + 점수 추이 */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* 왼쪽: 신호점수 차트 */}
+        <div>
+          <div className="text-[10px] text-gray-500 mb-2">카테고리별 점수</div>
+          <ScoreLineChart
+            longScores={{
+              divergence: longScore.divergence.score,
+              momentum: longScore.momentum.score,
+              volume: longScore.volume.score,
+              levels: longScore.levels.score,
+              sentiment: longScore.sentiment.score,
+            }}
+            shortScores={{
+              divergence: shortScore.divergence.score,
+              momentum: shortScore.momentum.score,
+              volume: shortScore.volume.score,
+              levels: shortScore.levels.score,
+              sentiment: shortScore.sentiment.score,
+            }}
+            size="normal"
+          />
+        </div>
 
-      {/* 점수 히스토리 스파크라인 */}
-      <div className="mt-3 border-t border-white/10 pt-2">
-        <button
-          onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-          className="w-full flex items-center justify-between text-[11px] text-gray-500 hover:text-gray-300 py-1"
-        >
-          <span className="flex items-center gap-1">
-            {isHistoryOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-            <Clock className="w-3 h-3" />
-            점수 추이
-          </span>
-          <span className="text-[10px]">
-            {historyLoading ? '로딩...' : `${history.length}개 기록`}
-          </span>
-        </button>
-
-        {isHistoryOpen && (
-          <div className="mt-2">
-            <ScoreSparkline history={history} height={80} showBoth={true} />
+        {/* 오른쪽: 점수 추이 */}
+        <div>
+          <div className="text-[10px] text-gray-500 mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              점수 추이
+            </span>
+            <span>{historyLoading ? '로딩...' : `${history.length}개`}</span>
           </div>
-        )}
+          <ScoreSparkline history={history} height={120} showBoth={true} />
+        </div>
       </div>
 
       {/* 상세 점수 아코디언 */}
