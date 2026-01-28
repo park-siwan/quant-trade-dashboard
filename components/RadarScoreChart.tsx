@@ -33,8 +33,7 @@ const COLORS = {
 };
 
 export default function RadarScoreChart({ longScores, shortScores, size = 'normal' }: RadarScoreChartProps) {
-  // 5개 카테고리 데이터 (정규화: 0-100%)
-  // 대척점 배치: 다이버전스, 모멘텀, 거래량, 지지/저항, 시장심리
+  // 4개 카테고리: 다이버전스, 모멘텀, 시장환경(거래량+시장심리), 지지/저항
 
   // sqrt 스케일: 낮은 점수도 시각적으로 인식 가능 (0은 0 유지)
   // 0→0, 4→20, 25→50, 50→71, 100→100
@@ -44,6 +43,11 @@ export default function RadarScoreChart({ longScores, shortScores, size = 'norma
   const divMax = Math.max(400, longScores.divergence, shortScores.divergence);
 
   const normalize = (raw: number, max: number) => Math.min(100, Math.round((raw / max) * 100));
+
+  // 시장환경 = 거래량(20) + 시장심리(15) = 35점 만점
+  const envMax = 35;
+  const longEnvRaw = longScores.volume + longScores.sentiment;
+  const shortEnvRaw = shortScores.volume + shortScores.sentiment;
 
   const data = [
     {
@@ -57,7 +61,7 @@ export default function RadarScoreChart({ longScores, shortScores, size = 'norma
     },
     {
       category: '모멘텀',
-      fullName: '모멘텀/RSI',
+      fullName: '모멘텀/RSI+ADX',
       long: sqrtScale(normalize(longScores.momentum, 25)),
       short: sqrtScale(normalize(shortScores.momentum, 25)),
       longRaw: longScores.momentum,
@@ -65,30 +69,21 @@ export default function RadarScoreChart({ longScores, shortScores, size = 'norma
       max: 25,
     },
     {
-      category: '거래량',
-      fullName: '거래량/CVD',
-      long: sqrtScale(normalize(longScores.volume, 20)),
-      short: sqrtScale(normalize(shortScores.volume, 20)),
-      longRaw: longScores.volume,
-      shortRaw: shortScores.volume,
-      max: 20,
+      category: '시장환경',
+      fullName: '시장환경 (CVD+ATR+펀딩+OI)',
+      long: sqrtScale(normalize(longEnvRaw, envMax)),
+      short: sqrtScale(normalize(shortEnvRaw, envMax)),
+      longRaw: longEnvRaw,
+      shortRaw: shortEnvRaw,
+      max: envMax,
     },
     {
       category: '지지/저항',
-      fullName: '지지/저항',
+      fullName: '지지/저항 (OB+POC+VA)',
       long: sqrtScale(normalize(longScores.levels, 15)),
       short: sqrtScale(normalize(shortScores.levels, 15)),
       longRaw: longScores.levels,
       shortRaw: shortScores.levels,
-      max: 15,
-    },
-    {
-      category: '시장심리',
-      fullName: '시장심리 (펀딩+OI)',
-      long: sqrtScale(normalize(longScores.sentiment, 15)),
-      short: sqrtScale(normalize(shortScores.sentiment, 15)),
-      longRaw: longScores.sentiment,
-      shortRaw: shortScores.sentiment,
       max: 15,
     },
   ];
