@@ -35,7 +35,7 @@ export default function SupportResistanceZones({
   mini = false,
   showLabels = true,
 }: SupportResistanceZonesProps) {
-  const rightPadding = mini ? 55 : 85; // 가격축 공간
+  const boxWidth = 60; // 박스 폭 고정 60px
 
   // 영역 타입에 따른 색상
   const getZoneColor = (zone: SupportResistanceZone) => {
@@ -71,7 +71,7 @@ export default function SupportResistanceZones({
             style={{
               position: 'absolute',
               left: `${startX}px`,
-              right: `${rightPadding}px`,
+              width: `${boxWidth}px`,
               top: `${top}px`,
               height: `${height}px`,
               backgroundColor: getZoneColor(zone),
