@@ -84,6 +84,64 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// 8비트 사운드 생성을 위한 AudioContext
+let audioContext: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+  }
+  return audioContext;
+}
+
+// 8비트 스타일 사운드 재생 (Web Audio API)
+export function play8BitSound(direction: 'bullish' | 'bearish'): void {
+  if (!hasUserInteraction) return;
+
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  // AudioContext가 suspended 상태면 resume
+  if (ctx.state === 'suspended') {
+    ctx.resume();
+  }
+
+  const now = ctx.currentTime;
+
+  // 8비트 스타일 음계 (C major scale frequencies)
+  const bullishNotes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6 (상승 아르페지오)
+  const bearishNotes = [783.99, 659.25, 523.25, 392.00];  // G5, E5, C5, G4 (하락 아르페지오)
+
+  const notes = direction === 'bullish' ? bullishNotes : bearishNotes;
+  const noteDuration = 0.08; // 각 음 길이 (초)
+  const noteGap = 0.02;      // 음 사이 간격
+
+  notes.forEach((freq, i) => {
+    const startTime = now + i * (noteDuration + noteGap);
+
+    // Oscillator (사각파 = 8비트 느낌)
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(freq, startTime);
+
+    // Gain (볼륨 엔벨로프)
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(0.15, startTime + 0.01); // Attack
+    gain.gain.linearRampToValueAtTime(0.1, startTime + noteDuration * 0.5); // Decay
+    gain.gain.linearRampToValueAtTime(0, startTime + noteDuration); // Release
+
+    // 연결
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    // 재생
+    osc.start(startTime);
+    osc.stop(startTime + noteDuration);
+  });
+}
+
 // 탭 간 소리 중복 방지용 키
 const TTS_PLAYED_KEY = 'tts-last-played';
 
@@ -353,12 +411,25 @@ export function useTTS(options: TTSOptions = {}) {
     setIsPlaying(false);
   }, []);
 
+  // 8비트 다이버전스 알림 (탭 간 중복 방지 적용)
+  const play8BitDivergenceAlert = useCallback((direction: 'bullish' | 'bearish') => {
+    if (!enabled) return;
+
+    // 탭 간 중복 방지
+    const soundKey = `8bit_div_${direction}`;
+    if (!canPlaySound(soundKey)) return;
+
+    markSoundPlayed(soundKey);
+    play8BitSound(direction);
+  }, [enabled]);
+
   return {
     isPlaying,
     isUnlocked, // 오디오 재생 가능 여부
     playEntryAlert,
     playStrongSignal,
     playDivergenceAlert,
+    play8BitDivergenceAlert, // 8비트 다이버전스 알림
     playSequence,
     stop,
   };

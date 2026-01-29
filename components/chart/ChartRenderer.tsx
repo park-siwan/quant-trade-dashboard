@@ -205,6 +205,9 @@ export default function ChartRenderer({
     color: string;
   } | null>(null);
 
+  // 새 다이버전스 감지용 이전 타임스탬프 추적
+  const lastDivergenceTimestampRef = useRef<number | null>(null);
+
   useEffect(() => {
     const calculateGlow = () => {
       if (!divergenceSignals || divergenceSignals.length === 0) {
@@ -223,6 +226,18 @@ export default function ChartRenderer({
       const latestSignal = endSignals.reduce((latest, current) =>
         current.timestamp > latest.timestamp ? current : latest
       );
+
+      // 새 다이버전스 감지 시 8비트 사운드 재생
+      if (lastDivergenceTimestampRef.current !== latestSignal.timestamp) {
+        // 초기 로드가 아닌 경우에만 사운드 재생 (이전 값이 있을 때)
+        if (lastDivergenceTimestampRef.current !== null) {
+          // 동적 import로 8비트 사운드 재생
+          import('@/hooks/useTTS').then(({ play8BitSound }) => {
+            play8BitSound(latestSignal.direction);
+          });
+        }
+        lastDivergenceTimestampRef.current = latestSignal.timestamp;
+      }
 
       // 신선도 계산
       const expiryCandles = DIVERGENCE_EXPIRY_CANDLES[timeframe] || 24;
