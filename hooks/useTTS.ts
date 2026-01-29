@@ -194,6 +194,115 @@ export function play8BitSound(direction: 'bullish' | 'bearish', forceVolume?: nu
   }
 }
 
+// 타임프레임별 8비트 사운드 재생
+// 짧은 타임프레임 = 높은 음, 빠름 / 긴 타임프레임 = 낮은 음, 느림
+export function play8BitTimeframe(timeframe: string, forceVolume?: number): void {
+  if (!forceVolume && !hasUserInteraction) return;
+
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  if (ctx.state === 'suspended') {
+    ctx.resume();
+  }
+
+  const vol = (forceVolume ?? soundVolume) * 0.7; // 타임프레임 소리는 약간 작게
+  const now = ctx.currentTime;
+
+  // 타임프레임별 음계 매핑 (짧을수록 높은 음)
+  const tfSounds: Record<string, { notes: number[]; tempo: number }> = {
+    '1m': { notes: [1568, 1760, 1976], tempo: 0.06 },      // G6-A6-B6 (매우 빠름)
+    '5m': { notes: [1319, 1480, 1568], tempo: 0.07 },      // E6-F#6-G6
+    '15m': { notes: [1047, 1175, 1319], tempo: 0.08 },     // C6-D6-E6
+    '30m': { notes: [880, 988, 1047], tempo: 0.09 },       // A5-B5-C6
+    '1h': { notes: [659, 784, 880], tempo: 0.10 },         // E5-G5-A5
+    '4h': { notes: [523, 587, 659], tempo: 0.12 },         // C5-D5-E5
+    '1d': { notes: [392, 440, 523], tempo: 0.14 },         // G4-A4-C5 (느림, 장엄)
+  };
+
+  const sound = tfSounds[timeframe] || tfSounds['1h'];
+  const { notes, tempo } = sound;
+
+  // 3음 아르페지오 재생
+  notes.forEach((freq, i) => {
+    playNote(ctx, now + i * tempo, freq, tempo * 1.5, vol);
+  });
+
+  // 마지막 음에 화음 추가 (옥타브 아래)
+  playNote(ctx, now + 2 * tempo, notes[2] / 2, tempo * 2, vol * 0.3, 'triangle');
+}
+
+// 타임프레임 + 방향 통합 알림 사운드
+// 타임프레임 음역대에서 상승/하락 패턴을 한 번에 재생
+export function play8BitAlert(
+  timeframe: string,
+  direction: 'bullish' | 'bearish',
+  forceVolume?: number
+): void {
+  if (!forceVolume && !hasUserInteraction) return;
+
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  if (ctx.state === 'suspended') {
+    ctx.resume();
+  }
+
+  const vol = forceVolume ?? soundVolume;
+  const now = ctx.currentTime;
+
+  // 타임프레임별 기준음 (베이스 주파수)
+  const tfBase: Record<string, number> = {
+    '1m': 1568,   // G6
+    '5m': 1319,   // E6
+    '15m': 1047,  // C6
+    '30m': 880,   // A5
+    '1h': 659,    // E5
+    '4h': 523,    // C5
+    '1d': 392,    // G4
+  };
+
+  const base = tfBase[timeframe] || tfBase['1h'];
+
+  if (direction === 'bullish') {
+    // 🎮 상승 알림: 기준음에서 시작하여 상승 팡파레
+    // 인트로 (타임프레임 식별)
+    playNote(ctx, now, base * 0.75, 0.08, vol * 0.6);           // 5도 아래에서 시작
+    playNote(ctx, now + 0.08, base, 0.12, vol * 0.8);           // 기준음으로
+
+    // --- 간격 (0.15초) ---
+
+    // 메인 코인 사운드 (기준음에서 완전4도 위로)
+    playNote(ctx, now + 0.35, base, 0.06, vol);                 // 기준음
+    playNote(ctx, now + 0.41, base * 1.33, 0.30, vol);          // 완전4도 위 (메인)
+    playNote(ctx, now + 0.41, base * 0.67, 0.25, vol * 0.3, 'triangle'); // 화음
+
+    // 팡파레 마무리
+    playNote(ctx, now + 0.74, base * 1.5, 0.08, vol * 0.9);     // 완전5도
+    playNote(ctx, now + 0.82, base * 2, 0.25, vol);             // 옥타브 피니시
+    playNote(ctx, now + 0.82, base, 0.20, vol * 0.3, 'triangle');
+
+  } else {
+    // 💀 하락 알림: 기준음에서 시작하여 하강 경고음
+    // 인트로 (타임프레임 식별) - 긴장감 있는 시작
+    playNote(ctx, now, base * 1.33, 0.08, vol * 0.7);           // 높은 음에서 시작
+    playNote(ctx, now + 0.08, base * 1.25, 0.10, vol * 0.8);    // 반음 하강
+
+    // --- 간격 (0.15초) ---
+
+    // 경고 하강
+    playNote(ctx, now + 0.33, base, 0.08, vol);                 // 기준음
+    playNote(ctx, now + 0.41, base * 0.94, 0.08, vol);          // 반음 아래
+    playNote(ctx, now + 0.49, base * 0.84, 0.08, vol);          // 단3도 아래
+    playNote(ctx, now + 0.57, base * 0.75, 0.10, vol);          // 완전4도 아래
+
+    // 게임오버 피니시
+    playNote(ctx, now + 0.69, base * 0.5, 0.12, vol);           // 옥타브 아래
+    playNote(ctx, now + 0.83, base * 0.375, 0.30, vol);         // 더 낮게
+    playNote(ctx, now + 0.83, base * 0.1875, 0.25, vol * 0.4, 'triangle'); // 베이스
+  }
+}
+
 // 탭 간 소리 중복 방지용 키
 const TTS_PLAYED_KEY = 'tts-last-played';
 
