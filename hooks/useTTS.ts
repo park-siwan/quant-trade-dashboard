@@ -118,80 +118,68 @@ function getAudioContext(): AudioContext | null {
   return audioContext;
 }
 
+// 단일 음 재생 헬퍼
+function playNote(
+  ctx: AudioContext,
+  startTime: number,
+  freq: number,
+  duration: number,
+  volume: number,
+  waveType: OscillatorType = 'square'
+) {
+  const osc = ctx.createOscillator();
+  osc.type = waveType;
+  osc.frequency.setValueAtTime(freq, startTime);
+
+  const gain = ctx.createGain();
+  const maxGain = volume * 0.25;
+  gain.gain.setValueAtTime(0, startTime);
+  gain.gain.linearRampToValueAtTime(maxGain, startTime + 0.008);
+  gain.gain.setValueAtTime(maxGain * 0.8, startTime + duration * 0.3);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(startTime);
+  osc.stop(startTime + duration);
+}
+
 // 8비트 스타일 사운드 재생 (Web Audio API)
 export function play8BitSound(direction: 'bullish' | 'bearish', forceVolume?: number): void {
-  // 테스트용 forceVolume이 있으면 상호작용 체크 스킵
   if (!forceVolume && !hasUserInteraction) return;
 
   const ctx = getAudioContext();
   if (!ctx) return;
 
-  // AudioContext가 suspended 상태면 resume
   if (ctx.state === 'suspended') {
     ctx.resume();
   }
 
-  const volume = forceVolume ?? soundVolume;
+  const vol = forceVolume ?? soundVolume;
   const now = ctx.currentTime;
 
   if (direction === 'bullish') {
-    // 🎮 게임 승리/레벨업 스타일 팡파레
-    const melody = [
-      // [시작시간, 주파수, 길이, 웨이브타입]
-      { t: 0, f: 523.25, d: 0.08, w: 'square' as OscillatorType },      // C5
-      { t: 0.06, f: 659.25, d: 0.08, w: 'square' as OscillatorType },   // E5
-      { t: 0.12, f: 783.99, d: 0.08, w: 'square' as OscillatorType },   // G5
-      { t: 0.20, f: 1046.50, d: 0.15, w: 'square' as OscillatorType },  // C6 (길게)
-      // 화음 레이어 (배경)
-      { t: 0.20, f: 659.25, d: 0.15, w: 'triangle' as OscillatorType }, // E5 화음
-      { t: 0.20, f: 783.99, d: 0.15, w: 'triangle' as OscillatorType }, // G5 화음
-      // 마무리 반짝임
-      { t: 0.38, f: 1318.51, d: 0.06, w: 'square' as OscillatorType },  // E6 (반짝)
-      { t: 0.42, f: 1567.98, d: 0.08, w: 'square' as OscillatorType },  // G6 (반짝)
-    ];
+    // 🪙 코인 획득 / 1UP 스타일 (마리오 코인 + 젤다 아이템 느낌)
+    // B5 -> E6 (빠른 상승) + 잔향
+    playNote(ctx, now, 987.77, 0.08, vol);           // B5
+    playNote(ctx, now + 0.08, 1318.51, 0.22, vol);   // E6 (메인 음, 길게)
+    // 옥타브 아래 서브 톤 (두께감)
+    playNote(ctx, now + 0.08, 659.25, 0.18, vol * 0.4, 'triangle');  // E5
 
-    melody.forEach(({ t, f, d, w }) => {
-      const osc = ctx.createOscillator();
-      osc.type = w;
-      osc.frequency.setValueAtTime(f, now + t);
-
-      const gain = ctx.createGain();
-      const maxGain = (w === 'triangle' ? 0.15 : 0.25) * volume;
-      gain.gain.setValueAtTime(0, now + t);
-      gain.gain.linearRampToValueAtTime(maxGain, now + t + 0.01);
-      gain.gain.linearRampToValueAtTime(maxGain * 0.6, now + t + d * 0.5);
-      gain.gain.linearRampToValueAtTime(0, now + t + d);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now + t);
-      osc.stop(now + t + d);
-    });
   } else {
-    // 🔻 하락 경고음 (기존 스타일)
-    const bearishNotes = [783.99, 659.25, 523.25, 392.00]; // G5, E5, C5, G4
-    const noteDuration = 0.1;
-    const noteGap = 0.02;
+    // 💔 피격/경고 스타일 (레트로 게임 데미지 느낌)
+    // 빠른 하강 + 떨림 효과
+    const baseFreq = 440; // A4
 
-    bearishNotes.forEach((freq, i) => {
-      const startTime = now + i * (noteDuration + noteGap);
-
-      const osc = ctx.createOscillator();
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(freq, startTime);
-
-      const gain = ctx.createGain();
-      const maxGain = 0.25 * volume;
-      gain.gain.setValueAtTime(0, startTime);
-      gain.gain.linearRampToValueAtTime(maxGain, startTime + 0.01);
-      gain.gain.linearRampToValueAtTime(maxGain * 0.5, startTime + noteDuration * 0.5);
-      gain.gain.linearRampToValueAtTime(0, startTime + noteDuration);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(startTime);
-      osc.stop(startTime + noteDuration);
-    });
+    // 첫 음 (충격)
+    playNote(ctx, now, baseFreq * 1.5, 0.06, vol);      // 660Hz
+    // 빠른 하강
+    playNote(ctx, now + 0.07, baseFreq * 1.2, 0.06, vol);
+    playNote(ctx, now + 0.14, baseFreq * 0.9, 0.06, vol);
+    // 마지막 낮은 음 (길게)
+    playNote(ctx, now + 0.21, baseFreq * 0.6, 0.15, vol);
+    // 서브 베이스 (무게감)
+    playNote(ctx, now + 0.21, baseFreq * 0.3, 0.12, vol * 0.5, 'triangle');
   }
 }
 
