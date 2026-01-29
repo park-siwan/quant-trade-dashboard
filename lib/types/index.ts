@@ -425,3 +425,35 @@ export interface BlendedZone extends SupportResistanceZone {
   blendType: 'support' | 'resistance' | 'conflict';
   finalColor: string;
 }
+
+// Walk-Forward 최적화 타입
+export interface WalkForwardWindow {
+  windowId: number;
+  trainStart: string;
+  trainEnd: string;
+  testStart: string;
+  testEnd: string;
+  bestParams: Record<string, number>;
+  trainSharpe: number;
+  testSharpe: number;
+  trainPnlPct: number;
+  testPnlPct: number;
+  trades: number;
+}
+
+export interface WalkForwardSummary {
+  totalWindows: number;
+  avgTrainSharpe: number;
+  avgTestSharpe: number;
+  degradationRatio: number;
+  totalTrades: number;
+  totalTestPnlPct: number;
+  winWindows: number;
+}
+
+export interface WalkForwardResult {
+  windows: WalkForwardWindow[];
+  summary: WalkForwardSummary;
+}
+
+export type WalkForwardStatus = 'idle' | 'running' | 'completed' | 'error';
