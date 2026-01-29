@@ -95,7 +95,7 @@ interface ChartRendererProps {
   whaleData?: WhaleSummary | null; // 고래 거래 데이터
   marketStructureData?: MarketStructureData | null; // 시장 구조 (BOS/CHoCH)
   adxData?: AdxData | null; // ADX 추세 강도 데이터
-  mini?: boolean; // 미니 차트 모드
+  mini?: boolean; // (레거시) 기본값 true
   actionInfo?: { action: string; reason: string } | null; // MTF 신호 정보 (미니 차트용)
 }
 
@@ -122,7 +122,7 @@ export default function ChartRenderer({
   whaleData,
   marketStructureData,
   adxData,
-  mini = false,
+  mini = true,
   actionInfo,
 }: ChartRendererProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -193,9 +193,70 @@ export default function ChartRenderer({
   // 안정적인 데이터 키 - 차트를 재생성해야 하는 경우만 변경됨
   const dataKey = useMemo(() => {
     if (data.length === 0) return 'empty';
-    // 첫 캔들 시간 + 데이터 길이 + 타임프레임으로 고유 키 생성
-    return `${data[0].time}-${data.length}-${timeframe}`;
-  }, [data.length > 0 ? data[0].time : null, data.length, timeframe]);
+    // 첫 캔들 시간 + 데이터 길이 + 타임프레임 + 다이버전스 데이터 존재 여부로 고유 키 생성
+    const hasDivergence = divergenceSignals && divergenceSignals.length > 0;
+    return `${data[0].time}-${data.length}-${timeframe}-${hasDivergence}`;
+  }, [data.length > 0 ? data[0].time : null, data.length, timeframe, divergenceSignals && divergenceSignals.length > 0]);
+
+  // 다이버전스 신선도 기반 글로우 효과 (실시간 업데이트)
+  const [divergenceGlow, setDivergenceGlow] = useState<{
+    direction: 'bullish' | 'bearish';
+    freshness: number;
+    color: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const calculateGlow = () => {
+      if (!divergenceSignals || divergenceSignals.length === 0) {
+        setDivergenceGlow(null);
+        return;
+      }
+
+      // 가장 최근 end 신호 찾기 (신선도 계산용)
+      const endSignals = divergenceSignals.filter(s => s.phase === 'end' && !s.isFiltered);
+      if (endSignals.length === 0) {
+        setDivergenceGlow(null);
+        return;
+      }
+
+      // 가장 최근 신호
+      const latestSignal = endSignals.reduce((latest, current) =>
+        current.timestamp > latest.timestamp ? current : latest
+      );
+
+      // 신선도 계산
+      const expiryCandles = DIVERGENCE_EXPIRY_CANDLES[timeframe] || 24;
+      const tfMs = timeframeToMs(timeframe);
+      const expiryMs = expiryCandles * tfMs;
+      const freshness = calculateDivergenceFreshness(latestSignal.timestamp, expiryMs);
+
+      // 신선도가 0.01 미만이면 글로우 없음
+      if (freshness < 0.01) {
+        setDivergenceGlow(null);
+        return;
+      }
+
+      const isBullish = latestSignal.direction === 'bullish';
+      const baseColor = isBullish ? COLORS.LONG : COLORS.SHORT;
+
+      setDivergenceGlow({
+        direction: latestSignal.direction,
+        freshness,
+        color: baseColor,
+      });
+    };
+
+    // 초기 계산
+    calculateGlow();
+
+    // 1초마다 신선도 업데이트
+    const interval = setInterval(calculateGlow, 1000);
+
+    return () => clearInterval(interval);
+  }, [divergenceSignals, timeframe]);
+
+  // 캔들 투명도 설정
+  const CANDLE_OPACITY = 0.3;
 
   // 실시간 캔들 업데이트 (update 방식으로 뷰 유지)
   useEffect(() => {
@@ -229,7 +290,6 @@ export default function ChartRenderer({
       if (candlestickSeriesRef.current && !isChartDisposedRef.current) {
         // 미니 모드와 일반 모드 모두 CandlestickSeries 사용
         const isUp = realtimeCandle.close >= realtimeCandle.open;
-        const candleColor = isUp ? GRAY_UP : GRAY_DOWN;
 
         const candleUpdate: CandlestickData = {
           time: (realtimeCandle.timestamp / 1000) as CandlestickData['time'],
@@ -237,9 +297,9 @@ export default function ChartRenderer({
           high: realtimeCandle.high,
           low: realtimeCandle.low,
           close: realtimeCandle.close,
-          color: candleColor,
-          borderColor: candleColor,
-          wickColor: candleColor,
+          color: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
+          borderColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
+          wickColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
         };
         (candlestickSeriesRef.current as ISeriesApi<'Candlestick'>).update(candleUpdate);
 
@@ -268,9 +328,6 @@ export default function ChartRenderer({
 
   // 차트 스케일 변경 감지를 위한 state (줌/스크롤 시 박스 위치 업데이트용)
   const [scaleUpdateTrigger, setScaleUpdateTrigger] = useState(0);
-
-  // 캔들 투명도 설정
-  const CANDLE_OPACITY = 0.3;
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -709,7 +766,8 @@ export default function ChartRenderer({
 
     // 모든 차트: 최근 N개 캔들만 표시 (확대 상태)
     // 줌이 적용될 때까지 반복 시도
-    const targetVisibleBars = 500;
+    // 미니 차트는 250개 (2배 확대), 일반 차트는 500개
+    const targetVisibleBars = mini ? 250 : 500;
     const totalBars = data.length;
     const rightMargin = mini ? 80 : 60; // 우측 여백 (캔들 개수 기준)
     const targetFrom = Math.max(0, totalBars - targetVisibleBars);
@@ -1904,10 +1962,31 @@ export default function ChartRenderer({
 
       {/* 차트 컨테이너 */}
       <div className='relative' style={mini ? { height: '100%' } : undefined}>
+      {/* 도화선 글로우 테두리 - 신선도에 따라 실시간 변화 */}
+      {divergenceGlow && (
+        <>
+          <div
+            className='absolute inset-0 rounded-xl pointer-events-none z-10 fuse-border'
+            style={{
+              '--fuse-color': divergenceGlow.color,
+              '--fuse-intensity': divergenceGlow.freshness,
+            } as React.CSSProperties}
+          />
+          <div
+            className='absolute inset-0 rounded-xl pointer-events-none transition-all duration-1000'
+            style={{
+              boxShadow: `0 0 ${Math.round(30 * divergenceGlow.freshness)}px ${rgba(divergenceGlow.color, 0.4 * divergenceGlow.freshness)}`,
+            }}
+          />
+        </>
+      )}
       <div
         ref={chartContainerRef}
-        className='rounded-xl overflow-hidden shadow-inner'
-        style={mini ? { position: 'relative', height: '100%' } : { position: 'relative' }}
+        className='rounded-xl overflow-hidden'
+        style={{
+          position: 'relative',
+          ...(mini ? { height: '100%' } : {}),
+        }}
       >
         {/* 차트 정보 오버레이 (왼쪽 상단) - 시간 범위, 가격, 변화율 (미니 모드에서 숨김) */}
         {!mini && (
