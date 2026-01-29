@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { Settings, Volume2, VolumeX, TrendingUp, TrendingDown } from 'lucide-react';
-import { play8BitSound, get8BitVolume, set8BitVolume } from '@/hooks/useTTS';
+import { play8BitSound, play8BitTimeframe, play8BitAlert, get8BitVolume, set8BitVolume } from '@/hooks/useTTS';
+
+const TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
 
 export default function SoundSettings() {
   const [isOpen, setIsOpen] = useState(false);
   const [volume, setVolume] = useState(0.5);
+  const [selectedTf, setSelectedTf] = useState('15m');
 
   // 초기 볼륨 로드
   useEffect(() => {
@@ -20,6 +23,11 @@ export default function SoundSettings() {
 
   const testSound = (direction: 'bullish' | 'bearish') => {
     play8BitSound(direction, volume);
+  };
+
+  // 타임프레임 + 방향 통합 테스트
+  const testCombined = (direction: 'bullish' | 'bearish') => {
+    play8BitAlert(selectedTf, direction, volume);
   };
 
   return (
@@ -96,6 +104,44 @@ export default function SoundSettings() {
                 >
                   <TrendingDown className="w-3.5 h-3.5" />
                   하락
+                </button>
+              </div>
+            </div>
+
+            {/* 조합 테스트 (타임프레임 + 방향) */}
+            <div className="mt-3 space-y-2">
+              <span className="text-xs text-zinc-400">조합 테스트</span>
+              {/* 타임프레임 선택 */}
+              <div className="flex gap-1 flex-wrap">
+                {TIMEFRAMES.map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => setSelectedTf(tf)}
+                    className={`py-1 px-2 rounded text-[10px] font-medium transition-colors border ${
+                      selectedTf === tf
+                        ? 'bg-blue-500/30 text-blue-300 border-blue-500/50'
+                        : 'bg-zinc-800/50 text-zinc-500 border-zinc-700/50 hover:bg-zinc-700/50'
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+              {/* 방향 버튼 */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => testCombined('bullish')}
+                  className="flex-1 py-2 px-3 bg-green-500/20 hover:bg-green-500/30
+                    border border-green-500/30 rounded-lg text-green-400 text-xs font-medium transition-colors"
+                >
+                  {selectedTf} 상승
+                </button>
+                <button
+                  onClick={() => testCombined('bearish')}
+                  className="flex-1 py-2 px-3 bg-red-500/20 hover:bg-red-500/30
+                    border border-red-500/30 rounded-lg text-red-400 text-xs font-medium transition-colors"
+                >
+                  {selectedTf} 하락
                 </button>
               </div>
             </div>
