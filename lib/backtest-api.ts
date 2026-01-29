@@ -1138,6 +1138,7 @@ export interface RollingParamResult {
   savedAt: string;
   validUntil: string;
   isValid: boolean;
+  source: 'rolling' | 'bayesian' | 'manual';
 }
 
 export async function getRollingParams(timeframe?: string): Promise<RollingParamResult[]> {

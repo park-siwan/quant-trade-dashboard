@@ -645,7 +645,7 @@ export default function RealtimeChart() {
       maxDrawdown: 0,
       sharpeRatio: rolling.testSharpe,
       rank: 1,
-      note: `[롤링] ${rolling.strategy} - Train: ${rolling.trainSharpe.toFixed(2)}, Test: ${rolling.testSharpe.toFixed(2)}`,
+      note: `[${rolling.source === 'manual' ? '수동' : rolling.source === 'bayesian' ? '베이지안' : '롤링'}] ${rolling.strategy} - Train: ${rolling.trainSharpe.toFixed(2)}, Test: ${rolling.testSharpe.toFixed(2)}`,
     };
 
     // 4. 전략별 추가 파라미터 및 필터 문자열 설정
