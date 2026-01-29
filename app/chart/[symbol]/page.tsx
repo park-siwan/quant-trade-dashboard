@@ -6,6 +6,7 @@ import { useSetAtom } from 'jotai';
 import { getSymbolBySlug } from '@/lib/symbols';
 import { symbolSlugAtom } from '@/stores/symbolAtom';
 import ChartAdapter from '@/components/ChartAdapter';
+import SoundSettings from '@/components/shared/SoundSettings';
 
 // 타임프레임 모드 (영향력 큰 순서)
 const TIMEFRAME_MODES = {
@@ -62,8 +63,8 @@ export default function ChartPage({ params }: ChartPageProps) {
             ))}
           </div>
         </div>
-        {/* 타임프레임 모드 토글 */}
-        <div className='flex justify-end mb-2'>
+        {/* 타임프레임 모드 토글 + 사운드 설정 */}
+        <div className='flex justify-end items-center gap-2 mb-2'>
           <button
             onClick={() => setTimeframeMode(prev => prev === 'default' ? 'short' : 'default')}
             className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 border ${
@@ -74,11 +75,12 @@ export default function ChartPage({ params }: ChartPageProps) {
           >
             {timeframeMode === 'short' ? '1m~4h (단기)' : '5m~1d (기본)'}
           </button>
+          <SoundSettings />
         </div>
         {/* 차트 그리드 */}
         <div className='grid grid-cols-2 md:grid-cols-3 grid-rows-2 gap-2 flex-1'>
           {timeframes.map((tf) => (
-            <ChartAdapter key={`${symbolSlug}-${tf}-${timeframeMode}`} symbol={symbol} initialTimeframe={tf} limit={500} mini />
+            <ChartAdapter key={`${symbolSlug}-${tf}-${timeframeMode}`} symbol={symbol} initialTimeframe={tf} limit={500} />
           ))}
         </div>
       </div>

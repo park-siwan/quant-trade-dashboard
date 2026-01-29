@@ -5,11 +5,8 @@ import { useCandles } from '@/hooks/useCandles';
 import { useLongShortRatio } from '@/hooks/useLongShortRatio';
 import { useLiquidations } from '@/hooks/useLiquidations';
 import { useWhales } from '@/hooks/useWhales';
-import { useFundingRate } from '@/hooks/useFundingRate';
-import { useCoinglass } from '@/hooks/useCoinglass';
 import { useMTFSocket } from '@/hooks/useMTFSocket';
 import ChartRenderer from '@/components/chart/ChartRenderer';
-import RefreshCountdown from '@/components/chart/RefreshCountdown';
 import { CandlestickData, LineData } from 'lightweight-charts';
 import {
   DivergenceSignal,
@@ -25,15 +22,11 @@ import {
   MarketStructureData,
   AdxData,
 } from '@/lib/types/index';
-import { Bitcoin } from 'lucide-react';
-import SignalChip from './SignalChip';
-import SoundSettings from './shared/SoundSettings';
 
 interface ChartAdapterProps {
   symbol?: string;
   initialTimeframe?: string;
   limit?: number;
-  mini?: boolean; // 헤더 없이 작은 차트만 표시
 }
 
 const TIMEFRAMES = [
@@ -49,7 +42,6 @@ export default function ChartAdapter({
   symbol = 'BTC/USDT',
   initialTimeframe = '5m',
   limit = 1000,
-  mini = false,
 }: ChartAdapterProps) {
   const [selectedTimeframe, setSelectedTimeframe] = useState(initialTimeframe);
   const prevSymbolRef = useRef<string>(symbol);
@@ -95,18 +87,6 @@ export default function ChartAdapter({
   const { data: whaleData } = useWhales({
     symbol,
     refreshInterval: 5000, // 5초마다 갱신
-  });
-
-  // 펀딩레이트 가져오기 (Binance API)
-  const { data: fundingRateData, timeUntilFunding } = useFundingRate({
-    symbol,
-    refreshInterval: 30000, // 30초마다 갱신
-  });
-
-  // Coinglass 트레이딩 신호 가져오기
-  const { data: coinglassData } = useCoinglass({
-    symbol: symbol.replace('/USDT', '').replace('/', ''),
-    refreshInterval: 60000, // 1분마다 갱신
   });
 
   // MTF WebSocket에서 추가 다이버전스 가져오기 (REST API에서 누락된 것들)
@@ -386,35 +366,16 @@ export default function ChartAdapter({
     (signal) => signal.phase === 'start' && signal.direction === 'bearish',
   ).length;
 
-  // 스켈레톤 로딩 UI (미니 모드 대응)
+  // 스켈레톤 로딩 UI
   const ChartSkeleton = () => (
-    <div className={`backdrop-blur-xl bg-white/5 border border-white/10 shadow-2xl ${mini ? 'rounded-xl p-2 h-full' : 'rounded-2xl p-6'}`}>
-      {/* 헤더 스켈레톤 (미니 모드에서는 숨김) */}
-      {!mini && (
-        <div className='flex items-center gap-3 mb-4'>
-          <div className='w-10 h-10 rounded-full bg-white/10 animate-pulse' />
-          <div className='space-y-2'>
-            <div className='w-24 h-4 bg-white/10 rounded animate-pulse' />
-            <div className='w-16 h-3 bg-white/10 rounded animate-pulse' />
-          </div>
-          <div className='ml-auto flex gap-2'>
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div
-                key={i}
-                className='w-10 h-6 bg-white/10 rounded animate-pulse'
-              />
-            ))}
-          </div>
-        </div>
-      )}
+    <div className='backdrop-blur-xl bg-white/5 border border-white/10 shadow-2xl rounded-xl p-2 h-full'>
       {/* 차트 스켈레톤 */}
-      <div className={`bg-white/5 rounded-xl overflow-hidden relative ${mini ? 'h-full' : 'h-[560px]'}`}>
+      <div className='bg-white/5 rounded-xl overflow-hidden relative h-full'>
         <div className='absolute inset-0 flex items-end justify-around px-4 pb-8'>
-          {/* 고정된 높이 패턴 (hydration 에러 방지) */}
-          {(mini ? [45, 62, 38, 71, 55, 33, 68, 42] : [45, 62, 38, 71, 55, 33, 68, 42, 58, 75, 48, 35, 65, 52, 40, 72, 56, 30, 63, 47]).map((h, i) => (
+          {[45, 62, 38, 71, 55, 33, 68, 42].map((h, i) => (
             <div
               key={i}
-              className={`bg-white/10 rounded-sm animate-pulse ${mini ? 'w-1' : 'w-2'}`}
+              className='bg-white/10 rounded-sm animate-pulse w-1'
               style={{
                 height: `${h}%`,
                 animationDelay: `${i * 100}ms`,
@@ -424,26 +385,25 @@ export default function ChartAdapter({
         </div>
         <div className='absolute inset-0 flex items-center justify-center'>
           <div className='text-center'>
-            <div className={`animate-spin rounded-full border-b-2 border-blue-400 mx-auto ${mini ? 'h-5 w-5 mb-1' : 'h-8 w-8 mb-3'}`} />
-            {!mini && <p className='text-gray-400 text-sm'>차트 로딩 중...</p>}
+            <div className='animate-spin rounded-full border-b-2 border-blue-400 mx-auto h-5 w-5 mb-1' />
           </div>
         </div>
       </div>
     </div>
   );
 
-  // 에러 상태 처리 (훅 호출 이후에 배치)
+  // 에러 상태 처리
   if (error) {
     return (
-      <div className='backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-2xl p-6 shadow-2xl'>
-        <div className='h-[560px] flex items-center justify-center'>
+      <div className='backdrop-blur-xl bg-white/5 border border-red-500/30 rounded-xl p-2 shadow-2xl h-full'>
+        <div className='h-full flex items-center justify-center'>
           <div className='text-center'>
-            <p className='text-red-400 mb-4'>데이터 로딩 실패</p>
+            <p className='text-red-400 text-xs mb-2'>로딩 실패</p>
             <button
               onClick={() => refetch()}
-              className='px-4 py-2 bg-red-500/30 backdrop-blur-md text-white rounded-lg hover:bg-red-500/40 transition-all duration-200 border border-red-400/50'
+              className='px-2 py-1 bg-red-500/30 text-white text-xs rounded hover:bg-red-500/40 transition-all'
             >
-              다시 시도
+              재시도
             </button>
           </div>
         </div>
@@ -456,233 +416,26 @@ export default function ChartAdapter({
     return <ChartSkeleton />;
   }
 
-  // 데이터 없음 상태 처리 (훅 호출 이후에 배치)
+  // 데이터 없음 상태 처리
   if (!data?.success || !data?.data?.candles) {
     return (
-      <div className={`backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl ${mini ? 'p-2' : 'p-6'}`}>
-        <div className={`${mini ? 'h-[200px]' : 'h-[560px]'} flex items-center justify-center`}>
+      <div className='backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl p-2 h-full'>
+        <div className='h-full flex items-center justify-center'>
           <p className='text-gray-500 text-xs'>데이터 없음</p>
         </div>
       </div>
     );
   }
 
-  // 미니 모드: 헤더 없이 차트만 표시
-  if (mini) {
-    return (
-      <div className='relative bg-white/[0.02] border border-white/10 rounded-xl overflow-hidden h-full'>
-        {/* 타임프레임 라벨 */}
-        <div className='absolute top-2 left-2 z-10'>
-          <span className='px-2 py-0.5 bg-black/50 rounded text-xs font-bold text-white'>
-            {TIMEFRAMES.find(tf => tf.value === selectedTimeframe)?.label || selectedTimeframe}
-          </span>
-        </div>
-        <ChartRenderer
-          data={chartData}
-          rsiData={rsiData}
-          obvData={obvData}
-          cvdData={cvdData}
-          oiData={oiData}
-          emaData={emaData}
-          divergenceSignals={divergenceSignals}
-          trendAnalysis={trendAnalysis}
-          crossoverEvents={crossoverEvents}
-          marketSignals={marketSignals}
-          timeframe={selectedTimeframe}
-          realtimeCandle={realtimeCandle}
-          longShortRatio={longShortRatio}
-          volumeProfile={volumeProfile}
-          consolidationData={consolidationData}
-          vwapAtrData={vwapAtrData}
-          orderBlockData={orderBlockData}
-          orderBookData={orderBookData}
-          liquidationData={liquidationData}
-          whaleData={whaleData}
-          marketStructureData={marketStructureData}
-          adxData={adxData}
-          actionInfo={actionInfo}
-        />
-      </div>
-    );
-  }
-
+  // 차트 표시
   return (
-    <div className='relative backdrop-blur-sm bg-white/[0.1] border border-white/10 rounded-2xl p-6 shadow-2xl'>
-      <div className='flex flex-col md:flex-row md:items-center md:justify-between mb-4'>
-        {/* 헤더: 한 줄로 표시, 반응형으로 줄바꿈 */}
-        <div className='flex flex-wrap items-center gap-3'>
-          {/* 코인 아이콘 + 심볼 */}
-          <div className='flex items-center gap-3'>
-            <div className='relative flex items-center justify-center w-10 h-10 rounded-full bg-orange-500 shadow-lg shadow-orange-500/30'>
-              <Bitcoin className='w-6 h-6 text-white' strokeWidth={2.5} />
-            </div>
-            <div>
-              <h2 className='text-xl font-bold bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-400 bg-clip-text text-transparent'>
-                {symbol}
-              </h2>
-            </div>
-          </div>
-
-          {/* EMA 설명 */}
-          <div className='flex items-center gap-2 px-2 py-1 rounded-lg bg-white/5 text-xs'>
-            <span className='text-blue-400 font-bold'>━</span>
-            <span className='text-gray-400'>EMA 50</span>
-            <span className='text-green-400 font-bold'>━</span>
-            <span className='text-gray-400'>EMA 200</span>
-          </div>
-
-          {/* 시장 구조 (추세) 표시 */}
-          {marketStructureData && (
-            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${
-              marketStructureData.currentTrend === 'bullish'
-                ? 'bg-green-500/20 text-green-400'
-                : marketStructureData.currentTrend === 'bearish'
-                ? 'bg-red-500/20 text-red-400'
-                : 'bg-gray-500/20 text-gray-400'
-            }`}>
-              <span className='font-semibold'>
-                {marketStructureData.currentTrend === 'bullish' ? '상승' :
-                 marketStructureData.currentTrend === 'bearish' ? '하락' : '횡보'}
-              </span>
-              {marketStructureData.lastCHoCH && (
-                <span className='text-[10px] opacity-70'>CHoCH</span>
-              )}
-            </div>
-          )}
-
-          {/* 펀딩레이트 표시 */}
-          {fundingRateData && (
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
-              fundingRateData.signal === 'LONG'
-                ? 'bg-green-500/10 border-green-500/30'
-                : fundingRateData.signal === 'SHORT'
-                ? 'bg-red-500/10 border-red-500/30'
-                : 'bg-white/5 border-white/10'
-            }`}>
-              <div className='text-xs'>
-                <span className='text-gray-400'>Funding</span>
-                <span className={`ml-1.5 font-mono font-bold ${
-                  fundingRateData.fundingRate > 0 ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {fundingRateData.fundingRate > 0 ? '+' : ''}{fundingRateData.fundingRate.toFixed(4)}%
-                </span>
-              </div>
-              <div className='w-px h-4 bg-white/20' />
-              <div className='text-xs'>
-                <span className='text-gray-400'>Next</span>
-                <span className='ml-1.5 font-mono text-white'>{timeUntilFunding}</span>
-              </div>
-              {fundingRateData.signal !== 'NEUTRAL' && (
-                <>
-                  <div className='w-px h-4 bg-white/20' />
-                  <span className={`text-xs font-semibold ${
-                    fundingRateData.signal === 'LONG' ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {fundingRateData.signal === 'LONG' ? '롱 기회' : '숏 기회'}
-                  </span>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Coinglass 트레이딩 신호 */}
-          {coinglassData && (
-            <div className='flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-white/5 border-white/10'>
-              {/* 공포탐욕 지수 */}
-              {coinglassData.fearGreed && (
-                <div className='flex items-center gap-1.5'>
-                  <span className='text-[10px] text-gray-400'>F&G</span>
-                  <span className={`text-xs font-bold ${
-                    coinglassData.fearGreed.value <= 25 ? 'text-red-400' :
-                    coinglassData.fearGreed.value <= 45 ? 'text-orange-400' :
-                    coinglassData.fearGreed.value <= 55 ? 'text-yellow-400' :
-                    coinglassData.fearGreed.value <= 75 ? 'text-lime-400' :
-                    'text-green-400'
-                  }`}>
-                    {coinglassData.fearGreed.value}
-                  </span>
-                </div>
-              )}
-
-              <div className='w-px h-4 bg-white/20' />
-
-              {/* 청산 편향 */}
-              <div className='flex items-center gap-1.5'>
-                <span className='text-[10px] text-gray-400'>청산</span>
-                <span className={`text-xs font-semibold ${
-                  coinglassData.liquidationBias === 'long_heavy' ? 'text-red-400' :
-                  coinglassData.liquidationBias === 'short_heavy' ? 'text-green-400' :
-                  'text-gray-400'
-                }`}>
-                  {coinglassData.liquidationBias === 'long_heavy' ? '롱↓' :
-                   coinglassData.liquidationBias === 'short_heavy' ? '숏↑' : '-'}
-                </span>
-              </div>
-
-              <div className='w-px h-4 bg-white/20' />
-
-              {/* ETF 트렌드 */}
-              <div className='flex items-center gap-1.5'>
-                <span className='text-[10px] text-gray-400'>ETF</span>
-                <span className={`text-xs font-semibold ${
-                  coinglassData.etfTrend === 'inflow' ? 'text-green-400' :
-                  coinglassData.etfTrend === 'outflow' ? 'text-red-400' :
-                  'text-gray-400'
-                }`}>
-                  {coinglassData.etfTrend === 'inflow' ? '유입' :
-                   coinglassData.etfTrend === 'outflow' ? '유출' : '-'}
-                </span>
-              </div>
-
-              {/* 불마켓 피크 리스크 (10% 이상일 때만 표시) */}
-              {coinglassData.bullMarketRisk >= 10 && (
-                <>
-                  <div className='w-px h-4 bg-white/20' />
-                  <div className='flex items-center gap-1.5'>
-                    <span className='text-[10px] text-gray-400'>피크</span>
-                    <span className='text-xs font-bold text-amber-400'>
-                      {coinglassData.bullMarketRisk}%
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-        </div>
-        <div className='flex items-center gap-2 shrink-0'>
-          {/* 타임프레임 버튼 */}
-          <div className='flex items-center gap-1 flex-nowrap'>
-            {TIMEFRAMES.map((tf) => (
-              <button
-                key={tf.value}
-                onClick={() => setSelectedTimeframe(tf.value)}
-                className={`w-14 py-1 rounded-lg text-xs text-center transition-all duration-200 shrink-0 ${
-                  selectedTimeframe === tf.value
-                    ? 'bg-orange-500/30 backdrop-blur-md text-white border border-orange-400/50 shadow-lg shadow-orange-500/20'
-                    : 'bg-white/5 backdrop-blur-sm text-gray-300 hover:text-white hover:bg-white/10 border border-white/5'
-                }`}
-              >
-                {tf.label}
-              </button>
-            ))}
-          </div>
-          {/* 새로고침 카운트다운 */}
-          <RefreshCountdown
-            timeframe={selectedTimeframe}
-            lastCandleTime={
-              chartData.length > 0
-                ? (chartData[chartData.length - 1].time as number)
-                : 0
-            }
-            onRefresh={refetch}
-            onManualRefresh={refetch}
-          />
-          {/* 사운드 설정 */}
-          <SoundSettings />
-        </div>
+    <div className='relative bg-white/[0.02] border border-white/10 rounded-xl overflow-hidden h-full'>
+      {/* 타임프레임 라벨 */}
+      <div className='absolute top-2 left-2 z-10'>
+        <span className='px-2 py-0.5 bg-black/50 rounded text-xs font-bold text-white'>
+          {TIMEFRAMES.find(tf => tf.value === selectedTimeframe)?.label || selectedTimeframe}
+        </span>
       </div>
-
       <ChartRenderer
         data={chartData}
         rsiData={rsiData}
@@ -706,6 +459,7 @@ export default function ChartAdapter({
         whaleData={whaleData}
         marketStructureData={marketStructureData}
         adxData={adxData}
+        actionInfo={actionInfo}
       />
     </div>
   );
