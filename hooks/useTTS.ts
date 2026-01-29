@@ -134,40 +134,65 @@ export function play8BitSound(direction: 'bullish' | 'bearish', forceVolume?: nu
   const volume = forceVolume ?? soundVolume;
   const now = ctx.currentTime;
 
-  // 8비트 스타일 음계 (C major scale frequencies)
-  const bullishNotes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6 (상승 아르페지오)
-  const bearishNotes = [783.99, 659.25, 523.25, 392.00];  // G5, E5, C5, G4 (하락 아르페지오)
+  if (direction === 'bullish') {
+    // 🎮 게임 승리/레벨업 스타일 팡파레
+    const melody = [
+      // [시작시간, 주파수, 길이, 웨이브타입]
+      { t: 0, f: 523.25, d: 0.08, w: 'square' as OscillatorType },      // C5
+      { t: 0.06, f: 659.25, d: 0.08, w: 'square' as OscillatorType },   // E5
+      { t: 0.12, f: 783.99, d: 0.08, w: 'square' as OscillatorType },   // G5
+      { t: 0.20, f: 1046.50, d: 0.15, w: 'square' as OscillatorType },  // C6 (길게)
+      // 화음 레이어 (배경)
+      { t: 0.20, f: 659.25, d: 0.15, w: 'triangle' as OscillatorType }, // E5 화음
+      { t: 0.20, f: 783.99, d: 0.15, w: 'triangle' as OscillatorType }, // G5 화음
+      // 마무리 반짝임
+      { t: 0.38, f: 1318.51, d: 0.06, w: 'square' as OscillatorType },  // E6 (반짝)
+      { t: 0.42, f: 1567.98, d: 0.08, w: 'square' as OscillatorType },  // G6 (반짝)
+    ];
 
-  const notes = direction === 'bullish' ? bullishNotes : bearishNotes;
-  const noteDuration = 0.08; // 각 음 길이 (초)
-  const noteGap = 0.02;      // 음 사이 간격
+    melody.forEach(({ t, f, d, w }) => {
+      const osc = ctx.createOscillator();
+      osc.type = w;
+      osc.frequency.setValueAtTime(f, now + t);
 
-  notes.forEach((freq, i) => {
-    const startTime = now + i * (noteDuration + noteGap);
+      const gain = ctx.createGain();
+      const maxGain = (w === 'triangle' ? 0.15 : 0.25) * volume;
+      gain.gain.setValueAtTime(0, now + t);
+      gain.gain.linearRampToValueAtTime(maxGain, now + t + 0.01);
+      gain.gain.linearRampToValueAtTime(maxGain * 0.6, now + t + d * 0.5);
+      gain.gain.linearRampToValueAtTime(0, now + t + d);
 
-    // Oscillator (사각파 = 8비트 느낌)
-    const osc = ctx.createOscillator();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(freq, startTime);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + t);
+      osc.stop(now + t + d);
+    });
+  } else {
+    // 🔻 하락 경고음 (기존 스타일)
+    const bearishNotes = [783.99, 659.25, 523.25, 392.00]; // G5, E5, C5, G4
+    const noteDuration = 0.1;
+    const noteGap = 0.02;
 
-    // Gain (볼륨 엔벨로프) - 볼륨 적용
-    const maxGain = 0.3 * volume; // 최대 볼륨의 30% * 사용자 설정
-    const sustainGain = 0.2 * volume;
+    bearishNotes.forEach((freq, i) => {
+      const startTime = now + i * (noteDuration + noteGap);
 
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(maxGain, startTime + 0.01); // Attack
-    gain.gain.linearRampToValueAtTime(sustainGain, startTime + noteDuration * 0.5); // Decay
-    gain.gain.linearRampToValueAtTime(0, startTime + noteDuration); // Release
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(freq, startTime);
 
-    // 연결
-    osc.connect(gain);
-    gain.connect(ctx.destination);
+      const gain = ctx.createGain();
+      const maxGain = 0.25 * volume;
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(maxGain, startTime + 0.01);
+      gain.gain.linearRampToValueAtTime(maxGain * 0.5, startTime + noteDuration * 0.5);
+      gain.gain.linearRampToValueAtTime(0, startTime + noteDuration);
 
-    // 재생
-    osc.start(startTime);
-    osc.stop(startTime + noteDuration);
-  });
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + noteDuration);
+    });
+  }
 }
 
 // 탭 간 소리 중복 방지용 키
