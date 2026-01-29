@@ -27,6 +27,7 @@ import {
 } from '@/lib/types/index';
 import { Bitcoin } from 'lucide-react';
 import SignalChip from './SignalChip';
+import SoundSettings from './shared/SoundSettings';
 
 interface ChartAdapterProps {
   symbol?: string;
@@ -677,6 +678,8 @@ export default function ChartAdapter({
             onRefresh={refetch}
             onManualRefresh={refetch}
           />
+          {/* 사운드 설정 */}
+          <SoundSettings />
         </div>
       </div>
 

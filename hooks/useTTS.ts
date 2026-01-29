@@ -87,6 +87,29 @@ if (typeof window !== 'undefined') {
 // 8비트 사운드 생성을 위한 AudioContext
 let audioContext: AudioContext | null = null;
 
+// 8비트 사운드 볼륨 (0.0 ~ 1.0)
+const SOUND_VOLUME_KEY = '8bit-sound-volume';
+let soundVolume = 0.5; // 기본값 50%
+
+// 초기 볼륨 로드
+if (typeof window !== 'undefined') {
+  const saved = localStorage.getItem(SOUND_VOLUME_KEY);
+  if (saved) {
+    soundVolume = parseFloat(saved);
+  }
+}
+
+export function get8BitVolume(): number {
+  return soundVolume;
+}
+
+export function set8BitVolume(volume: number): void {
+  soundVolume = Math.max(0, Math.min(1, volume));
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(SOUND_VOLUME_KEY, soundVolume.toString());
+  }
+}
+
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!audioContext) {
@@ -96,8 +119,9 @@ function getAudioContext(): AudioContext | null {
 }
 
 // 8비트 스타일 사운드 재생 (Web Audio API)
-export function play8BitSound(direction: 'bullish' | 'bearish'): void {
-  if (!hasUserInteraction) return;
+export function play8BitSound(direction: 'bullish' | 'bearish', forceVolume?: number): void {
+  // 테스트용 forceVolume이 있으면 상호작용 체크 스킵
+  if (!forceVolume && !hasUserInteraction) return;
 
   const ctx = getAudioContext();
   if (!ctx) return;
@@ -107,6 +131,7 @@ export function play8BitSound(direction: 'bullish' | 'bearish'): void {
     ctx.resume();
   }
 
+  const volume = forceVolume ?? soundVolume;
   const now = ctx.currentTime;
 
   // 8비트 스타일 음계 (C major scale frequencies)
@@ -125,11 +150,14 @@ export function play8BitSound(direction: 'bullish' | 'bearish'): void {
     osc.type = 'square';
     osc.frequency.setValueAtTime(freq, startTime);
 
-    // Gain (볼륨 엔벨로프)
+    // Gain (볼륨 엔벨로프) - 볼륨 적용
+    const maxGain = 0.3 * volume; // 최대 볼륨의 30% * 사용자 설정
+    const sustainGain = 0.2 * volume;
+
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(0.15, startTime + 0.01); // Attack
-    gain.gain.linearRampToValueAtTime(0.1, startTime + noteDuration * 0.5); // Decay
+    gain.gain.linearRampToValueAtTime(maxGain, startTime + 0.01); // Attack
+    gain.gain.linearRampToValueAtTime(sustainGain, startTime + noteDuration * 0.5); // Decay
     gain.gain.linearRampToValueAtTime(0, startTime + noteDuration); // Release
 
     // 연결
