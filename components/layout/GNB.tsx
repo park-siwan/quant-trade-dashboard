@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, BarChart3, CandlestickChart, Target, BookOpen } from 'lucide-react';
 import { useAtom, useAtomValue } from 'jotai';
 import { symbolSlugAtom, symbolAtom, symbolListAtom } from '@/stores/symbolAtom';
 import { usePrice } from '@/hooks/usePrice';
@@ -10,10 +10,10 @@ import { AnimatedPrice } from '@/components/shared';
 import { useState, useRef, useEffect } from 'react';
 
 const tabs = [
-  { href: '/', label: '분석' },
-  { href: '/chart', label: '차트' },
-  { href: '/strategy', label: '전략' },
-  { href: '/glossary', label: '용어' },
+  { href: '/', label: '분석', icon: BarChart3 },
+  { href: '/chart', label: '차트', icon: CandlestickChart },
+  { href: '/strategy', label: '전략', icon: Target },
+  { href: '/glossary', label: '용어', icon: BookOpen },
 ];
 
 // 심볼별 아이콘 색상
@@ -120,16 +120,18 @@ export default function GNB() {
           {tabs.map((tab) => {
             const isActive = pathname === tab.href ||
               (tab.href !== '/' && pathname.startsWith(tab.href));
+            const Icon = tab.icon;
             return (
               <Link
                 key={tab.href}
                 href={tab.href}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   isActive
                     ? 'bg-white/10 text-white'
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
               >
+                <Icon className='w-4 h-4' />
                 {tab.label}
               </Link>
             );
