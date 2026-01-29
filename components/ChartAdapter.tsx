@@ -36,12 +36,12 @@ interface ChartAdapterProps {
 }
 
 const TIMEFRAMES = [
-  { value: '5m', label: '5분' },
-  { value: '15m', label: '15분' },
-  { value: '30m', label: '30분' },
-  { value: '1h', label: '1시간' },
-  { value: '4h', label: '4시간' },
   { value: '1d', label: '1일' },
+  { value: '4h', label: '4시간' },
+  { value: '1h', label: '1시간' },
+  { value: '30m', label: '30분' },
+  { value: '15m', label: '15분' },
+  { value: '5m', label: '5분' },
 ];
 
 export default function ChartAdapter({

@@ -7,10 +7,10 @@ import { getSymbolBySlug } from '@/lib/symbols';
 import { symbolSlugAtom } from '@/stores/symbolAtom';
 import ChartAdapter from '@/components/ChartAdapter';
 
-// 타임프레임 모드
+// 타임프레임 모드 (영향력 큰 순서)
 const TIMEFRAME_MODES = {
-  default: ['5m', '15m', '30m', '1h', '4h', '1d'],
-  short: ['1m', '5m', '15m', '30m', '1h', '4h'],
+  default: ['1d', '4h', '1h', '30m', '15m', '5m'],
+  short: ['4h', '1h', '30m', '15m', '5m', '1m'],
 } as const;
 
 interface ChartPageProps {
