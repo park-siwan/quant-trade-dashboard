@@ -1,5 +1,5 @@
 import { API_CONFIG } from '@/lib/config';
-import type { WalkForwardWindow, WalkForwardSummary } from '@/lib/types';
+import type { WalkForwardWindow, WalkForwardSummary, MonthlyParam, MonthlyParamsStats } from '@/lib/types';
 
 export interface WalkForwardParams {
   symbol: string;
@@ -106,6 +106,94 @@ export async function saveRollingParams(data: {
 }) {
   const response = await fetch(
     `${API_CONFIG.BASE_URL}/backtest/strategy/save-params`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`API 요청 실패: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+// ============== Monthly Params API ==============
+
+/**
+ * 월별 파라미터 조회
+ */
+export async function fetchMonthlyParams(
+  symbol: string,
+  timeframe: string
+): Promise<MonthlyParam[]> {
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/backtest/monthly-params?symbol=${symbol}&timeframe=${timeframe}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`API 요청 실패: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * 월별 파라미터 통계 조회
+ */
+export async function fetchMonthlyParamsStats(
+  symbol: string,
+  timeframe: string
+): Promise<MonthlyParamsStats> {
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/backtest/monthly-params/stats?symbol=${symbol}&timeframe=${timeframe}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`API 요청 실패: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * 사용 가능한 심볼/타임프레임 조합 조회
+ */
+export async function fetchMonthlyParamsPairs(): Promise<
+  { symbol: string; timeframe: string; count: number }[]
+> {
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/backtest/monthly-params/pairs`
+  );
+
+  if (!response.ok) {
+    throw new Error(`API 요청 실패: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * 월별 파라미터 저장
+ */
+export async function saveMonthlyParams(data: {
+  symbol: string;
+  timeframe: string;
+  results: Array<{
+    testMonth: string;
+    trainStart: string;
+    trainEnd: string;
+    params: { pl: number; pr: number; tp: number; sl: number };
+    trainSharpe: number;
+    testSharpe: number;
+    testPnlPct: number;
+    trades: number;
+  }>;
+}): Promise<{ success: boolean; count: number }> {
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/backtest/monthly-params/save`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

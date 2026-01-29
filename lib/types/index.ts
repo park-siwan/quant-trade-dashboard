@@ -457,3 +457,37 @@ export interface WalkForwardResult {
 }
 
 export type WalkForwardStatus = 'idle' | 'running' | 'completed' | 'error';
+
+// 월별 파라미터 추이 타입
+export interface MonthlyParam {
+  id: number;
+  createdAt: string;
+  symbol: string;
+  timeframe: string;
+  testMonth: string;      // '2025-01'
+  trainStart: string;     // '2024-10'
+  trainEnd: string;       // '2025-01'
+  pivotLeft: number;
+  pivotRight: number;
+  tpPct: number;
+  slPct: number;
+  trainSharpe: number;
+  testSharpe: number;
+  testPnlPct: number;
+  trades: number;
+}
+
+export interface MonthlyParamsStats {
+  totalMonths: number;
+  avgTrainSharpe: number;
+  avgTestSharpe: number;
+  degradationRatio: number;
+  totalTestPnlPct: number;
+  winMonths: number;
+  paramFrequency: {
+    pl: Record<number, number>;
+    pr: Record<number, number>;
+    tp: Record<number, number>;
+    sl: Record<number, number>;
+  };
+}
