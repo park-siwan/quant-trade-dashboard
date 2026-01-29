@@ -556,9 +556,10 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
     }
 
     // 심볼 검증: backendData.symbol이 요청된 symbol과 일치하는지 확인
-    // backendData.symbol은 "BTC/USDT" 형식, symbol은 "BTCUSDT" 형식
+    // backendData.symbol은 "BTCUSDT" 형식, symbol은 "BTC/USDT" 또는 "BTCUSDT" 형식
     const normalizedBackendSymbol = backendData.symbol?.replace('/', '').toUpperCase();
-    if (normalizedBackendSymbol !== symbol.toUpperCase()) {
+    const normalizedSymbol = symbol.replace('/', '').toUpperCase();
+    if (normalizedBackendSymbol !== normalizedSymbol) {
       return { mtfData: null, volumeProfile: null, orderBlocks: undefined };
     }
 
@@ -617,7 +618,8 @@ export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocke
     if (!backendData?.timeframes) return [];
     // 심볼 검증: 다른 심볼의 다이버전스 데이터 반환 방지
     const normalizedBackendSymbol = backendData.symbol?.replace('/', '').toUpperCase();
-    if (normalizedBackendSymbol !== symbol.toUpperCase()) return [];
+    const normalizedSymbol = symbol.replace('/', '').toUpperCase();
+    if (normalizedBackendSymbol !== normalizedSymbol) return [];
     const tf = backendData.timeframes.find(t => t.timeframe === timeframe);
     return tf?.signals?.divergence || [];
   }, [backendData, symbol]);

@@ -150,6 +150,9 @@ export default function RealtimeChart() {
   // 수동 전략 선택 추적 (자동 선택 방지)
   const manuallySelectedRef = useRef(false);
 
+  // 전략 변경 중 추적 (마커 useEffect 스킵용)
+  const isChangingStrategyRef = useRef(false);
+
   // localStorage에서 저장된 전략 ID 및 타임프레임 복원
   useEffect(() => {
     const savedId = localStorage.getItem('selectedStrategyId');
@@ -527,44 +530,79 @@ export default function RealtimeChart() {
     totalPnlPercent: number;
   } | null> => {
     try {
-      // RSI Divergence 전략만 미리보기 백테스트 지원
-      // 다른 전략(BB Reversion, EMA+ADX)은 아직 백엔드 미지원
-      if (strategy.strategy && strategy.strategy !== 'rsi_divergence') {
-        // 롤링 최적화 결과가 있으면 Sharpe 기반 추정치 반환
-        // (실제 백테스트는 실행하지 않음)
-        return null; // UI에서 "롤링 SR" 표시
-      }
-
+      const strategyType = strategy.strategy || 'rsi_divergence';
       const indicators = strategy.indicators
         ? strategy.indicators.split(',').filter(Boolean)
         : ['rsi'];
-      const result = await runBacktest({
+
+      // 공통 파라미터
+      const baseParams = {
+        strategy: strategyType,
         symbol: currentSymbol.slashFormat,
         timeframe: strategy.timeframe,
-        candleCount: 5000, // 5m = ~17일, 충분한 거래 횟수 확보
-        rsiPeriod: strategy.rsiPeriod,
-        pivotLeftBars: strategy.pivotLeft,
-        pivotRightBars: strategy.pivotRight,
-        minDistance: strategy.minDistance,
-        maxDistance: strategy.maxDistance,
-        takeProfitAtr: strategy.tpAtr,
-        stopLossAtr: strategy.slAtr,
-        minDivergencePct: strategy.minDivPct,
+        candleCount: 5000,
         initialCapital: 1000,
         positionSizePercent: 100,
-        indicators,
-        trendFilter: strategy.trendFilter,
-        volatilityFilter: strategy.volatilityFilter,
-        rsiExtremeFilter: strategy.rsiExtremeFilter,
-        indicatorPreset: strategy.indicatorPreset,
         useLiveData: true,
-      });
+      };
+
+      let result;
+
+      if (strategyType === 'bb_reversion') {
+        // BB Reversion 전략
+        result = await runBacktest({
+          ...baseParams,
+          lookback: strategy.lookback ?? 15,
+          entryZ: strategy.entryZ ?? 1.5,
+          exitZ: strategy.exitZ ?? 0,
+          stopZ: strategy.stopZ ?? 2.5,
+          volFilter: strategy.volFilter ?? 0,
+          volThreshold: strategy.volThreshold ?? 1.5,
+          rsiConfirm: strategy.rsiConfirm ?? 0,
+          takeProfitAtr: strategy.tpAtr ?? 2.5,
+          stopLossAtr: strategy.slAtr ?? 1.5,
+        });
+      } else if (strategyType === 'ema_adx') {
+        // EMA+ADX (Momentum Breakout) 전략
+        result = await runBacktest({
+          ...baseParams,
+          smaPeriod: strategy.smaPeriod ?? 50,
+          atrPeriod: strategy.atrPeriod ?? 14,
+          compressionMult: strategy.compressionMult ?? 0.8,
+          breakoutPeriod: strategy.breakoutPeriod ?? 10,
+          rocPeriod: strategy.rocPeriod ?? 5,
+          rocThreshold: strategy.rocThreshold ?? 1.0,
+          volumeConfirm: strategy.volumeConfirm ?? 0,
+          takeProfitAtr: strategy.tpAtr ?? 2.5,
+          stopLossAtr: strategy.slAtr ?? 1.5,
+        });
+      } else {
+        // RSI Divergence 전략 (기본)
+        result = await runBacktest({
+          ...baseParams,
+          rsiPeriod: strategy.rsiPeriod,
+          pivotLeftBars: strategy.pivotLeft,
+          pivotRightBars: strategy.pivotRight,
+          minDistance: strategy.minDistance,
+          maxDistance: strategy.maxDistance,
+          takeProfitAtr: strategy.tpAtr,
+          stopLossAtr: strategy.slAtr,
+          minDivergencePct: strategy.minDivPct,
+          indicators,
+          trendFilter: strategy.trendFilter,
+          volatilityFilter: strategy.volatilityFilter,
+          rsiExtremeFilter: strategy.rsiExtremeFilter,
+          indicatorPreset: strategy.indicatorPreset,
+        });
+      }
+
       return {
         totalTrades: result.totalTrades,
         winRate: result.winRate,
         totalPnlPercent: result.totalPnlPercent,
       };
-    } catch {
+    } catch (err) {
+      console.error(`Preview backtest failed for strategy ${strategy.id}:`, err);
       return null;
     }
   };
@@ -751,17 +789,8 @@ export default function RealtimeChart() {
       slAtr: strategy.slAtr,
     });
 
-    manuallySelectedRef.current = true; // 수동 선택 플래그 설정
-    savedStrategyIdRef.current = strategy.id;
-    localStorage.setItem('selectedStrategyId', String(strategy.id)); // 새로고침 후 복원용
-    localStorage.setItem('selectedStrategyTimeframe', strategy.timeframe); // 타임프레임도 저장
-
-    // 이전 백테스트 데이터 즉시 초기화 (이전 전략 데이터가 스며드는 것 방지)
-    setBacktestStats(null);
-    setBacktestTrades([]);
-    setSkippedSignals([]);
-    setOpenPosition(null);
-    setEquityCurve([]);
+    // 전략 변경 중 플래그 설정 (ref는 동기적으로 업데이트됨)
+    isChangingStrategyRef.current = true;
 
     // 마커 및 라인 즉시 클리어 (상태 업데이트 전에 시각적으로 즉시 제거)
     if (candleSeriesRef.current) {
@@ -780,11 +809,24 @@ export default function RealtimeChart() {
       });
       priceLinesRef.current = [];
       console.log('[Strategy Clear] Cleared price lines');
-    } else {
-      console.log('[Strategy Clear] candleSeriesRef.current is null!');
     }
 
-    // 전략의 타임프레임으로 변경 (전략이 최적화된 타임프레임 사용)
+    // 백테스트 실행 중 상태로 설정
+    setIsBacktestRunning(true);
+
+    manuallySelectedRef.current = true;
+    savedStrategyIdRef.current = strategy.id;
+    localStorage.setItem('selectedStrategyId', String(strategy.id));
+    localStorage.setItem('selectedStrategyTimeframe', strategy.timeframe);
+
+    // 이전 백테스트 데이터 초기화
+    setBacktestStats(null);
+    setBacktestTrades([]);
+    setSkippedSignals([]);
+    setOpenPosition(null);
+    setEquityCurve([]);
+
+    // 전략의 타임프레임으로 변경
     if (strategy.timeframe && strategy.timeframe !== timeframe) {
       console.log('[Strategy] Changing timeframe to match strategy:', strategy.timeframe);
       setTimeframe(strategy.timeframe);
@@ -792,8 +834,7 @@ export default function RealtimeChart() {
 
     setSelectedStrategy(strategy);
     await changeStrategy(strategy.id);
-    console.log('[Strategy] Manually selected:', strategy.id, 'TF:', strategy.timeframe, 'Pvt:', strategy.pivotLeft, strategy.pivotRight);
-    // useEffect가 selectedStrategy 변경을 감지하여 자동으로 백테스트 실행
+    console.log('[Strategy] Manually selected:', strategy.id, 'TF:', strategy.timeframe);
   };
 
   // 선택된 전략으로 백테스트 실행 (재시도 포함 + throttling)
@@ -824,6 +865,8 @@ export default function RealtimeChart() {
       timestamp: now,
     };
 
+    // 전략 변경 완료 - isBacktestRunning이 마커 클리어를 담당
+    isChangingStrategyRef.current = false;
     setIsBacktestRunning(true);
     try {
       const indicators = strategy.indicators
@@ -1283,13 +1326,16 @@ export default function RealtimeChart() {
 
   // 마커 업데이트 + 거래 구간 캔들 색상 변경
   useEffect(() => {
-    console.log('[Markers] useEffect triggered - strategy:', selectedStrategy?.id, 'trades:', backtestTrades.length, 'openPos:', !!openPosition, 'isBacktestRunning:', isBacktestRunning);
+    console.log('[Markers] useEffect triggered - strategy:', selectedStrategy?.id, 'trades:', backtestTrades.length, 'openPos:', !!openPosition, 'isBacktestRunning:', isBacktestRunning, 'isChangingStrategy:', isChangingStrategyRef.current);
 
     if (!candleSeriesRef.current || candles.length === 0) return;
 
-    // 백테스트 진행 중이면 색상 변경 건너뛰기 (깜빡임 방지)
-    if (isBacktestRunning) {
-      console.log('[Markers] Skipping update - backtest in progress');
+    // 전략 변경 중이거나 백테스트 진행 중이면 마커 클리어 (깔끔한 상태 유지)
+    if (isChangingStrategyRef.current || isBacktestRunning) {
+      console.log('[Markers] Clearing markers - strategy changing or backtest in progress');
+      createSeriesMarkers(candleSeriesRef.current, []);
+      // 캔들 색상도 원래대로 복구
+      candleSeriesRef.current.setData(candles);
       return;
     }
 
@@ -2318,15 +2364,7 @@ export default function RealtimeChart() {
                   </div>
                   {/* 백테스트 결과 */}
                   <div className='flex items-center gap-1 mt-0.5'>
-                    {strategyLabel !== 'rsi_divergence' ? (
-                      <span className='text-zinc-400 text-[9px]'>
-                        {strategyLabel === 'bb_reversion' ? (
-                          <>Z:{strategy.entryZ?.toFixed(1)} | LB:{strategy.lookback}</>
-                        ) : strategyLabel === 'ema_adx' ? (
-                          <>ROC:{strategy.rocThreshold?.toFixed(1)}% | 기간:{strategy.breakoutPeriod}</>
-                        ) : null}
-                      </span>
-                    ) : isSelected && backtestStats ? (
+                    {isSelected && backtestStats ? (
                       <>
                         <span className='text-blue-400 text-[8px]'>●</span>
                         <span className={`text-[10px] font-bold ${backtestStats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
@@ -2344,7 +2382,7 @@ export default function RealtimeChart() {
                         <span className='w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse' />
                         분석중
                       </span>
-                    ) : preview ? (
+                    ) : preview && preview.totalTrades > 0 ? (
                       <>
                         <span className={`text-[10px] font-bold ${preview.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
                           {preview.winRate.toFixed(0)}%
@@ -2356,6 +2394,14 @@ export default function RealtimeChart() {
                         <span className='text-zinc-600'>|</span>
                         <span className='text-[10px] text-zinc-400'>{preview.totalTrades}회</span>
                       </>
+                    ) : strategyLabel !== 'rsi_divergence' ? (
+                      <span className='text-zinc-400 text-[9px]'>
+                        {strategyLabel === 'bb_reversion' ? (
+                          <>Z:{strategy.entryZ?.toFixed(1)} | LB:{strategy.lookback}</>
+                        ) : strategyLabel === 'ema_adx' ? (
+                          <>ROC:{strategy.rocThreshold?.toFixed(1)}% | 기간:{strategy.breakoutPeriod}</>
+                        ) : null}
+                      </span>
                     ) : (
                       <span className='text-zinc-500 text-[9px]'>대기중</span>
                     )}

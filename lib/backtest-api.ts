@@ -120,18 +120,32 @@ export interface BacktestResult {
 }
 
 export async function runBacktest(params: BacktestParams): Promise<BacktestResult> {
-  const response = await fetch(`${API_BASE}/backtest/run`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
-  });
+  // 30초 타임아웃 설정 (5000 캔들 백테스트는 시간이 걸릴 수 있음)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Backtest failed');
+  try {
+    const response = await fetch(`${API_BASE}/backtest/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Backtest failed');
+    }
+
+    return response.json();
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('Backtest timeout: 서버 응답이 너무 느립니다');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return response.json();
 }
 
 export async function checkBacktestHealth(): Promise<{ valid: boolean; message: string }> {
