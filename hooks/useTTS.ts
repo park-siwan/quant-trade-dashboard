@@ -145,6 +145,7 @@ function playNote(
 }
 
 // 8비트 스타일 사운드 재생 (Web Audio API)
+// 마리오 코인사운드 참고: B5 (987.77Hz) → E6 (1318.51Hz) - 완전 4도 도약
 export function play8BitSound(direction: 'bullish' | 'bearish', forceVolume?: number): void {
   if (!forceVolume && !hasUserInteraction) return;
 
@@ -159,45 +160,37 @@ export function play8BitSound(direction: 'bullish' | 'bearish', forceVolume?: nu
   const now = ctx.currentTime;
 
   if (direction === 'bullish') {
-    // 🎮 레벨업/보물 발견 팡파레 (젤다 + 파이널판타지 스타일)
-    // 상승 아르페지오 → 팡파레 마무리
+    // 🪙 마리오 코인 사운드 + 1UP 팡파레
+    // Part 1: 코인 사운드 (B5 → E6 완전4도 도약)
+    playNote(ctx, now, 987.77, 0.07, vol);                // B5 (짧은 장식음)
+    playNote(ctx, now + 0.07, 1318.51, 0.35, vol);        // E6 (메인 - 길게)
+    playNote(ctx, now + 0.07, 659.25, 0.30, vol * 0.3, 'triangle'); // E5 서브 화음
 
-    // 1단계: 빠른 상승 아르페지오 (C-E-G)
-    playNote(ctx, now, 523.25, 0.08, vol);                // C5
-    playNote(ctx, now + 0.07, 659.25, 0.08, vol);         // E5
-    playNote(ctx, now + 0.14, 783.99, 0.08, vol);         // G5
-
-    // 2단계: 옥타브 점프 + 홀드
-    playNote(ctx, now + 0.22, 1046.50, 0.18, vol);        // C6 (메인)
-    playNote(ctx, now + 0.22, 659.25, 0.15, vol * 0.5, 'triangle');  // E5 화음
-
-    // 3단계: 승리 팡파레 마무리
-    playNote(ctx, now + 0.42, 1174.66, 0.1, vol);         // D6
-    playNote(ctx, now + 0.52, 1318.51, 0.1, vol);         // E6
-    playNote(ctx, now + 0.64, 1567.98, 0.25, vol);        // G6 (피날레)
-    playNote(ctx, now + 0.64, 1046.50, 0.22, vol * 0.4, 'triangle');  // C6 화음
-    playNote(ctx, now + 0.64, 783.99, 0.20, vol * 0.3, 'triangle');   // G5 화음
+    // Part 2: 1UP 스타일 팡파레 (E-G-C 상승)
+    playNote(ctx, now + 0.45, 1318.51, 0.08, vol * 0.9);  // E6
+    playNote(ctx, now + 0.53, 1567.98, 0.08, vol * 0.9);  // G6
+    playNote(ctx, now + 0.61, 2093.00, 0.30, vol);        // C7 (하이 피니시)
+    playNote(ctx, now + 0.61, 1046.50, 0.25, vol * 0.4, 'triangle'); // C6 화음
+    playNote(ctx, now + 0.61, 1318.51, 0.20, vol * 0.25, 'triangle'); // E6 화음
 
   } else {
-    // 💀 게임오버/피격 경고음 (레트로 RPG 스타일)
-    // 불길한 하강 + 긴장감
+    // 💀 마리오 죽음/파이프 다운 사운드
+    // Part 1: 충격 (반음계 하강)
+    playNote(ctx, now, 987.77, 0.06, vol);                // B5
+    playNote(ctx, now + 0.06, 932.33, 0.06, vol);         // A#5
+    playNote(ctx, now + 0.12, 880.00, 0.06, vol);         // A5
+    playNote(ctx, now + 0.18, 830.61, 0.06, vol);         // G#5
 
-    // 1단계: 충격음
-    playNote(ctx, now, 880, 0.08, vol);                   // A5
-    playNote(ctx, now, 440, 0.08, vol * 0.4, 'triangle'); // A4 서브
+    // Part 2: 슬라이드 다운 (빠른 하강)
+    playNote(ctx, now + 0.26, 783.99, 0.08, vol);         // G5
+    playNote(ctx, now + 0.34, 659.25, 0.08, vol);         // E5
+    playNote(ctx, now + 0.42, 523.25, 0.08, vol);         // C5
+    playNote(ctx, now + 0.50, 392.00, 0.10, vol);         // G4
 
-    // 2단계: 불안한 반복
-    playNote(ctx, now + 0.12, 830.61, 0.08, vol);         // G#5
-    playNote(ctx, now + 0.22, 783.99, 0.08, vol);         // G5
-
-    // 3단계: 하강 스케일
-    playNote(ctx, now + 0.32, 659.25, 0.1, vol);          // E5
-    playNote(ctx, now + 0.44, 523.25, 0.1, vol);          // C5
-    playNote(ctx, now + 0.56, 392.00, 0.12, vol);         // G4
-
-    // 4단계: 최종 경고 (낮은 음)
-    playNote(ctx, now + 0.70, 261.63, 0.25, vol);         // C4
-    playNote(ctx, now + 0.70, 130.81, 0.22, vol * 0.5, 'triangle');  // C3 베이스
+    // Part 3: 게임오버 피니시 (저음 + 펑)
+    playNote(ctx, now + 0.62, 261.63, 0.12, vol);         // C4
+    playNote(ctx, now + 0.76, 196.00, 0.35, vol);         // G3 (길게 유지)
+    playNote(ctx, now + 0.76, 98.00, 0.30, vol * 0.5, 'triangle');   // G2 베이스
   }
 }
 
