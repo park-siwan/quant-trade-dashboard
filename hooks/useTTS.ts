@@ -159,27 +159,45 @@ export function play8BitSound(direction: 'bullish' | 'bearish', forceVolume?: nu
   const now = ctx.currentTime;
 
   if (direction === 'bullish') {
-    // 🪙 코인 획득 / 1UP 스타일 (마리오 코인 + 젤다 아이템 느낌)
-    // B5 -> E6 (빠른 상승) + 잔향
-    playNote(ctx, now, 987.77, 0.08, vol);           // B5
-    playNote(ctx, now + 0.08, 1318.51, 0.22, vol);   // E6 (메인 음, 길게)
-    // 옥타브 아래 서브 톤 (두께감)
-    playNote(ctx, now + 0.08, 659.25, 0.18, vol * 0.4, 'triangle');  // E5
+    // 🎮 레벨업/보물 발견 팡파레 (젤다 + 파이널판타지 스타일)
+    // 상승 아르페지오 → 팡파레 마무리
+
+    // 1단계: 빠른 상승 아르페지오 (C-E-G)
+    playNote(ctx, now, 523.25, 0.08, vol);                // C5
+    playNote(ctx, now + 0.07, 659.25, 0.08, vol);         // E5
+    playNote(ctx, now + 0.14, 783.99, 0.08, vol);         // G5
+
+    // 2단계: 옥타브 점프 + 홀드
+    playNote(ctx, now + 0.22, 1046.50, 0.18, vol);        // C6 (메인)
+    playNote(ctx, now + 0.22, 659.25, 0.15, vol * 0.5, 'triangle');  // E5 화음
+
+    // 3단계: 승리 팡파레 마무리
+    playNote(ctx, now + 0.42, 1174.66, 0.1, vol);         // D6
+    playNote(ctx, now + 0.52, 1318.51, 0.1, vol);         // E6
+    playNote(ctx, now + 0.64, 1567.98, 0.25, vol);        // G6 (피날레)
+    playNote(ctx, now + 0.64, 1046.50, 0.22, vol * 0.4, 'triangle');  // C6 화음
+    playNote(ctx, now + 0.64, 783.99, 0.20, vol * 0.3, 'triangle');   // G5 화음
 
   } else {
-    // 💔 피격/경고 스타일 (레트로 게임 데미지 느낌)
-    // 빠른 하강 + 떨림 효과
-    const baseFreq = 440; // A4
+    // 💀 게임오버/피격 경고음 (레트로 RPG 스타일)
+    // 불길한 하강 + 긴장감
 
-    // 첫 음 (충격)
-    playNote(ctx, now, baseFreq * 1.5, 0.06, vol);      // 660Hz
-    // 빠른 하강
-    playNote(ctx, now + 0.07, baseFreq * 1.2, 0.06, vol);
-    playNote(ctx, now + 0.14, baseFreq * 0.9, 0.06, vol);
-    // 마지막 낮은 음 (길게)
-    playNote(ctx, now + 0.21, baseFreq * 0.6, 0.15, vol);
-    // 서브 베이스 (무게감)
-    playNote(ctx, now + 0.21, baseFreq * 0.3, 0.12, vol * 0.5, 'triangle');
+    // 1단계: 충격음
+    playNote(ctx, now, 880, 0.08, vol);                   // A5
+    playNote(ctx, now, 440, 0.08, vol * 0.4, 'triangle'); // A4 서브
+
+    // 2단계: 불안한 반복
+    playNote(ctx, now + 0.12, 830.61, 0.08, vol);         // G#5
+    playNote(ctx, now + 0.22, 783.99, 0.08, vol);         // G5
+
+    // 3단계: 하강 스케일
+    playNote(ctx, now + 0.32, 659.25, 0.1, vol);          // E5
+    playNote(ctx, now + 0.44, 523.25, 0.1, vol);          // C5
+    playNote(ctx, now + 0.56, 392.00, 0.12, vol);         // G4
+
+    // 4단계: 최종 경고 (낮은 음)
+    playNote(ctx, now + 0.70, 261.63, 0.25, vol);         // C4
+    playNote(ctx, now + 0.70, 130.81, 0.22, vol * 0.5, 'triangle');  // C3 베이스
   }
 }
 
