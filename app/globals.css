@@ -425,3 +425,50 @@ div[data-ref="tv-lightweight-charts"] a,
   background: rgba(161, 161, 170, 0.8) !important;
 }
 
+/* 도화선 글로우 테두리 애니메이션 */
+@property --fuse-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes fuse-rotate {
+  0% { --fuse-angle: 0deg; }
+  10% { --fuse-angle: 20deg; }
+  20% { --fuse-angle: 50deg; }
+  30% { --fuse-angle: 90deg; }
+  40% { --fuse-angle: 140deg; }
+  50% { --fuse-angle: 180deg; }
+  60% { --fuse-angle: 220deg; }
+  70% { --fuse-angle: 270deg; }
+  80% { --fuse-angle: 310deg; }
+  90% { --fuse-angle: 340deg; }
+  100% { --fuse-angle: 360deg; }
+}
+
+.fuse-border {
+  --fuse-color: #22c55e;
+  --fuse-intensity: 1;
+  background:
+    /* 밝은 글로우 도화선 (회전) */
+    conic-gradient(
+      from var(--fuse-angle),
+      transparent 0%,
+      transparent 75%,
+      var(--fuse-color) 85%,
+      var(--fuse-color) 92%,
+      var(--fuse-color) 97%,
+      transparent 100%
+    ),
+    /* 기본 테두리 색상 (고정, 반투명) */
+    color-mix(in srgb, var(--fuse-color) 40%, transparent 60%);
+  animation: fuse-rotate 3s linear infinite;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding: 2px;
+  opacity: var(--fuse-intensity);
+}
+

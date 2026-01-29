@@ -499,7 +499,6 @@ export default function ChartAdapter({
           whaleData={whaleData}
           marketStructureData={marketStructureData}
           adxData={adxData}
-          mini={true}
           actionInfo={actionInfo}
         />
       </div>
