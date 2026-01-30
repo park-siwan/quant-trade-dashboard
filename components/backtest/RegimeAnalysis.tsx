@@ -91,18 +91,27 @@ const REGIME_COLORS = {
   Bearish: '#ef4444',
 };
 
+// 기간 옵션 정의
+const PERIOD_OPTIONS = [
+  { label: '1주', days: 7 },
+  { label: '1개월', days: 30 },
+  { label: '3개월', days: 90 },
+  { label: '5개월', days: 150 },
+];
+
 export default function RegimeAnalysis({ symbol = 'BTCUSDT', timeframe = '5m', regimeData }: RegimeAnalysisProps) {
   const [currentRegime, setCurrentRegime] = useState<CurrentRegimeStatus>(DEFAULT_REGIME);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showMethodInfo, setShowMethodInfo] = useState(false);
+  const [periodDays, setPeriodDays] = useState(150); // 기본 5개월
 
   // API에서 현재 레짐 가져오기
   const fetchRegime = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchCurrentRegime(symbol, timeframe);
+      const data = await fetchCurrentRegime(symbol, timeframe, periodDays);
       setCurrentRegime(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : '레짐 조회 실패');
@@ -110,7 +119,7 @@ export default function RegimeAnalysis({ symbol = 'BTCUSDT', timeframe = '5m', r
     } finally {
       setLoading(false);
     }
-  }, [symbol, timeframe]);
+  }, [symbol, timeframe, periodDays]);
 
   // 마운트 시 + 1분마다 자동 갱신
   useEffect(() => {
@@ -336,7 +345,28 @@ export default function RegimeAnalysis({ symbol = 'BTCUSDT', timeframe = '5m', r
       {/* 레짐 추세 차트 */}
       {regimeHistoryData.length > 0 && (
         <div className="bg-zinc-900 p-4 rounded-lg">
-          <h4 className="text-sm font-semibold text-white mb-2">레짐 추세 (최근 1주일)</h4>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+            <h4 className="text-sm font-semibold text-white">
+              레짐 추세 (최근 {PERIOD_OPTIONS.find(p => p.days === periodDays)?.label || `${periodDays}일`})
+            </h4>
+            {/* 기간 선택 버튼 */}
+            <div className="flex gap-1">
+              {PERIOD_OPTIONS.map((opt) => (
+                <button
+                  key={opt.days}
+                  onClick={() => setPeriodDays(opt.days)}
+                  disabled={loading}
+                  className={`px-3 py-1 text-xs rounded transition-colors ${
+                    periodDays === opt.days
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                  } disabled:opacity-50`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <p className="text-xs text-zinc-500 mb-4">
             시간에 따른 레짐 변화와 가격 흐름. 색상 영역은 해당 시점의 레짐을 나타냅니다.
           </p>

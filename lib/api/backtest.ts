@@ -243,16 +243,23 @@ export interface CurrentRegimeStatus {
   timeframe: string;
   method?: 'HMM' | 'GMM';  // 사용된 감지 방법
   regimeHistory?: RegimeHistoryPoint[];  // 시간별 레짐 추세 데이터
+  periodDays?: number;  // 조회 기간 (일)
 }
 
 /**
  * 현재 레짐 상태 조회
+ * @param periodDays 히스토리 기간 (일 단위, 기본 150일)
  */
 export async function fetchCurrentRegime(
   symbol: string = 'BTCUSDT',
-  timeframe: string = '5m'
+  timeframe: string = '5m',
+  periodDays: number = 150
 ): Promise<CurrentRegimeStatus> {
-  const params = new URLSearchParams({ symbol, timeframe });
+  const params = new URLSearchParams({
+    symbol,
+    timeframe,
+    periodDays: String(periodDays),
+  });
   const response = await fetch(
     `${API_CONFIG.BASE_URL}/backtest/regime/current?${params}`
   );
