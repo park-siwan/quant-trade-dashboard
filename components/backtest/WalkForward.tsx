@@ -9,8 +9,14 @@ import MonthlyParamsTrend from './MonthlyParamsTrend';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
 const TIMEFRAMES = ['5m', '15m', '1h', '4h'];
+const REGIME_FILTERS = [
+  { value: 'none', label: 'None (필터 없음)' },
+  { value: 'hmm', label: 'HMM (안정적)' },
+  { value: 'gmm', label: 'GMM (노이즈)' },
+] as const;
 
 type ViewMode = 'run' | 'history';
+type RegimeFilter = 'none' | 'gmm' | 'hmm';
 
 export default function WalkForward() {
   // 뷰 모드
@@ -19,6 +25,7 @@ export default function WalkForward() {
   // 입력 상태
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [timeframe, setTimeframe] = useState('5m');
+  const [regimeFilter, setRegimeFilter] = useState<RegimeFilter>('none');
   const [trainMonths, setTrainMonths] = useState(4);
   const [testMonths, setTestMonths] = useState(1);
 
@@ -49,8 +56,8 @@ export default function WalkForward() {
     setHistoryLoading(true);
     try {
       const [params, stats] = await Promise.all([
-        fetchMonthlyParams(symbol, timeframe),
-        fetchMonthlyParamsStats(symbol, timeframe),
+        fetchMonthlyParams(symbol, timeframe, regimeFilter),
+        fetchMonthlyParamsStats(symbol, timeframe, regimeFilter),
       ]);
       setMonthlyParams(params);
       setMonthlyStats(stats);
@@ -59,14 +66,14 @@ export default function WalkForward() {
     } finally {
       setHistoryLoading(false);
     }
-  }, [symbol, timeframe]);
+  }, [symbol, timeframe, regimeFilter]);
 
-  // 히스토리 모드에서 심볼/타임프레임 변경 시 자동 로드
+  // 히스토리 모드에서 심볼/타임프레임/레짐필터 변경 시 자동 로드
   useEffect(() => {
     if (viewMode === 'history') {
       loadHistory();
     }
-  }, [viewMode, symbol, timeframe, loadHistory]);
+  }, [viewMode, symbol, timeframe, regimeFilter, loadHistory]);
 
   const runOptimization = useCallback(async () => {
     setStatus('running');
@@ -216,6 +223,18 @@ export default function WalkForward() {
                 >
                   {TIMEFRAMES.map(tf => (
                     <option key={tf} value={tf}>{tf}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">Regime Filter</label>
+                <select
+                  value={regimeFilter}
+                  onChange={(e) => setRegimeFilter(e.target.value as RegimeFilter)}
+                  className="bg-zinc-800 text-white px-3 py-2 rounded text-sm border border-zinc-700 focus:border-zinc-500 outline-none"
+                >
+                  {REGIME_FILTERS.map(rf => (
+                    <option key={rf.value} value={rf.value}>{rf.label}</option>
                   ))}
                 </select>
               </div>

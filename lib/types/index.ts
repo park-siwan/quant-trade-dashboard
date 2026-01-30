@@ -475,6 +475,7 @@ export interface MonthlyParam {
   testSharpe: number;
   testPnlPct: number;
   trades: number;
+  regimeFilter: 'none' | 'gmm' | 'hmm';  // 레짐 필터 타입
 }
 
 export interface MonthlyParamsStats {

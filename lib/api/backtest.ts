@@ -127,10 +127,14 @@ export async function saveRollingParams(data: {
  */
 export async function fetchMonthlyParams(
   symbol: string,
-  timeframe: string
+  timeframe: string,
+  regimeFilter?: 'none' | 'gmm' | 'hmm'
 ): Promise<MonthlyParam[]> {
+  const params = new URLSearchParams({ symbol, timeframe });
+  if (regimeFilter) params.append('regimeFilter', regimeFilter);
+
   const response = await fetch(
-    `${API_CONFIG.BASE_URL}/backtest/monthly-params?symbol=${symbol}&timeframe=${timeframe}`
+    `${API_CONFIG.BASE_URL}/backtest/monthly-params?${params}`
   );
 
   if (!response.ok) {
@@ -145,10 +149,14 @@ export async function fetchMonthlyParams(
  */
 export async function fetchMonthlyParamsStats(
   symbol: string,
-  timeframe: string
+  timeframe: string,
+  regimeFilter?: 'none' | 'gmm' | 'hmm'
 ): Promise<MonthlyParamsStats> {
+  const params = new URLSearchParams({ symbol, timeframe });
+  if (regimeFilter) params.append('regimeFilter', regimeFilter);
+
   const response = await fetch(
-    `${API_CONFIG.BASE_URL}/backtest/monthly-params/stats?symbol=${symbol}&timeframe=${timeframe}`
+    `${API_CONFIG.BASE_URL}/backtest/monthly-params/stats?${params}`
   );
 
   if (!response.ok) {
@@ -181,6 +189,7 @@ export async function fetchMonthlyParamsPairs(): Promise<
 export async function saveMonthlyParams(data: {
   symbol: string;
   timeframe: string;
+  regimeFilter?: 'none' | 'gmm' | 'hmm';
   results: Array<{
     testMonth: string;
     trainStart: string;
