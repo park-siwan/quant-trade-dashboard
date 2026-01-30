@@ -1,6 +1,6 @@
 'use client';
 
-type StrategySubTab = 'realtime' | 'walk-forward';
+type StrategySubTab = 'realtime' | 'regime' | 'walk-forward';
 
 interface StrategyLNBProps {
   activeSubTab: StrategySubTab;
@@ -9,6 +9,7 @@ interface StrategyLNBProps {
 
 const subTabs: { id: StrategySubTab; label: string }[] = [
   { id: 'realtime', label: '실시간' },
+  { id: 'regime', label: '레짐 분석' },
   { id: 'walk-forward', label: 'Walk-Forward' },
 ];
 

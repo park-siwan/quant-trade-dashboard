@@ -1,18 +1,35 @@
 'use client';
 
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, Suspense } from 'react';
 import { StrategyLNB, type StrategySubTab } from '@/components/layout';
 import RealtimeChart from '@/components/backtest/RealtimeChart';
+import RegimeAnalysis from '@/components/backtest/RegimeAnalysis';
 import WalkForward from '@/components/backtest/WalkForward';
 
-export default function StrategyPage() {
-  const [strategySubTab, setStrategySubTab] = useState<StrategySubTab>('realtime');
+function StrategyContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tab = (searchParams.get('tab') as StrategySubTab) || 'realtime';
+
+  const handleTabChange = useCallback((newTab: StrategySubTab) => {
+    router.push(`/strategy?tab=${newTab}`);
+  }, [router]);
 
   return (
     <div className='p-4 md:p-8'>
-      <StrategyLNB activeSubTab={strategySubTab} onSubTabChange={setStrategySubTab} />
-      {strategySubTab === 'realtime' && <RealtimeChart />}
-      {strategySubTab === 'walk-forward' && <WalkForward />}
+      <StrategyLNB activeSubTab={tab} onSubTabChange={handleTabChange} />
+      {tab === 'realtime' && <RealtimeChart />}
+      {tab === 'regime' && <RegimeAnalysis />}
+      {tab === 'walk-forward' && <WalkForward />}
     </div>
+  );
+}
+
+export default function StrategyPage() {
+  return (
+    <Suspense fallback={<div className="p-4 md:p-8">로딩 중...</div>}>
+      <StrategyContent />
+    </Suspense>
   );
 }

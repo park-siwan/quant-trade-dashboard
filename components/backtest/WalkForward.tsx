@@ -459,6 +459,7 @@ export default function WalkForward() {
           )}
         </>
       )}
+
     </div>
   );
 }

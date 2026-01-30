@@ -216,3 +216,73 @@ export async function saveMonthlyParams(data: {
 
   return response.json();
 }
+
+// ============== Regime API ==============
+
+export interface RegimeHistoryPoint {
+  timestamp: string;
+  regime: 'Bullish' | 'Sideways' | 'Bearish';
+  regimeNum: number;
+  price: number;
+}
+
+export interface CurrentRegimeStatus {
+  regime: 'Bullish' | 'Sideways' | 'Bearish';
+  regimeNum: number;
+  confidence: number;
+  price: number;
+  sma50: number;
+  sma200: number;
+  timestamp: string;
+  recommendedAction: string;
+  nextLikelyRegime: string;
+  nextLikelyProbability: number;
+  distribution: Array<{ regime: string; count: number; percentage: number }>;
+  transitionMatrix: number[][] | null;
+  symbol: string;
+  timeframe: string;
+  method?: 'HMM' | 'GMM';  // 사용된 감지 방법
+  regimeHistory?: RegimeHistoryPoint[];  // 시간별 레짐 추세 데이터
+}
+
+/**
+ * 현재 레짐 상태 조회
+ */
+export async function fetchCurrentRegime(
+  symbol: string = 'BTCUSDT',
+  timeframe: string = '5m'
+): Promise<CurrentRegimeStatus> {
+  const params = new URLSearchParams({ symbol, timeframe });
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/backtest/regime/current?${params}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`API 요청 실패: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * 레짐 캐시 새로고침
+ */
+export async function refreshRegime(
+  symbol?: string,
+  timeframe?: string
+): Promise<{ success: boolean; message: string }> {
+  const params = new URLSearchParams();
+  if (symbol) params.append('symbol', symbol);
+  if (timeframe) params.append('timeframe', timeframe);
+
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/backtest/regime/refresh?${params}`,
+    { method: 'POST' }
+  );
+
+  if (!response.ok) {
+    throw new Error(`API 요청 실패: ${response.statusText}`);
+  }
+
+  return response.json();
+}
