@@ -217,6 +217,49 @@ export async function saveMonthlyParams(data: {
   return response.json();
 }
 
+// ============== Robust Params API ==============
+
+export interface RobustParams {
+  recommended: {
+    pivotLeft: number;
+    pivotRight: number;
+    tpPct: number;
+    slPct: number;
+  } | null;
+  positiveWindows: number;
+  totalWindows: number;
+  avgPositiveTestSharpe: number;
+  avgPositiveTestPnl: number;
+  paramDetails: {
+    pl: { value: number; count: number; avgTestSharpe: number }[];
+    pr: { value: number; count: number; avgTestSharpe: number }[];
+    tp: { value: number; count: number; avgTestSharpe: number }[];
+    sl: { value: number; count: number; avgTestSharpe: number }[];
+  };
+}
+
+/**
+ * 로버스트 파라미터 조회 (긍정적 Test Sharpe 윈도우 기반)
+ */
+export async function fetchRobustParams(
+  symbol: string,
+  timeframe: string,
+  regimeFilter?: 'none' | 'gmm' | 'hmm'
+): Promise<RobustParams> {
+  const params = new URLSearchParams({ symbol, timeframe });
+  if (regimeFilter) params.append('regimeFilter', regimeFilter);
+
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/backtest/monthly-params/robust?${params}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`API 요청 실패: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
 // ============== Regime API ==============
 
 export interface RegimeHistoryPoint {

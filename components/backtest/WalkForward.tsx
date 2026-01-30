@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { Play, Square, Save, History, Zap } from 'lucide-react';
-import { streamWalkForward, saveRollingParams, fetchMonthlyParams, fetchMonthlyParamsStats, type WalkForwardEvent } from '@/lib/api/backtest';
+import { streamWalkForward, saveRollingParams, fetchMonthlyParams, fetchMonthlyParamsStats, fetchRobustParams, type WalkForwardEvent, type RobustParams } from '@/lib/api/backtest';
 import type { WalkForwardWindow, WalkForwardSummary, WalkForwardStatus, MonthlyParam, MonthlyParamsStats } from '@/lib/types';
 import WalkForwardChart from './WalkForwardChart';
 import MonthlyParamsTrend from './MonthlyParamsTrend';
@@ -41,6 +41,7 @@ export default function WalkForward() {
   // 히스토리 상태
   const [monthlyParams, setMonthlyParams] = useState<MonthlyParam[]>([]);
   const [monthlyStats, setMonthlyStats] = useState<MonthlyParamsStats | null>(null);
+  const [robustParams, setRobustParams] = useState<RobustParams | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   // 캔들 수 계산 (5분봉 기준)
@@ -55,12 +56,14 @@ export default function WalkForward() {
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const [params, stats] = await Promise.all([
+      const [params, stats, robust] = await Promise.all([
         fetchMonthlyParams(symbol, timeframe, regimeFilter),
         fetchMonthlyParamsStats(symbol, timeframe, regimeFilter),
+        fetchRobustParams(symbol, timeframe, regimeFilter),
       ]);
       setMonthlyParams(params);
       setMonthlyStats(stats);
+      setRobustParams(robust);
     } catch (error) {
       console.error('Failed to load monthly params:', error);
     } finally {
@@ -254,7 +257,7 @@ export default function WalkForward() {
               로딩 중...
             </div>
           ) : (
-            <MonthlyParamsTrend params={monthlyParams} stats={monthlyStats} />
+            <MonthlyParamsTrend params={monthlyParams} stats={monthlyStats} robustParams={robustParams} />
           )}
         </>
       )}

@@ -15,13 +15,15 @@ import {
   Legend,
 } from 'recharts';
 import type { MonthlyParam, MonthlyParamsStats } from '@/lib/types';
+import type { RobustParams } from '@/lib/api/backtest';
 
 interface MonthlyParamsTrendProps {
   params: MonthlyParam[];
   stats: MonthlyParamsStats | null;
+  robustParams?: RobustParams | null;
 }
 
-export default function MonthlyParamsTrend({ params, stats }: MonthlyParamsTrendProps) {
+export default function MonthlyParamsTrend({ params, stats, robustParams }: MonthlyParamsTrendProps) {
   // PnL 차트 데이터
   const pnlData = useMemo(() => {
     let cumulative = 0;
@@ -113,6 +115,63 @@ export default function MonthlyParamsTrend({ params, stats }: MonthlyParamsTrend
               <div className="text-xs text-zinc-500">Avg Test Sharpe</div>
               <div className="text-xl font-bold text-green-400">{stats.avgTestSharpe.toFixed(2)}</div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 로버스트 파라미터 추천 */}
+      {robustParams && robustParams.recommended && (
+        <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 p-4 rounded-lg border border-blue-800/30">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-white">🎯 로버스트 파라미터 추천</h3>
+            <span className="text-xs text-zinc-400">
+              긍정적 Test Sharpe 윈도우 기반 ({robustParams.positiveWindows}/{robustParams.totalWindows})
+            </span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <div className="bg-black/30 p-3 rounded">
+              <div className="text-xs text-zinc-500">pivotLeft</div>
+              <div className="text-xl font-bold text-white">{robustParams.recommended.pivotLeft}</div>
+            </div>
+            <div className="bg-black/30 p-3 rounded">
+              <div className="text-xs text-zinc-500">pivotRight</div>
+              <div className="text-xl font-bold text-white">{robustParams.recommended.pivotRight}</div>
+            </div>
+            <div className="bg-black/30 p-3 rounded">
+              <div className="text-xs text-zinc-500">tpPct</div>
+              <div className="text-xl font-bold text-white">{robustParams.recommended.tpPct}</div>
+            </div>
+            <div className="bg-black/30 p-3 rounded">
+              <div className="text-xs text-zinc-500">slPct</div>
+              <div className="text-xl font-bold text-white">{robustParams.recommended.slPct}</div>
+            </div>
+            <div className="bg-black/30 p-3 rounded">
+              <div className="text-xs text-zinc-500">Avg Positive Sharpe</div>
+              <div className="text-xl font-bold text-green-400">{robustParams.avgPositiveTestSharpe.toFixed(2)}</div>
+            </div>
+            <div className="bg-black/30 p-3 rounded">
+              <div className="text-xs text-zinc-500">Avg Positive PnL</div>
+              <div className="text-xl font-bold text-green-400">+{robustParams.avgPositiveTestPnl.toFixed(2)}%</div>
+            </div>
+          </div>
+          {/* 파라미터 상세 분석 */}
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+            {['pl', 'pr', 'tp', 'sl'].map((key) => {
+              const paramKey = key as keyof typeof robustParams.paramDetails;
+              const details = robustParams.paramDetails[paramKey];
+              if (!details || details.length === 0) return null;
+              return (
+                <div key={key} className="bg-black/20 p-2 rounded">
+                  <div className="text-zinc-500 mb-1">{key === 'pl' ? 'pivotLeft' : key === 'pr' ? 'pivotRight' : key === 'tp' ? 'tpPct' : 'slPct'}</div>
+                  {details.slice(0, 3).map((d, i) => (
+                    <div key={i} className={`flex justify-between ${i === 0 ? 'text-white font-semibold' : 'text-zinc-400'}`}>
+                      <span>{d.value}</span>
+                      <span>{d.count}회 (Sharpe: {d.avgTestSharpe})</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
