@@ -6,6 +6,7 @@ import { useLongShortRatio } from '@/hooks/useLongShortRatio';
 import { useLiquidations } from '@/hooks/useLiquidations';
 import { useWhales } from '@/hooks/useWhales';
 import { useMTFSocket } from '@/hooks/useMTFSocket';
+import { useRegime } from '@/hooks/useRegime';
 import ChartRenderer from '@/components/chart/ChartRenderer';
 import { CandlestickData, LineData } from 'lightweight-charts';
 import {
@@ -93,6 +94,13 @@ export default function ChartAdapter({
   const { data: mtfData, getRawDivergences } = useMTFSocket({
     symbol: symbol.replace('/', ''),
     enabled: true,
+  });
+
+  // 레짐 상태 가져오기 (HMM 기반)
+  const { regime, isSideways, confidence } = useRegime({
+    symbol,
+    timeframe: selectedTimeframe,
+    periodDays: 30,
   });
 
   // 현재 타임프레임의 actionInfo 가져오기
@@ -296,8 +304,20 @@ export default function ChartAdapter({
   const crossoverEvents: CrossoverEvent[] = data?.data?.crossoverEvents || [];
 
   // 다이버전스 시그널 (WebSocket 전용 - MTF 분석과 동일 데이터)
+  // 레짐 필터 적용: 레짐과 같은 방향의 다이버전스만 유효 (추세 추종)
   const divergenceSignals: DivergenceSignal[] = useMemo(() => {
     const wsSignals = getRawDivergences(selectedTimeframe);
+
+    // 레짐 기반 필터링 로직:
+    // - Sideways: 모든 다이버전스 유효 (역추세 전략 가능)
+    // - Bullish: 상승 다이버전스만 유효 (추세 추종 롱)
+    // - Bearish: 하락 다이버전스만 유효 (추세 추종 숏)
+    const shouldFilterByRegime = (direction: string): boolean => {
+      if (!regime || isSideways) return false; // Sideways면 필터 안함
+      if (regime === 'Bullish' && direction === 'bullish') return false; // 상승장 + 상승 다이버전스 OK
+      if (regime === 'Bearish' && direction === 'bearish') return false; // 하락장 + 하락 다이버전스 OK
+      return true; // 역추세 신호는 필터링
+    };
 
     return wsSignals.map((s: {
       type: string;
@@ -309,19 +329,26 @@ export default function ChartAdapter({
       indicatorValue?: number;
       isFiltered?: boolean;
       confirmed?: boolean;
-    }) => ({
-      index: s.index ?? 0,
-      type: s.type as 'rsi' | 'obv' | 'cvd' | 'oi',
-      direction: s.direction as 'bullish' | 'bearish',
-      phase: s.phase as 'start' | 'end' | 'entry',
-      timestamp: s.timestamp ?? Date.now(),
-      datetime: new Date(s.timestamp ?? Date.now()).toISOString(),
-      priceValue: s.priceValue, // 가격 값 (차트 라인용)
-      indicatorValue: s.indicatorValue, // 지표 값
-      isFiltered: s.isFiltered, // 필터링 여부
-      confirmed: s.confirmed, // 피봇 확정 여부
-    }));
-  }, [getRawDivergences, selectedTimeframe]);
+      reason?: string;
+    }) => {
+      const regimeFiltered = shouldFilterByRegime(s.direction);
+      return {
+        index: s.index ?? 0,
+        type: s.type as 'rsi' | 'obv' | 'cvd' | 'oi',
+        direction: s.direction as 'bullish' | 'bearish',
+        phase: s.phase as 'start' | 'end' | 'entry',
+        timestamp: s.timestamp ?? Date.now(),
+        datetime: new Date(s.timestamp ?? Date.now()).toISOString(),
+        priceValue: s.priceValue,
+        indicatorValue: s.indicatorValue,
+        // 레짐 필터 적용 (역추세 신호만 필터링)
+        isFiltered: regimeFiltered || s.isFiltered,
+        confirmed: s.confirmed,
+        // 필터 사유
+        reason: regimeFiltered ? `역추세 (${regime} 레짐)` : s.reason,
+      };
+    });
+  }, [getRawDivergences, selectedTimeframe, regime, isSideways]);
 
   // 다이버전스 요약 정보
   const summary = data?.data?.summary || {
@@ -430,11 +457,33 @@ export default function ChartAdapter({
   // 차트 표시
   return (
     <div className='relative bg-white/[0.02] border border-white/10 rounded-xl overflow-hidden h-full'>
-      {/* 타임프레임 라벨 */}
-      <div className='absolute top-2 left-2 z-10'>
+      {/* 타임프레임 라벨 + 레짐 뱃지 */}
+      <div className='absolute top-2 left-2 z-10 flex items-center gap-1.5'>
         <span className='px-2 py-0.5 bg-black/50 rounded text-xs font-bold text-white'>
           {TIMEFRAMES.find(tf => tf.value === selectedTimeframe)?.label || selectedTimeframe}
         </span>
+        {regime && (
+          <span
+            className='px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1'
+            style={{
+              backgroundColor: isSideways
+                ? 'rgba(59, 130, 246, 0.3)'
+                : regime === 'Bullish'
+                ? 'rgba(34, 197, 94, 0.2)'
+                : 'rgba(239, 68, 68, 0.2)',
+              color: isSideways
+                ? '#60a5fa'
+                : regime === 'Bullish'
+                ? '#4ade80'
+                : '#f87171',
+            }}
+            title={`레짐: ${regime} (신뢰도 ${confidence}%)`}
+          >
+            {regime === 'Bullish' ? '📈' : regime === 'Bearish' ? '📉' : '📊'}
+            {regime}
+            {isSideways && <span className='text-blue-300 ml-0.5'>✓</span>}
+          </span>
+        )}
       </div>
       <ChartRenderer
         data={chartData}

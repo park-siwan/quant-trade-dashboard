@@ -424,8 +424,8 @@ export default function RegimeAnalysis({ symbol = 'BTCUSDT', timeframe = '5m', r
                   borderRadius: '6px',
                 }}
                 labelStyle={{ color: '#a1a1aa' }}
-                formatter={(value: number | null, name: string) => {
-                  if (name === 'price') return [`$${value?.toLocaleString()}`, '가격'];
+                formatter={(value, name) => {
+                  if (name === 'price') return [`$${(value as number)?.toLocaleString()}`, '가격'];
                   if (name === 'bullishArea' && value) return ['Bullish', '레짐'];
                   if (name === 'sidewaysArea' && value) return ['Sideways', '레짐'];
                   if (name === 'bearishArea' && value) return ['Bearish', '레짐'];

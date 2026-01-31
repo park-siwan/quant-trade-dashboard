@@ -110,7 +110,7 @@ export const RsiDivergenceDefaults: Record<string, number> = {
   slAtr: 1.5,
   rsiPeriod: 14,
   pivotLeft: 5,
-  pivotRight: 1,
+  pivotRight: 2,
   minDistance: 8,
   maxDistance: 60,
   minRsiDiff: 3.0,

@@ -312,7 +312,7 @@ export default function MonthlyParamsTrend({
                   borderRadius: '6px',
                 }}
                 labelStyle={{ color: '#a1a1aa' }}
-                formatter={(value: number) => [formatPercent(value), '누적 PnL']}
+                formatter={(value) => [formatPercent(value as number), '누적 PnL']}
                 labelFormatter={(label) => `2025-${label}`}
               />
               <ReferenceLine y={0} stroke="#71717a" strokeDasharray="3 3" />
@@ -350,7 +350,7 @@ export default function MonthlyParamsTrend({
                   borderRadius: '6px',
                 }}
                 labelStyle={{ color: '#a1a1aa' }}
-                formatter={(value: number) => [formatPercent(value), 'PnL']}
+                formatter={(value) => [formatPercent(value as number), 'PnL']}
                 labelFormatter={(label) => `2025-${label}`}
               />
               <ReferenceLine y={0} stroke="#71717a" strokeDasharray="3 3" />
@@ -404,8 +404,8 @@ export default function MonthlyParamsTrend({
                   borderRadius: '6px',
                 }}
                 labelStyle={{ color: '#a1a1aa' }}
-                formatter={(value: number, name: string) => [
-                  formatSharpe(value),
+                formatter={(value, name) => [
+                  formatSharpe(value as number),
                   name === 'trainSharpe' ? 'Train' : 'Test',
                 ]}
                 labelFormatter={(label) => `2025-${label}`}
