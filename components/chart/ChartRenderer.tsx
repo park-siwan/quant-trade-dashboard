@@ -306,15 +306,16 @@ export default function ChartRenderer({
         // 미니 모드와 일반 모드 모두 CandlestickSeries 사용
         const isUp = realtimeCandle.close >= realtimeCandle.open;
 
+        // 실시간 캔들은 항상 컬러 (최신 캔들)
         const candleUpdate: CandlestickData = {
           time: (realtimeCandle.timestamp / 1000) as CandlestickData['time'],
           open: realtimeCandle.open,
           high: realtimeCandle.high,
           low: realtimeCandle.low,
           close: realtimeCandle.close,
-          color: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
-          borderColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
-          wickColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
+          color: rgba(isUp ? COLORS.LONG : COLORS.SHORT, 0.9),
+          borderColor: rgba(isUp ? COLORS.LONG : COLORS.SHORT, 0.9),
+          wickColor: rgba(isUp ? COLORS.LONG : COLORS.SHORT, 0.9),
         };
         (candlestickSeriesRef.current as ISeriesApi<'Candlestick'>).update(candleUpdate);
 
@@ -441,8 +442,9 @@ export default function ChartRenderer({
     // 차트 참조 저장
     chartRef.current = chart;
 
-    // 중복 타임스탬프 제거 (lightweight-charts 요구사항: 시간 오름차순, 중복 불가)
-    const uniqueData = data.filter((candle, index, arr) => {
+    // lightweight-charts 요구사항: 시간 오름차순 정렬 + 중복 타임스탬프 제거
+    const sortedData = [...data].sort((a, b) => (a.time as number) - (b.time as number));
+    const uniqueData = sortedData.filter((candle, index, arr) => {
       if (index === 0) return true;
       return candle.time !== arr[index - 1].time;
     });
@@ -468,15 +470,22 @@ export default function ChartRenderer({
         0,
       );
 
-      // 모든 캔들 동일 투명도
-      const candleDataWithColors = uniqueData.map((candle) => {
+      // 모든 캔들 동일 투명도, 최신 3개 캔들만 컬러
+      const lastIndex = uniqueData.length - 1;
+      const candleDataWithColors = uniqueData.map((candle, index) => {
         const isUp = candle.close >= candle.open;
+        const isRecent = index >= lastIndex - 2; // 최신 3개
+
+        // 최신 3개 캔들은 컬러, 나머지는 무채색
+        const upColor = isRecent ? COLORS.LONG : GRAY_UP;
+        const downColor = isRecent ? COLORS.SHORT : GRAY_DOWN;
+        const opacity = isRecent ? 0.9 : CANDLE_OPACITY;
 
         return {
           ...candle,
-          color: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
-          borderColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
-          wickColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
+          color: rgba(isUp ? upColor : downColor, opacity),
+          borderColor: rgba(isUp ? upColor : downColor, opacity),
+          wickColor: rgba(isUp ? upColor : downColor, opacity),
         };
       });
 
@@ -497,15 +506,22 @@ export default function ChartRenderer({
         0,
       );
 
-      // 모든 캔들 동일 투명도
-      const candleDataWithColors = uniqueData.map((candle) => {
+      // 모든 캔들 동일 투명도, 최신 3개 캔들만 컬러
+      const lastIndex = uniqueData.length - 1;
+      const candleDataWithColors = uniqueData.map((candle, index) => {
         const isUp = candle.close >= candle.open;
+        const isRecent = index >= lastIndex - 2; // 최신 3개
+
+        // 최신 3개 캔들은 컬러, 나머지는 무채색
+        const upColor = isRecent ? COLORS.LONG : GRAY_UP;
+        const downColor = isRecent ? COLORS.SHORT : GRAY_DOWN;
+        const opacity = isRecent ? 0.9 : CANDLE_OPACITY;
 
         return {
           ...candle,
-          color: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
-          borderColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
-          wickColor: rgba(isUp ? GRAY_UP : GRAY_DOWN, CANDLE_OPACITY),
+          color: rgba(isUp ? upColor : downColor, opacity),
+          borderColor: rgba(isUp ? upColor : downColor, opacity),
+          wickColor: rgba(isUp ? upColor : downColor, opacity),
         };
       });
 
