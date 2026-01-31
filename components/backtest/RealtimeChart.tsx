@@ -23,11 +23,14 @@ import {
   OpenPosition,
   BacktestResult,
   EquityPoint,
+  deleteSavedResult,
 } from '@/lib/backtest-api';
+import { X } from 'lucide-react';
 import { convertApiParams, getDefaultParams } from '@/lib/strategy-params';
 import { CHART } from '@/lib/constants';
 import { useAtomValue } from 'jotai';
 import { symbolAtom } from '@/stores/symbolAtom';
+import { toSeconds, formatKST, getTimeframeSeconds } from '@/lib/utils/timestamp';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -42,25 +45,6 @@ const changeStrategy = async (strategyId: number) => {
   } catch (err) {
     console.error('Failed to change strategy:', err);
   }
-};
-
-// 거래 시간 문자열을 UTC timestamp(초)로 변환 (BacktestChart와 동일)
-const parseTradeTime = (timeStr: string): number => {
-  // 백테스트 API에서 오는 시간은 UTC (Z 없이)
-  const utcStr = timeStr.endsWith('Z') ? timeStr : timeStr + 'Z';
-  return new Date(utcStr).getTime() / 1000;
-};
-
-// KST 시간 포맷
-const formatKST = (utcTimestamp: number): string => {
-  const date = new Date(utcTimestamp);
-  return date.toLocaleString('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
 };
 
 export default function RealtimeChart() {
@@ -645,7 +629,7 @@ export default function RealtimeChart() {
       maxDrawdown: 0,
       sharpeRatio: rolling.testSharpe,
       rank: 1,
-      note: `[${rolling.source === 'manual' ? '수동' : rolling.source === 'bayesian' ? '베이지안' : '롤링'}] ${rolling.strategy} - Train: ${rolling.trainSharpe.toFixed(2)}, Test: ${rolling.testSharpe.toFixed(2)}`,
+      note: `[롤링] ${rolling.strategy}`,
     };
 
     // 4. 전략별 추가 파라미터 및 필터 문자열 설정
@@ -1094,7 +1078,7 @@ export default function RealtimeChart() {
     // 포지션 구간인지 확인하여 색상 적용
     let coloredCandle = newCandle;
     if (openPosition) {
-      const entryTime = parseTradeTime(openPosition.entryTime);
+      const entryTime = toSeconds(openPosition.entryTime);
       if (newCandleTime >= entryTime) {
         const isLong = openPosition.direction === 'long';
         coloredCandle = {
@@ -1207,7 +1191,7 @@ export default function RealtimeChart() {
         shiftVisibleRangeOnNewBar: true,
       },
       localization: {
-        timeFormatter: (time: number) => formatKST(time * 1000),
+        timeFormatter: (time: number) => formatKST(time),  // time은 이미 초 단위
       },
     });
 
@@ -1353,6 +1337,22 @@ export default function RealtimeChart() {
     const minCandleTime = Math.min(...candleTimes);
     const maxCandleTime = Math.max(...candleTimes);
 
+    // 디버그 로깅 (개발 환경에서만)
+    const DEBUG_MARKERS = process.env.NODE_ENV === 'development';
+    if (DEBUG_MARKERS && backtestTrades.length > 0) {
+      console.log('[Marker Debug] Candle range:', {
+        min: new Date(minCandleTime * 1000).toISOString(),
+        max: new Date(maxCandleTime * 1000).toISOString(),
+        count: candles.length,
+      });
+      console.log('[Marker Debug] Trades:', backtestTrades.slice(0, 3).map(t => ({
+        entry: t.entryTime,
+        exit: t.exitTime,
+        entrySeconds: toSeconds(t.entryTime),
+        exitSeconds: toSeconds(t.exitTime),
+      })));
+    }
+
     // 거래 구간별 색상 맵 생성 (캔들 시간 -> 색상)
     const tradeColorMap = new Map<
       number,
@@ -1362,8 +1362,8 @@ export default function RealtimeChart() {
     // 청산된 거래 구간 색상 설정
     if (backtestTrades.length > 0) {
       backtestTrades.forEach((trade) => {
-        const entryTime = parseTradeTime(trade.entryTime);
-        const exitTime = parseTradeTime(trade.exitTime);
+        const entryTime = toSeconds(trade.entryTime);
+        const exitTime = toSeconds(trade.exitTime);
         const isLong = trade.direction === 'long';
         const isWin = trade.pnl > 0;
 
@@ -1379,7 +1379,7 @@ export default function RealtimeChart() {
 
     // 열린 포지션 구간 색상 설정
     if (openPosition) {
-      const entryTime = parseTradeTime(openPosition.entryTime);
+      const entryTime = toSeconds(openPosition.entryTime);
       const isLong = openPosition.direction === 'long';
 
       candles.forEach((candle) => {
@@ -1443,12 +1443,12 @@ export default function RealtimeChart() {
         size: CHART.SPACER_SIZE,
       }) as SeriesMarker<Time>;
 
-    // 백테스트 거래 마커 (parseTradeTime 사용 - BacktestChart와 동일)
+    // 백테스트 거래 마커 (toSeconds 사용 - BacktestChart와 동일)
     if (backtestTrades.length > 0) {
       // 디버깅: 첫 거래의 시간 매칭 확인
       if (backtestTrades.length > 0) {
         const firstTrade = backtestTrades[0];
-        const firstEntryTime = parseTradeTime(firstTrade.entryTime);
+        const firstEntryTime = toSeconds(firstTrade.entryTime);
         console.log('[Time Debug] First trade entryTime raw:', firstTrade.entryTime);
         console.log('[Time Debug] First trade entryTime parsed (UTC sec):', firstEntryTime);
         console.log('[Time Debug] First trade entryTime as Date:', new Date(firstEntryTime * 1000).toISOString());
@@ -1456,8 +1456,8 @@ export default function RealtimeChart() {
         console.log('[Time Debug] Candle range as Date:', new Date(minCandleTime * 1000).toISOString(), '-', new Date(maxCandleTime * 1000).toISOString());
       }
       backtestTrades.forEach((trade) => {
-        const entryTime = parseTradeTime(trade.entryTime);
-        const exitTime = parseTradeTime(trade.exitTime);
+        const entryTime = toSeconds(trade.entryTime);
+        const exitTime = toSeconds(trade.exitTime);
         const isLong = trade.direction === 'long';
         const isWin = trade.pnl > 0;
 
@@ -1505,7 +1505,7 @@ export default function RealtimeChart() {
     // 스킵된 신호 마커 (수수료 보호) - 회색 화살표 + 예상 TP 위치 회색 점
     if (skippedSignals.length > 0) {
       skippedSignals.forEach((signal) => {
-        const signalTime = parseTradeTime(signal.time);
+        const signalTime = toSeconds(signal.time);
         const isLong = signal.direction === 'long';
         if (signalTime >= minCandleTime && signalTime <= maxCandleTime) {
           markers.push(createSpacer(signalTime, isLong ? 'belowBar' : 'aboveBar'));
@@ -1635,19 +1635,25 @@ export default function RealtimeChart() {
     }
   }, [openPosition, ticker?.price, selectedStrategy?.id]); // 전략 변경 시 라인 즉시 제거/갱신
 
-  // 총 소요시간 계산 (모든 거래의 소요시간 합계)
-  const totalDuration = backtestTrades.reduce((acc, trade) => {
-    const entryDate = new Date(trade.entryTime + 'Z');
-    const exitDate = new Date(trade.exitTime + 'Z');
-    return acc + (exitDate.getTime() - entryDate.getTime());
+  // 총 포지션 보유시간 계산 (모든 거래의 보유시간 합계)
+  const totalHoldingTime = backtestTrades.reduce((acc, trade) => {
+    const entrySeconds = toSeconds(trade.entryTime);
+    const exitSeconds = toSeconds(trade.exitTime);
+    // toSeconds는 초 단위 반환, formatDuration은 밀리초 필요
+    return acc + (exitSeconds - entrySeconds) * 1000;
   }, 0);
 
-  const formatDuration = (ms: number) => {
+  // 측정기간 계산 (백테스트 시작~끝)
+  const measurementPeriod = backtestStats
+    ? new Date(backtestStats.endDate).getTime() - new Date(backtestStats.startDate).getTime()
+    : 0;
+
+  const formatDuration = (ms: number, short = false) => {
     const hours = Math.floor(ms / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
     const remainingHours = hours % 24;
     if (days > 0) {
-      return `${days}일 ${remainingHours}시간`;
+      return short ? `${days}일` : `${days}일 ${remainingHours}시간`;
     }
     return `${hours}시간`;
   };
@@ -1690,10 +1696,16 @@ export default function RealtimeChart() {
             </span>
           </div>
           <div className='w-px h-4 bg-zinc-700' />
-          {/* 소요시간 */}
+          {/* 측정기간 */}
           <div className='flex items-center gap-2'>
-            <span className='text-zinc-500 text-xs'>소요</span>
-            <span className='text-zinc-300 text-sm font-bold'>{formatDuration(totalDuration)}</span>
+            <span className='text-zinc-500 text-xs'>측정</span>
+            <span className='text-zinc-300 text-sm font-bold'>{formatDuration(measurementPeriod, true)}</span>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          {/* 포지션 보유시간 */}
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>보유</span>
+            <span className='text-cyan-400 text-sm font-bold'>{formatDuration(totalHoldingTime)}</span>
           </div>
           <div className='w-px h-4 bg-zinc-700' />
           {/* 거래 횟수 */}
@@ -1754,8 +1766,13 @@ export default function RealtimeChart() {
           </div>
           <div className='w-px h-4 bg-zinc-700' />
           <div className='flex items-center gap-2'>
-            <span className='text-zinc-500 text-xs'>소요</span>
-            <div className='w-14 h-4 bg-zinc-800 rounded' />
+            <span className='text-zinc-500 text-xs'>측정</span>
+            <div className='w-12 h-4 bg-zinc-800 rounded' />
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          <div className='flex items-center gap-2'>
+            <span className='text-zinc-500 text-xs'>보유</span>
+            <div className='w-12 h-4 bg-zinc-800 rounded' />
           </div>
           <div className='w-px h-4 bg-zinc-700' />
           <div className='flex items-center gap-2'>
@@ -1833,15 +1850,17 @@ export default function RealtimeChart() {
                 <span className='text-white'>
                   {selectedStrategy.id < 0 ? (
                     <span className='text-cyan-400 mr-1'>[롤링]</span>
-                  ) : (
-                    <span className='text-amber-400 mr-1'>[베이지안]</span>
-                  )}
+                  ) : selectedStrategy.note?.includes('[Robust]') ? (
+                    <span className='text-green-400 mr-1'>[Robust]</span>
+                  ) : selectedStrategy.note?.includes('[HF]') ? (
+                    <span className='text-orange-400 mr-1'>[HF]</span>
+                  ) : null}
                   {selectedStrategy.note?.includes('ema_adx') ? (
                     <>EMA+ADX</>
                   ) : selectedStrategy.note?.includes('bb_reversion') ? (
                     <>BB평균회귀</>
                   ) : (
-                    <>RSI {selectedStrategy.rsiPeriod}</>
+                    <>RSI {selectedStrategy.rsiPeriod} | Pvt {selectedStrategy.pivotLeft}/{selectedStrategy.pivotRight}</>
                   )}
                   {backtestStats && (
                     <span className={`ml-2 ${backtestStats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
@@ -1849,9 +1868,7 @@ export default function RealtimeChart() {
                     </span>
                   )}
                 </span>
-              ) : (
-                <span className='text-zinc-400'>↓ 하단에서 전략 선택</span>
-              )}
+              ) : null}
             </div>
 
             {/* 타임프레임 표시 */}
@@ -2077,7 +2094,7 @@ export default function RealtimeChart() {
               chartRef.current &&
               candleSeriesRef.current &&
               (() => {
-                const entryTime = parseTradeTime(openPosition.entryTime);
+                const entryTime = toSeconds(openPosition.entryTime);
                 const isLong = openPosition.direction === 'long';
                 const x = chartRef.current
                   .timeScale()
@@ -2145,10 +2162,10 @@ export default function RealtimeChart() {
                 <div className='space-y-1 text-zinc-300'>
                   <div>
                     진입:{' '}
-                    {formatKST(new Date(hoveredTrade.entryTime + 'Z').getTime())}
+                    {formatKST(toSeconds(hoveredTrade.entryTime))}
                   </div>
                   <div>
-                    청산: {formatKST(new Date(hoveredTrade.exitTime + 'Z').getTime())}
+                    청산: {formatKST(toSeconds(hoveredTrade.exitTime))}
                   </div>
                   <div>진입가: ${hoveredTrade.entryPrice.toFixed(2)}</div>
                   <div>청산가: ${hoveredTrade.exitPrice.toFixed(2)}</div>
@@ -2194,7 +2211,7 @@ export default function RealtimeChart() {
                 </div>
                 <div className='space-y-1 text-zinc-300'>
                   <div>
-                    시간: {formatKST(new Date(hoveredSkipped.time).getTime())}
+                    시간: {formatKST(toSeconds(hoveredSkipped.time))}
                   </div>
                   <div>가격: ${hoveredSkipped.price.toFixed(2)}</div>
                   <div className='text-zinc-400 text-[10px] mt-1'>
@@ -2237,7 +2254,7 @@ export default function RealtimeChart() {
                   {divergenceData.strength}
                 </div>
                 <div className='text-xs text-zinc-500'>
-                  {formatKST(divergenceData.timestamp)}
+                  {formatKST(toSeconds(divergenceData.timestamp))}
                 </div>
               </div>
             </div>
@@ -2272,7 +2289,7 @@ export default function RealtimeChart() {
                       ${signal.price.toLocaleString()}
                     </span>
                     <span className='text-zinc-500'>
-                      {formatKST(signal.timestamp)}
+                      {formatKST(toSeconds(signal.timestamp))}
                     </span>
                   </div>
                 ))}
@@ -2331,37 +2348,46 @@ export default function RealtimeChart() {
               const isRolling = strategy.id < 0;
               const strategyLabel = strategy.note?.includes('[롤링]')
                 ? strategy.note.match(/\[롤링\] (\w+)/)?.[1] || 'rsi_divergence'
+                : strategy.note?.includes('[Robust]')
+                ? 'robust'
+                : strategy.note?.includes('[HF]')
+                ? 'hf'
                 : 'rsi_divergence';
               const isSelected = selectedStrategy?.id === strategy.id;
               return (
-                <button
+                <div
                   key={strategy.id}
-                  onClick={() => handleStrategyChange(strategy)}
-                  className={`w-full px-2 py-1.5 text-left text-xs rounded transition-colors ${
+                  className={`w-full px-2 py-1.5 text-left text-xs rounded transition-colors flex items-start gap-1 ${
                     isSelected
                       ? 'bg-blue-600/30 border border-blue-500/50'
                       : 'bg-zinc-800 hover:bg-zinc-700'
                   }`}
                 >
-                  <div className='flex justify-between items-center'>
-                    <span className='text-zinc-300 text-[11px]'>
-                      {isRolling ? (
-                        <span className='text-cyan-400 mr-1'>[롤링]</span>
-                      ) : (
-                        <span className='text-amber-400 mr-1'>[베이지안]</span>
-                      )}
-                      {strategyLabel === 'ema_adx' ? (
-                        <>EMA+ADX</>
-                      ) : strategyLabel === 'bb_reversion' ? (
-                        <>BB평균회귀</>
-                      ) : (
-                        <>RSI {strategy.rsiPeriod} | Pvt {strategy.pivotLeft}/{strategy.pivotRight}</>
-                      )}
-                    </span>
-                    <span className='text-yellow-400 text-[9px]'>
-                      SR {strategy.sharpeRatio.toFixed(2)}
-                    </span>
-                  </div>
+                  <button
+                    onClick={() => handleStrategyChange(strategy)}
+                    className='flex-1 text-left min-w-0'
+                  >
+                    <div className='flex justify-between items-center'>
+                      <span className='text-zinc-300 text-[11px]'>
+                        {isRolling ? (
+                          <span className='text-cyan-400 mr-1'>[롤링]</span>
+                        ) : strategyLabel === 'robust' ? (
+                          <span className='text-green-400 mr-1'>[Robust]</span>
+                        ) : strategyLabel === 'hf' ? (
+                          <span className='text-orange-400 mr-1'>[HF]</span>
+                        ) : null}
+                        {strategyLabel === 'ema_adx' ? (
+                          <>EMA+ADX</>
+                        ) : strategyLabel === 'bb_reversion' ? (
+                          <>BB평균회귀</>
+                        ) : (
+                          <>RSI {strategy.rsiPeriod} | Pvt {strategy.pivotLeft}/{strategy.pivotRight}</>
+                        )}
+                      </span>
+                      <span className='text-yellow-400 text-[9px]'>
+                        SR {strategy.sharpeRatio.toFixed(2)}
+                      </span>
+                    </div>
                   {/* 백테스트 결과 */}
                   <div className='flex items-center gap-1 mt-0.5'>
                     {isSelected && backtestStats ? (
@@ -2394,7 +2420,7 @@ export default function RealtimeChart() {
                         <span className='text-zinc-600'>|</span>
                         <span className='text-[10px] text-zinc-400'>{preview.totalTrades}회</span>
                       </>
-                    ) : strategyLabel !== 'rsi_divergence' ? (
+                    ) : strategyLabel !== 'rsi_divergence' && strategyLabel !== 'robust' ? (
                       <span className='text-zinc-400 text-[9px]'>
                         {strategyLabel === 'bb_reversion' ? (
                           <>Z:{strategy.entryZ?.toFixed(1)} | LB:{strategy.lookback}</>
@@ -2406,7 +2432,30 @@ export default function RealtimeChart() {
                       <span className='text-zinc-500 text-[9px]'>대기중</span>
                     )}
                   </div>
-                </button>
+                  </button>
+                  {/* 삭제 버튼 */}
+                  {!isRolling && (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!confirm('이 전략을 삭제하시겠습니까?')) return;
+                        try {
+                          await deleteSavedResult(strategy.id);
+                          setStrategies(prev => prev.filter(s => s.id !== strategy.id));
+                          if (selectedStrategy?.id === strategy.id) {
+                            setSelectedStrategy(null);
+                          }
+                        } catch (err) {
+                          console.error('삭제 실패:', err);
+                        }
+                      }}
+                      className='p-0.5 text-zinc-500 hover:text-red-400 transition-colors shrink-0'
+                      title='전략 삭제'
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -2448,13 +2497,13 @@ export default function RealtimeChart() {
           ) : equityCurve.length > 0 ? (
             <div className='h-24 w-full relative'>
               {/* X축 시간 레이블 */}
-              {totalDuration > 0 && (
+              {totalHoldingTime > 0 && (
                 <div className='absolute bottom-0 left-0 right-0 flex justify-between text-[9px] text-zinc-600 px-1'>
                   {(() => {
-                    const hours = totalDuration / (1000 * 60 * 60);
+                    const hours = totalHoldingTime / (1000 * 60 * 60);
                     const startTs = equityCurve[0]?.timestamp;
                     const endTs = equityCurve[equityCurve.length - 1]?.timestamp;
-                    const startTime = typeof startTs === 'number' ? startTs : Date.now() - totalDuration;
+                    const startTime = typeof startTs === 'number' ? startTs : Date.now() - totalHoldingTime;
                     const endTime = typeof endTs === 'number' ? endTs : Date.now();
 
                     // 시간 포맷 함수
@@ -2628,13 +2677,13 @@ export default function RealtimeChart() {
           </div>
           {isBacktestRunning ? (
             <div className='h-24 w-full bg-zinc-800 rounded animate-pulse' />
-          ) : equityCurve.length > 1 && totalDuration > 0 && backtestStats ? (
+          ) : equityCurve.length > 1 && totalHoldingTime > 0 && backtestStats ? (
             <>
             {/* X축 기간 레이블 */}
             <div className='h-24 w-full relative'>
               <div className='absolute bottom-0 left-0 right-0 flex justify-between text-[9px] text-zinc-600 px-1'>
                 {(() => {
-                  const hoursTraded = totalDuration / (1000 * 60 * 60);
+                  const hoursTraded = totalHoldingTime / (1000 * 60 * 60);
                   const endTs = equityCurve[equityCurve.length - 1]?.timestamp;
                   const currentDate = typeof endTs === 'number' ? new Date(endTs) : new Date();
                   const futureDate = new Date(currentDate.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -2646,7 +2695,7 @@ export default function RealtimeChart() {
 
                   // 시작점 레이블 (거래 시작일 또는 기간)
                   const startTs = equityCurve[0]?.timestamp;
-                  const startDate = typeof startTs === 'number' ? new Date(startTs) : new Date(Date.now() - totalDuration);
+                  const startDate = typeof startTs === 'number' ? new Date(startTs) : new Date(Date.now() - totalHoldingTime);
                   const startLabel = hoursTraded < 24
                     ? startDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
                     : formatDate(startDate);
@@ -2668,7 +2717,7 @@ export default function RealtimeChart() {
               >
                 {(() => {
                   const initialCapital = 1000;
-                  const hoursTraded = totalDuration / (1000 * 60 * 60);
+                  const hoursTraded = totalHoldingTime / (1000 * 60 * 60);
                   const monthlyHours = 30 * 24;
 
                   // 현재 자산 곡선 데이터 (레버리지 적용)
@@ -2883,7 +2932,7 @@ export default function RealtimeChart() {
             {/* 예상 수익 표시 (레버리지 적용, 단순 선형 계산) */}
             {(() => {
               const initialCapital = 1000;
-              const hoursTraded = totalDuration / (1000 * 60 * 60);
+              const hoursTraded = totalHoldingTime / (1000 * 60 * 60);
               const monthlyHours = 30 * 24;
 
               // 단순 선형 계산: 현재 수익률 × (30일 / 거래기간)

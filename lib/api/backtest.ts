@@ -194,7 +194,7 @@ export async function saveMonthlyParams(data: {
     testMonth: string;
     trainStart: string;
     trainEnd: string;
-    params: { pl: number; pr: number; tp: number; sl: number };
+    params: { pl: number; pr: number; rl: number; ru: number; tp: number; sl: number };
     trainSharpe: number;
     testSharpe: number;
     testPnlPct: number;
@@ -223,6 +223,8 @@ export interface RobustParams {
   recommended: {
     pivotLeft: number;
     pivotRight: number;
+    rangeLower: number;
+    rangeUpper: number;
     tpPct: number;
     slPct: number;
   } | null;
@@ -233,6 +235,8 @@ export interface RobustParams {
   paramDetails: {
     pl: { value: number; count: number; avgTestSharpe: number }[];
     pr: { value: number; count: number; avgTestSharpe: number }[];
+    rl: { value: number; count: number; avgTestSharpe: number }[];
+    ru: { value: number; count: number; avgTestSharpe: number }[];
     tp: { value: number; count: number; avgTestSharpe: number }[];
     sl: { value: number; count: number; avgTestSharpe: number }[];
   };

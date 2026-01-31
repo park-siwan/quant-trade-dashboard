@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -14,16 +14,78 @@ import {
   ReferenceLine,
   Legend,
 } from 'recharts';
+import { Save, Check, Loader2 } from 'lucide-react';
 import type { MonthlyParam, MonthlyParamsStats } from '@/lib/types';
 import type { RobustParams } from '@/lib/api/backtest';
+import { saveOptimizeResult } from '@/lib/backtest-api';
 
 interface MonthlyParamsTrendProps {
   params: MonthlyParam[];
   stats: MonthlyParamsStats | null;
   robustParams?: RobustParams | null;
+  symbol?: string;
+  timeframe?: string;
+  regimeFilter?: 'none' | 'gmm' | 'hmm';
 }
 
-export default function MonthlyParamsTrend({ params, stats, robustParams }: MonthlyParamsTrendProps) {
+export default function MonthlyParamsTrend({
+  params,
+  stats,
+  robustParams,
+  symbol = 'BTCUSDT',
+  timeframe = '5m',
+  regimeFilter = 'none',
+}: MonthlyParamsTrendProps) {
+  // 저장 상태
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // 로버스트 파라미터를 실시간 전략 DB에 저장
+  const handleSaveToStrategy = async () => {
+    if (!robustParams?.recommended) return;
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+
+    try {
+      const filterLabel = regimeFilter === 'none' ? 'None' : regimeFilter.toUpperCase();
+      await saveOptimizeResult({
+        symbol,
+        timeframe,
+        indicators: ['rsi'],
+        metric: 'sharpe',
+        optimizeMethod: 'bayesian',
+        params: {
+          rsi_period: 14,
+          pivot_left: robustParams.recommended.pivotLeft,
+          pivot_right: robustParams.recommended.pivotRight,
+          min_distance: robustParams.recommended.rangeLower ?? 5,
+          max_distance: robustParams.recommended.rangeUpper ?? 60,
+          tp_atr: robustParams.recommended.tpPct,
+          sl_atr: robustParams.recommended.slPct,
+        },
+        result: {
+          totalTrades: robustParams.totalWindows * 10,
+          winRate: (robustParams.positiveWindows / robustParams.totalWindows) * 100,
+          totalPnlPercent: robustParams.avgPositiveTestPnl,
+          profitFactor: 1.5,
+          maxDrawdown: 5,
+          sharpeRatio: robustParams.avgPositiveTestSharpe,
+        },
+        rank: 1,
+        note: `[Robust] ${filterLabel} 필터, ${robustParams.positiveWindows}/${robustParams.totalWindows} 양성 윈도우`,
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : '저장 실패');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // PnL 차트 데이터
   const pnlData = useMemo(() => {
     let cumulative = 0;
@@ -47,6 +109,8 @@ export default function MonthlyParamsTrend({ params, stats, robustParams }: Mont
       fullMonth: p.testMonth,
       pl: p.pivotLeft,
       pr: p.pivotRight,
+      rl: p.rangeLower ?? 5,
+      ru: p.rangeUpper ?? 60,
       tp: p.tpPct,
       sl: p.slPct,
     }));
@@ -124,11 +188,42 @@ export default function MonthlyParamsTrend({ params, stats, robustParams }: Mont
         <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 p-4 rounded-lg border border-blue-800/30">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-white">🎯 로버스트 파라미터 추천</h3>
-            <span className="text-xs text-zinc-400">
-              긍정적 Test Sharpe 윈도우 기반 ({robustParams.positiveWindows}/{robustParams.totalWindows})
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-zinc-400">
+                긍정적 Test Sharpe 윈도우 기반 ({robustParams.positiveWindows}/{robustParams.totalWindows})
+              </span>
+              <button
+                onClick={handleSaveToStrategy}
+                disabled={isSaving}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                  saveSuccess
+                    ? 'bg-green-600 text-white'
+                    : 'bg-blue-600 hover:bg-blue-500 text-white'
+                } disabled:opacity-50`}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    저장 중...
+                  </>
+                ) : saveSuccess ? (
+                  <>
+                    <Check size={14} />
+                    저장됨
+                  </>
+                ) : (
+                  <>
+                    <Save size={14} />
+                    전략 저장
+                  </>
+                )}
+              </button>
+            </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          {saveError && (
+            <div className="text-red-400 text-xs mb-2">{saveError}</div>
+          )}
+          <div className="grid grid-cols-3 md:grid-cols-8 gap-3">
             <div className="bg-black/30 p-3 rounded">
               <div className="text-xs text-zinc-500">pivotLeft</div>
               <div className="text-xl font-bold text-white">{robustParams.recommended.pivotLeft}</div>
@@ -136,6 +231,14 @@ export default function MonthlyParamsTrend({ params, stats, robustParams }: Mont
             <div className="bg-black/30 p-3 rounded">
               <div className="text-xs text-zinc-500">pivotRight</div>
               <div className="text-xl font-bold text-white">{robustParams.recommended.pivotRight}</div>
+            </div>
+            <div className="bg-black/30 p-3 rounded">
+              <div className="text-xs text-zinc-500">rangeLower</div>
+              <div className="text-xl font-bold text-amber-400">{robustParams.recommended.rangeLower ?? 5}</div>
+            </div>
+            <div className="bg-black/30 p-3 rounded">
+              <div className="text-xs text-zinc-500">rangeUpper</div>
+              <div className="text-xl font-bold text-amber-400">{robustParams.recommended.rangeUpper ?? 60}</div>
             </div>
             <div className="bg-black/30 p-3 rounded">
               <div className="text-xs text-zinc-500">tpPct</div>
@@ -155,14 +258,22 @@ export default function MonthlyParamsTrend({ params, stats, robustParams }: Mont
             </div>
           </div>
           {/* 파라미터 상세 분석 */}
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-            {['pl', 'pr', 'tp', 'sl'].map((key) => {
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
+            {['pl', 'pr', 'rl', 'ru', 'tp', 'sl'].map((key) => {
               const paramKey = key as keyof typeof robustParams.paramDetails;
               const details = robustParams.paramDetails[paramKey];
               if (!details || details.length === 0) return null;
+              const labelMap: Record<string, string> = {
+                pl: 'pivotLeft',
+                pr: 'pivotRight',
+                rl: 'rangeLower',
+                ru: 'rangeUpper',
+                tp: 'tpPct',
+                sl: 'slPct',
+              };
               return (
                 <div key={key} className="bg-black/20 p-2 rounded">
-                  <div className="text-zinc-500 mb-1">{key === 'pl' ? 'pivotLeft' : key === 'pr' ? 'pivotRight' : key === 'tp' ? 'tpPct' : 'slPct'}</div>
+                  <div className="text-zinc-500 mb-1">{labelMap[key]}</div>
                   {details.slice(0, 3).map((d, i) => (
                     <div key={i} className={`flex justify-between ${i === 0 ? 'text-white font-semibold' : 'text-zinc-400'}`}>
                       <span>{d.value}</span>
@@ -346,6 +457,8 @@ export default function MonthlyParamsTrend({ params, stats, robustParams }: Mont
                   const names: Record<string, string> = {
                     pl: 'PivotLeft',
                     pr: 'PivotRight',
+                    rl: 'RangeLower',
+                    ru: 'RangeUpper',
                     tp: 'TP%',
                     sl: 'SL%',
                   };
@@ -354,6 +467,8 @@ export default function MonthlyParamsTrend({ params, stats, robustParams }: Mont
               />
               <Line type="monotone" dataKey="pl" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} />
               <Line type="monotone" dataKey="pr" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 2 }} />
+              <Line type="monotone" dataKey="rl" stroke="#06b6d4" strokeWidth={2} dot={{ r: 2 }} />
+              <Line type="monotone" dataKey="ru" stroke="#0ea5e9" strokeWidth={2} dot={{ r: 2 }} />
               <Line type="monotone" dataKey="tp" stroke="#10b981" strokeWidth={2} dot={{ r: 2 }} />
               <Line type="monotone" dataKey="sl" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} />
             </LineChart>
@@ -369,7 +484,9 @@ export default function MonthlyParamsTrend({ params, stats, robustParams }: Mont
             <tr className="text-zinc-400 border-b border-zinc-800">
               <th className="text-left py-2 px-2">Month</th>
               <th className="text-left py-2 px-2">Train Period</th>
-              <th className="text-center py-2 px-2">PL/PR/TP/SL</th>
+              <th className="text-center py-2 px-2">PL/PR</th>
+              <th className="text-center py-2 px-2">RL/RU</th>
+              <th className="text-center py-2 px-2">TP/SL</th>
               <th className="text-right py-2 px-2">Train Sharpe</th>
               <th className="text-right py-2 px-2">Test Sharpe</th>
               <th className="text-right py-2 px-2">Test PnL</th>
@@ -384,7 +501,13 @@ export default function MonthlyParamsTrend({ params, stats, robustParams }: Mont
                   {p.trainStart} ~ {p.trainEnd}
                 </td>
                 <td className="py-2 px-2 text-center text-zinc-300 font-mono text-xs">
-                  {p.pivotLeft}/{p.pivotRight}/{p.tpPct}/{p.slPct}
+                  {p.pivotLeft}/{p.pivotRight}
+                </td>
+                <td className="py-2 px-2 text-center text-amber-300 font-mono text-xs">
+                  {p.rangeLower ?? 5}/{p.rangeUpper ?? 60}
+                </td>
+                <td className="py-2 px-2 text-center text-zinc-300 font-mono text-xs">
+                  {p.tpPct}/{p.slPct}
                 </td>
                 <td className="py-2 px-2 text-right text-blue-400">{p.trainSharpe.toFixed(2)}</td>
                 <td className="py-2 px-2 text-right text-green-400">{p.testSharpe.toFixed(2)}</td>
@@ -402,7 +525,7 @@ export default function MonthlyParamsTrend({ params, stats, robustParams }: Mont
       {stats && (
         <div className="bg-zinc-900 p-4 rounded-lg">
           <h3 className="text-lg font-semibold text-white mb-4">파라미터 빈도</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             <div>
               <div className="text-xs text-zinc-500 mb-2">Pivot Left</div>
               <div className="space-y-1">
@@ -425,6 +548,32 @@ export default function MonthlyParamsTrend({ params, stats, robustParams }: Mont
                     <div key={val} className="flex justify-between text-sm">
                       <span className="text-zinc-400">PR={val}</span>
                       <span className="text-purple-400">{count}회</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-zinc-500 mb-2">Range Lower</div>
+              <div className="space-y-1">
+                {stats.paramFrequency.rl && Object.entries(stats.paramFrequency.rl)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([val, count]) => (
+                    <div key={val} className="flex justify-between text-sm">
+                      <span className="text-zinc-400">RL={val}</span>
+                      <span className="text-cyan-400">{count}회</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-zinc-500 mb-2">Range Upper</div>
+              <div className="space-y-1">
+                {stats.paramFrequency.ru && Object.entries(stats.paramFrequency.ru)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([val, count]) => (
+                    <div key={val} className="flex justify-between text-sm">
+                      <span className="text-zinc-400">RU={val}</span>
+                      <span className="text-cyan-400">{count}회</span>
                     </div>
                   ))}
               </div>

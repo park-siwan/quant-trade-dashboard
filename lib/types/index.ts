@@ -469,6 +469,8 @@ export interface MonthlyParam {
   trainEnd: string;       // '2025-01'
   pivotLeft: number;
   pivotRight: number;
+  rangeLower: number;     // min_distance
+  rangeUpper: number;     // max_distance
   tpPct: number;
   slPct: number;
   trainSharpe: number;
@@ -488,6 +490,8 @@ export interface MonthlyParamsStats {
   paramFrequency: {
     pl: Record<number, number>;
     pr: Record<number, number>;
+    rl: Record<number, number>;  // rangeLower
+    ru: Record<number, number>;  // rangeUpper
     tp: Record<number, number>;
     sl: Record<number, number>;
   };
