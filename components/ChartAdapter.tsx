@@ -479,7 +479,6 @@ export default function ChartAdapter({
             }}
             title={`레짐: ${regime} (신뢰도 ${confidence}%)`}
           >
-            {regime === 'Bullish' ? '📈' : regime === 'Bearish' ? '📉' : '📊'}
             {regime}
             {isSideways && <span className='text-blue-300 ml-0.5'>✓</span>}
           </span>
