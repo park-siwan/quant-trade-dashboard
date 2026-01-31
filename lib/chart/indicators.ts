@@ -24,9 +24,15 @@ function rgbToHex(color: { r: number; g: number; b: number }): string {
   return `#${color.r.toString(16).padStart(2, '0')}${color.g.toString(16).padStart(2, '0')}${color.b.toString(16).padStart(2, '0')}`;
 }
 
-// 중복 타임스탬프 제거 유틸리티 (lightweight-charts 요구사항)
+// 시간순 정렬 + 중복 타임스탬프 제거 유틸리티 (lightweight-charts 요구사항)
 function dedupeByTime<T extends { time: Time }>(data: T[]): T[] {
-  return data.filter((item, index, arr) => {
+  // 시간순 정렬 후 중복 제거
+  const sorted = [...data].sort((a, b) => {
+    const timeA = typeof a.time === 'number' ? a.time : new Date(a.time as string).getTime() / 1000;
+    const timeB = typeof b.time === 'number' ? b.time : new Date(b.time as string).getTime() / 1000;
+    return timeA - timeB;
+  });
+  return sorted.filter((item, index, arr) => {
     if (index === 0) return true;
     return item.time !== arr[index - 1].time;
   });
