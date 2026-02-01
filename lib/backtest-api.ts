@@ -1,14 +1,13 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // ============== 전략 타입 ==============
-export type StrategyType = 'rsi_divergence' | 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'macd_crossover' | 'stoch_rsi';
+export type StrategyType = 'rsi_divergence' | 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'stoch_rsi';
 
 export const STRATEGIES = [
   { id: 'rsi_divergence' as const, label: 'OBV 다이버전스', desc: 'On-Balance Volume 기반 다이버전스 감지' },
   { id: 'bb_reversion' as const, label: '적응형 평균회귀', desc: '레짐 적응형 Z-Score 평균회귀' },
   { id: 'ema_adx' as const, label: '거래량 브레이크아웃', desc: '거래량 확인 브레이크아웃' },
   { id: 'hybrid_regime' as const, label: '레짐 적응형', desc: '시장 레짐 기반 전략 전환' },
-  { id: 'macd_crossover' as const, label: '최적화 MACD', desc: 'MACD(8,21,5) + MFI 확인' },
   { id: 'stoch_rsi' as const, label: '다중 지표 확인', desc: 'Stoch + RSI + BB 복합 확인' },
 ];
 

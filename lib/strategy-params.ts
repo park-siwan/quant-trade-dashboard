@@ -152,12 +152,6 @@ export const HybridRegimeDefaults: Record<string, number> = {
   slAtr: 1.5,
 };
 
-// 최적화 MACD 전략 (Optimized MACD + MFI)
-export const MacdCrossoverDefaults: Record<string, number> = {
-  tpAtr: 2.0,
-  slAtr: 1.5,
-};
-
 // 다중 지표 확인 전략 (Multi-Indicator Confirmation)
 export const StochRsiDefaults: Record<string, number> = {
   tpAtr: 1.5,
@@ -203,8 +197,6 @@ export function getDefaultParams(strategy: string): Record<string, number> {
       return { ...EmaAdxDefaults };
     case 'hybrid_regime':
       return { ...HybridRegimeDefaults };
-    case 'macd_crossover':
-      return { ...MacdCrossoverDefaults };
     case 'stoch_rsi':
       return { ...StochRsiDefaults };
     default:

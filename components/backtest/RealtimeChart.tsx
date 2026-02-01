@@ -40,7 +40,6 @@ const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
   'bb_reversion': '적응형 평균회귀',
   'ema_adx': '거래량 브레이크아웃',
   'hybrid_regime': '레짐 적응형',
-  'macd_crossover': '최적화 MACD',
   'stoch_rsi': '다중 지표 확인',
 };
 
@@ -618,8 +617,8 @@ export default function RealtimeChart() {
   // 롤링 파라미터를 SavedOptimizeResult 형식으로 변환
   // param_registry.py 기반 자동 변환 사용
   const convertRollingToSaved = (rolling: RollingParamResult, index: number): SavedOptimizeResult => {
-    // 모든 6개 전략 지원
-    const strategyType = rolling.strategy as 'rsi_divergence' | 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'macd_crossover' | 'stoch_rsi';
+    // 모든 5개 전략 지원
+    const strategyType = rolling.strategy as 'rsi_divergence' | 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'stoch_rsi';
 
     // 1. API 파라미터 (snake_case) → 프론트엔드 (camelCase) 자동 변환
     const rawParams = rolling.params as Record<string, unknown>;
@@ -687,10 +686,6 @@ export default function RealtimeChart() {
       base.volatilityFilter = base.volumeConfirm ? 'volume' : 'OFF';
     } else if (strategyType === 'hybrid_regime') {
       // 레짐 적응형 (학술 기반) - 새 전략
-      base.tpAtr = convertedParams.tpAtr ?? 2.0;
-      base.slAtr = convertedParams.slAtr ?? 1.5;
-    } else if (strategyType === 'macd_crossover') {
-      // 최적화 MACD (학술 기반) - 새 전략
       base.tpAtr = convertedParams.tpAtr ?? 2.0;
       base.slAtr = convertedParams.slAtr ?? 1.5;
     } else if (strategyType === 'stoch_rsi') {
