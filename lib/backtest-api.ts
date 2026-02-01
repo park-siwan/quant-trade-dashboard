@@ -1,14 +1,15 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // ============== 전략 타입 ==============
-export type StrategyType = 'rsi_divergence' | 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'stoch_rsi';
+export type StrategyType = 'rsi_divergence' | 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'stoch_rsi' | 'classic_rsi_div';
 
 export const STRATEGIES = [
-  { id: 'rsi_divergence' as const, label: 'OBV 다이버전스', desc: 'On-Balance Volume 기반 다이버전스 감지' },
-  { id: 'bb_reversion' as const, label: '적응형 평균회귀', desc: '레짐 적응형 Z-Score 평균회귀' },
-  { id: 'ema_adx' as const, label: '거래량 브레이크아웃', desc: '거래량 확인 브레이크아웃' },
-  { id: 'hybrid_regime' as const, label: '레짐 적응형', desc: '시장 레짐 기반 전략 전환' },
-  { id: 'stoch_rsi' as const, label: '다중 지표 확인', desc: 'Stoch + RSI + BB 복합 확인' },
+  { id: 'rsi_divergence' as const, label: 'OBV 다이버전스 (가격-거래량)', desc: 'On-Balance Volume 기반 가격-거래량 다이버전스 감지' },
+  { id: 'classic_rsi_div' as const, label: 'RSI 다이버전스 (클래식)', desc: '가격-RSI 다이버전스 감지 (전통적 기법)' },
+  { id: 'bb_reversion' as const, label: '적응형 평균회귀 (볼린저밴드)', desc: '볼린저밴드 기반 Z-Score 평균회귀 + 레짐 필터' },
+  { id: 'ema_adx' as const, label: '거래량 브레이크아웃 (EMA/ADX)', desc: 'EMA 추세 + ADX 강도 기반 거래량 돌파' },
+  { id: 'hybrid_regime' as const, label: '레짐 적응형 (HMM)', desc: 'HMM 기반 시장 레짐 판단 후 전략 전환' },
+  { id: 'stoch_rsi' as const, label: '다중 지표 확인 (Stoch RSI)', desc: 'Stochastic RSI + 볼린저밴드 복합 확인' },
 ];
 
 export interface BacktestParams {

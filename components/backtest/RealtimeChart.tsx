@@ -34,13 +34,14 @@ import { toSeconds, formatKST, getTimeframeSeconds } from '@/lib/utils/timestamp
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-// 전략 표시 이름 매핑 (학술 기반)
+// 전략 표시 이름 매핑 (학술 기반 + 원본 지표명)
 const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
-  'rsi_divergence': 'OBV 다이버전스',
-  'bb_reversion': '적응형 평균회귀',
-  'ema_adx': '거래량 브레이크아웃',
-  'hybrid_regime': '레짐 적응형',
-  'stoch_rsi': '다중 지표 확인',
+  'rsi_divergence': 'OBV 다이버전스 (가격-거래량)',
+  'classic_rsi_div': 'RSI 다이버전스 (클래식)',
+  'bb_reversion': '적응형 평균회귀 (볼린저밴드)',
+  'ema_adx': '거래량 브레이크아웃 (EMA/ADX)',
+  'hybrid_regime': '레짐 적응형 (HMM)',
+  'stoch_rsi': '다중 지표 확인 (Stoch RSI)',
 };
 
 // 전략 ID에서 표시 이름 추출
@@ -715,8 +716,9 @@ export default function RealtimeChart() {
           console.log('No rolling params found');
         }
 
-        // 3. 롤링 결과를 먼저 배치 (최신 최적화 우선)
-        const mergedResults = [...rollingConverted, ...filteredBayesian];
+        // 3. Sharpe ratio 순으로 정렬 (높은 순)
+        const mergedResults = [...rollingConverted, ...filteredBayesian]
+          .sort((a, b) => b.sharpeRatio - a.sharpeRatio);
         setStrategies(mergedResults);
 
         // 미리보기 초기화 (로딩 상태로)
@@ -788,8 +790,20 @@ export default function RealtimeChart() {
           });
 
           // 모든 병렬 작업 완료 대기
-          await Promise.all(previewPromises);
+          const previewResults = await Promise.all(previewPromises);
           previewLoadingRef.current = false;
+
+          // 프리뷰 결과로 Sharpe ratio 재정렬
+          setStrategies(prev => {
+            const sorted = [...prev].sort((a, b) => {
+              const previewA = previewResults.find(p => p.id === a.id)?.preview;
+              const previewB = previewResults.find(p => p.id === b.id)?.preview;
+              const sharpeA = previewA?.sharpeRatio ?? a.sharpeRatio;
+              const sharpeB = previewB?.sharpeRatio ?? b.sharpeRatio;
+              return sharpeB - sharpeA;
+            });
+            return sorted;
+          });
         }
       } catch (err) {
         console.error('Failed to load strategies:', err);
