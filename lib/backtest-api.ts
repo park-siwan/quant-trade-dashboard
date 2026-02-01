@@ -1,12 +1,15 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // ============== 전략 타입 ==============
-export type StrategyType = 'rsi_divergence' | 'bb_reversion' | 'ema_adx';
+export type StrategyType = 'rsi_divergence' | 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'macd_crossover' | 'stoch_rsi';
 
 export const STRATEGIES = [
-  { id: 'rsi_divergence' as const, label: 'RSI 다이버전스', desc: '가격-RSI 괴리 + 볼륨 확인 + 레짐 필터' },
-  { id: 'bb_reversion' as const, label: 'Z-Score 평균회귀', desc: 'Z-Score 기반 과매수/과매도 반전 (Sharpe ~2.3)' },
-  { id: 'ema_adx' as const, label: '모멘텀 브레이크아웃', desc: '변동성 압축 후 브레이크아웃 + 모멘텀 (Sharpe ~1.2)' },
+  { id: 'rsi_divergence' as const, label: 'OBV 다이버전스', desc: 'On-Balance Volume 기반 다이버전스 감지' },
+  { id: 'bb_reversion' as const, label: '적응형 평균회귀', desc: '레짐 적응형 Z-Score 평균회귀' },
+  { id: 'ema_adx' as const, label: '거래량 브레이크아웃', desc: '거래량 확인 브레이크아웃' },
+  { id: 'hybrid_regime' as const, label: '레짐 적응형', desc: '시장 레짐 기반 전략 전환' },
+  { id: 'macd_crossover' as const, label: '최적화 MACD', desc: 'MACD(8,21,5) + MFI 확인' },
+  { id: 'stoch_rsi' as const, label: '다중 지표 확인', desc: 'Stoch + RSI + BB 복합 확인' },
 ];
 
 export interface BacktestParams {

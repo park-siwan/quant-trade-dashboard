@@ -144,6 +144,26 @@ export const EmaAdxDefaults: Record<string, number> = {
   rocThreshold: 1.0,
 };
 
+// ===== 학술 기반 새 전략 기본값 =====
+
+// 레짐 적응형 전략 (Regime Adaptive)
+export const HybridRegimeDefaults: Record<string, number> = {
+  tpAtr: 2.0,
+  slAtr: 1.5,
+};
+
+// 최적화 MACD 전략 (Optimized MACD + MFI)
+export const MacdCrossoverDefaults: Record<string, number> = {
+  tpAtr: 2.0,
+  slAtr: 1.5,
+};
+
+// 다중 지표 확인 전략 (Multi-Indicator Confirmation)
+export const StochRsiDefaults: Record<string, number> = {
+  tpAtr: 1.5,
+  slAtr: 2.0,
+};
+
 // ===== 변환 유틸리티 함수 =====
 
 /**
@@ -181,6 +201,12 @@ export function getDefaultParams(strategy: string): Record<string, number> {
       return { ...BbReversionDefaults };
     case 'ema_adx':
       return { ...EmaAdxDefaults };
+    case 'hybrid_regime':
+      return { ...HybridRegimeDefaults };
+    case 'macd_crossover':
+      return { ...MacdCrossoverDefaults };
+    case 'stoch_rsi':
+      return { ...StochRsiDefaults };
     default:
       return { ...RsiDivergenceDefaults };
   }
