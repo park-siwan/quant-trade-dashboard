@@ -26,7 +26,7 @@ import {
   deleteSavedResult,
 } from '@/lib/backtest-api';
 import { X } from 'lucide-react';
-import { convertApiParams, getDefaultParams } from '@/lib/strategy-params';
+import { convertApiParams, getDefaultParams, TrendReversalComboDefaults } from '@/lib/strategy-params';
 import { CHART } from '@/lib/constants';
 import { useAtomValue } from 'jotai';
 import { symbolAtom } from '@/stores/symbolAtom';
@@ -589,10 +589,10 @@ export default function RealtimeChart() {
         rocPeriod: strategy.rocPeriod,
         rocThreshold: strategy.rocThreshold,
         volumeConfirm: strategy.volumeConfirm,
-        // Trend Reversal Combo 파라미터
-        volumeMult: strategy.volumeMult,
-        adxThreshold: strategy.adxThreshold,
-        cooldownBars: strategy.cooldownBars,
+        // Trend Reversal Combo 파라미터 (undefined 방어 로직 추가)
+        volumeMult: strategy.volumeMult ?? TrendReversalComboDefaults.volumeMult ?? 1.5,
+        adxThreshold: strategy.adxThreshold ?? TrendReversalComboDefaults.adxThreshold ?? 25,
+        cooldownBars: strategy.cooldownBars ?? TrendReversalComboDefaults.cooldownBars ?? 5,
         // RSI Divergence 레거시 파라미터 (해당 전략일 때만 유효)
         rsiPeriod: strategy.rsiPeriod,
         pivotLeftBars: strategy.pivotLeft,
@@ -979,10 +979,10 @@ export default function RealtimeChart() {
         rocPeriod: strategy.rocPeriod,
         rocThreshold: strategy.rocThreshold,
         volumeConfirm: strategy.volumeConfirm,
-        // Trend Reversal Combo 파라미터
-        volumeMult: strategy.volumeMult,
-        adxThreshold: strategy.adxThreshold,
-        cooldownBars: strategy.cooldownBars,
+        // Trend Reversal Combo 파라미터 (undefined 방어 로직 추가)
+        volumeMult: strategy.volumeMult ?? TrendReversalComboDefaults.volumeMult ?? 1.5,
+        adxThreshold: strategy.adxThreshold ?? TrendReversalComboDefaults.adxThreshold ?? 25,
+        cooldownBars: strategy.cooldownBars ?? TrendReversalComboDefaults.cooldownBars ?? 5,
         // 리얼타임 차트용: 캐시 대신 API에서 데이터 가져오기 (차트와 동일한 데이터)
         useLiveData: true,
       });
