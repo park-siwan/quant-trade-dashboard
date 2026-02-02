@@ -441,6 +441,7 @@ export interface SavedOptimizeResult {
   // Trend Reversal Combo 파라미터
   adxThreshold?: number;   // ADX 임계값 (추세/횡보 판단)
   volumeMult?: number;     // 볼륨 배수
+  cooldownBars?: number;   // 쿨다운 바 수
   // 공통 결과
   totalTrades: number;
   winRate: number;

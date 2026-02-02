@@ -591,6 +591,10 @@ export default function RealtimeChart() {
         rocPeriod: strategy.rocPeriod,
         rocThreshold: strategy.rocThreshold,
         volumeConfirm: strategy.volumeConfirm,
+        // Trend Reversal Combo 파라미터
+        volumeMult: strategy.volumeMult,
+        adxThreshold: strategy.adxThreshold,
+        cooldownBars: strategy.cooldownBars,
         // RSI Divergence 레거시 파라미터 (해당 전략일 때만 유효)
         rsiPeriod: strategy.rsiPeriod,
         pivotLeftBars: strategy.pivotLeft,
@@ -701,6 +705,7 @@ export default function RealtimeChart() {
       base.volumeConfirm = 1;  // 볼륨 확인 활성화 (int)
       base.volumeMult = convertedParams.volumeMult ?? defaults.volumeMult ?? 1.5;
       base.adxThreshold = convertedParams.adxThreshold ?? defaults.adxThreshold ?? 25;
+      base.cooldownBars = convertedParams.cooldownBars ?? defaults.cooldownBars ?? 5;
       base.tpAtr = convertedParams.tpAtr ?? 1.7;
       base.slAtr = convertedParams.slAtr ?? 3.5;
     }
@@ -976,6 +981,10 @@ export default function RealtimeChart() {
         rocPeriod: strategy.rocPeriod,
         rocThreshold: strategy.rocThreshold,
         volumeConfirm: strategy.volumeConfirm,
+        // Trend Reversal Combo 파라미터
+        volumeMult: strategy.volumeMult,
+        adxThreshold: strategy.adxThreshold,
+        cooldownBars: strategy.cooldownBars,
         // 리얼타임 차트용: 캐시 대신 API에서 데이터 가져오기 (차트와 동일한 데이터)
         useLiveData: true,
       });
