@@ -8,7 +8,7 @@ export const STRATEGIES = [
   { id: 'classic_rsi_div' as const, label: 'RSI 다이버전스 (클래식)', desc: '가격-RSI 다이버전스 감지 (전통적 기법)' },
   { id: 'bb_reversion' as const, label: '적응형 평균회귀 (볼린저밴드)', desc: '볼린저밴드 기반 Z-Score 평균회귀 + 레짐 필터' },
   { id: 'ema_adx' as const, label: '돌파매매(EMA+ADX+거래량)', desc: 'EMA 추세 + ADX 강도 기반 거래량 돌파' },
-  { id: 'hybrid_regime' as const, label: '레짐 적응형 (HMM)', desc: 'HMM 기반 시장 레짐 판단 후 전략 전환' },
+  { id: 'hybrid_regime' as const, label: '머신러닝 방향추론', desc: 'HMM 기반 시장 방향 추론 후 전략 전환' },
   { id: 'stoch_rsi' as const, label: '다중 지표 확인 (Stoch RSI)', desc: 'Stochastic RSI + 볼린저밴드 복합 확인' },
   { id: 'trend_reversal_combo' as const, label: '추세+역추세 콤보', desc: 'HMM 레짐 기반 브레이크아웃 + RSI 다이버전스 조합' },
 ];
