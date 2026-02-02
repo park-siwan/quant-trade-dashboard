@@ -4,7 +4,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 export type StrategyType = 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'stoch_rsi' | 'classic_rsi_div' | 'trend_reversal_combo';
 
 export const STRATEGIES = [
-  { id: 'classic_rsi_div' as const, label: 'RSI 다이버전스', desc: '가격-RSI 다이버전스 감지' },
+  { id: 'classic_rsi_div' as const, label: '반전매매(RSI DIV)', desc: '가격-RSI 다이버전스 감지' },
   { id: 'bb_reversion' as const, label: '적응형 평균회귀 (볼린저밴드)', desc: '볼린저밴드 기반 Z-Score 평균회귀 + 레짐 필터' },
   { id: 'ema_adx' as const, label: '돌파매매(EMA+ADX+거래량)', desc: 'EMA 추세 + ADX 강도 기반 거래량 돌파' },
   { id: 'hybrid_regime' as const, label: '머신러닝 추세추론(HMM)', desc: 'HMM 기반 시장 방향 추론 후 전략 전환' },
