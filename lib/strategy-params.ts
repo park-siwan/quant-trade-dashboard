@@ -73,6 +73,11 @@ export const snakeToCamelMap: Record<string, string> = {
   'breakout_period': 'breakoutPeriod',
   'roc_period': 'rocPeriod',
   'roc_threshold': 'rocThreshold',
+  // Trend Reversal Combo 파라미터
+  'volume_mult': 'volumeMult',
+  'adx_threshold': 'adxThreshold',
+  'adx_trend_threshold': 'adxThreshold',
+  'cooldown_bars': 'cooldownBars',
 };
 
 // ===== camelCase → snake_case 변환 매핑 =====
@@ -102,6 +107,10 @@ export const camelToSnakeMap: Record<string, string> = {
   'breakoutPeriod': 'breakout_period',
   'rocPeriod': 'roc_period',
   'rocThreshold': 'roc_threshold',
+  // Trend Reversal Combo 파라미터
+  'volumeMult': 'volume_mult',
+  'adxThreshold': 'adx_threshold',
+  'cooldownBars': 'cooldown_bars',
 };
 
 // ===== 전략별 기본값 =====

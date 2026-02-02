@@ -1,7 +1,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // ============== 전략 타입 ==============
-export type StrategyType = 'rsi_divergence' | 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'stoch_rsi' | 'classic_rsi_div';
+export type StrategyType = 'rsi_divergence' | 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'stoch_rsi' | 'classic_rsi_div' | 'trend_reversal_combo';
 
 export const STRATEGIES = [
   { id: 'rsi_divergence' as const, label: 'OBV 다이버전스 (가격-거래량)', desc: 'On-Balance Volume 기반 가격-거래량 다이버전스 감지' },
@@ -10,6 +10,7 @@ export const STRATEGIES = [
   { id: 'ema_adx' as const, label: '거래량 브레이크아웃 (EMA/ADX)', desc: 'EMA 추세 + ADX 강도 기반 거래량 돌파' },
   { id: 'hybrid_regime' as const, label: '레짐 적응형 (HMM)', desc: 'HMM 기반 시장 레짐 판단 후 전략 전환' },
   { id: 'stoch_rsi' as const, label: '다중 지표 확인 (Stoch RSI)', desc: 'Stochastic RSI + 볼린저밴드 복합 확인' },
+  { id: 'trend_reversal_combo' as const, label: '추세+역추세 콤보', desc: 'HMM 레짐 기반 브레이크아웃 + RSI 다이버전스 조합' },
 ];
 
 export interface BacktestParams {
@@ -51,6 +52,10 @@ export interface BacktestParams {
   rocPeriod?: number;
   rocThreshold?: number;
   volumeConfirm?: number;
+  // Trend Reversal Combo 파라미터
+  volumeMult?: number;
+  adxThreshold?: number;
+  cooldownBars?: number;
   // 리얼타임 차트용: 캐시 대신 API에서 데이터 가져오기
   useLiveData?: boolean;
 }
@@ -433,6 +438,9 @@ export interface SavedOptimizeResult {
   rocPeriod?: number;
   rocThreshold?: number;
   volumeConfirm?: number;  // 볼륨 확인 필터 (0=OFF, 1=ON)
+  // Trend Reversal Combo 파라미터
+  adxThreshold?: number;   // ADX 임계값 (추세/횡보 판단)
+  volumeMult?: number;     // 볼륨 배수
   // 공통 결과
   totalTrades: number;
   winRate: number;

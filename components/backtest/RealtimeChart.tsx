@@ -42,6 +42,7 @@ const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
   'ema_adx': '거래량 브레이크아웃 (EMA/ADX)',
   'hybrid_regime': '레짐 적응형 (HMM)',
   'stoch_rsi': '다중 지표 확인 (Stoch RSI)',
+  'trend_reversal_combo': '추세+역추세 콤보',
 };
 
 // 전략 ID에서 표시 이름 추출
@@ -87,6 +88,7 @@ export default function RealtimeChart() {
   const [candles, setCandles] = useState<CandlestickData[]>([]);
   const [timeframe, setTimeframe] = useState('5m');
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingAllStrategies, setIsLoadingAllStrategies] = useState(true); // 모든 전략 백테스트 로딩 중
   const [strategies, setStrategies] = useState<SavedOptimizeResult[]>([]);
   const [selectedStrategy, setSelectedStrategy] =
     useState<SavedOptimizeResult | null>(null);
@@ -693,6 +695,14 @@ export default function RealtimeChart() {
       // 다중 지표 확인 (학술 기반) - 새 전략
       base.tpAtr = convertedParams.tpAtr ?? 1.5;
       base.slAtr = convertedParams.slAtr ?? 2.0;
+    } else if (strategyType === 'trend_reversal_combo') {
+      // 추세+역추세 콤보 (HMM 레짐 기반)
+      base.breakoutPeriod = convertedParams.breakoutPeriod ?? defaults.breakoutPeriod ?? 20;
+      base.volumeConfirm = 1;  // 볼륨 확인 활성화 (int)
+      base.volumeMult = convertedParams.volumeMult ?? defaults.volumeMult ?? 1.5;
+      base.adxThreshold = convertedParams.adxThreshold ?? defaults.adxThreshold ?? 25;
+      base.tpAtr = convertedParams.tpAtr ?? 1.7;
+      base.slAtr = convertedParams.slAtr ?? 3.5;
     }
 
     return base;
@@ -701,6 +711,10 @@ export default function RealtimeChart() {
   // 상위 전략 목록 로드 (타임프레임 필터링) + 미리보기 백테스트
   useEffect(() => {
     const loadStrategies = async () => {
+      // 로딩 시작
+      setIsLoadingAllStrategies(true);
+      setSelectedStrategy(null); // 로딩 중에는 전략 선택 해제
+
       try {
         // 1. 베이지안 최적화 결과 로드
         const bayesianResults = await getTopSavedResults('sharpe', 50);
@@ -721,6 +735,17 @@ export default function RealtimeChart() {
           .sort((a, b) => b.sharpeRatio - a.sharpeRatio);
         setStrategies(mergedResults);
 
+        // 전략이 없으면 로딩 완료
+        if (mergedResults.length === 0) {
+          setSelectedStrategy(null);
+          manuallySelectedRef.current = false;
+          savedStrategyIdRef.current = null;
+          localStorage.removeItem('selectedStrategyId');
+          localStorage.removeItem('selectedStrategyTimeframe');
+          setIsLoadingAllStrategies(false);
+          return;
+        }
+
         // 미리보기 초기화 (로딩 상태로)
         const initialPreviews = new Map<number, { totalTrades: number; winRate: number; totalPnlPercent: number; sharpeRatio: number; loading: boolean }>();
         mergedResults.slice(0, 10).forEach(s => {
@@ -728,37 +753,8 @@ export default function RealtimeChart() {
         });
         setStrategyPreviews(initialPreviews);
 
-        // 타임프레임에 맞는 전략 자동 선택
-        if (mergedResults.length > 0) {
-          // 저장된 전략 ID가 있으면 해당 전략 복원
-          if (savedStrategyIdRef.current !== null) {
-            const savedStrategy = mergedResults.find(s => s.id === savedStrategyIdRef.current);
-            if (savedStrategy) {
-              setSelectedStrategy(savedStrategy);
-              console.log('[Strategy] Restored saved strategy:', savedStrategy.id);
-            } else {
-              // 저장된 전략이 목록에 없으면 첫 번째 선택
-              setSelectedStrategy(mergedResults[0]);
-              console.log('[Strategy] Saved strategy not found, auto-selected first:', mergedResults[0].id);
-            }
-          } else if (!manuallySelectedRef.current) {
-            // 수동 선택된 전략이 없으면 첫 번째 자동 선택
-            setSelectedStrategy(mergedResults[0]);
-            console.log('[Strategy] Auto-selected first strategy:', mergedResults[0].id);
-          } else {
-            console.log('[Strategy] Skipped auto-select (manual selection active)');
-          }
-        } else {
-          // 해당 타임프레임에 저장된 전략이 없으면 선택 해제
-          setSelectedStrategy(null);
-          manuallySelectedRef.current = false;
-          savedStrategyIdRef.current = null;
-          localStorage.removeItem('selectedStrategyId');
-          localStorage.removeItem('selectedStrategyTimeframe');
-        }
-
         // 상위 10개 전략 미리보기 백테스트 실행 (병렬)
-        if (!previewLoadingRef.current && mergedResults.length > 0) {
+        if (!previewLoadingRef.current) {
           previewLoadingRef.current = true;
           const strategiesToPreview = mergedResults.slice(0, 10);
 
@@ -777,7 +773,7 @@ export default function RealtimeChart() {
                 }
                 return newMap;
               });
-              return { id: strategy.id, preview };
+              return { id: strategy.id, preview, strategy };
             } catch (err) {
               console.error(`Preview failed for strategy ${strategy.id}:`, err);
               setStrategyPreviews(prev => {
@@ -785,7 +781,7 @@ export default function RealtimeChart() {
                 newMap.set(strategy.id, { totalTrades: 0, winRate: 0, totalPnlPercent: 0, sharpeRatio: 0, loading: false });
                 return newMap;
               });
-              return { id: strategy.id, preview: null };
+              return { id: strategy.id, preview: null, strategy };
             }
           });
 
@@ -794,19 +790,40 @@ export default function RealtimeChart() {
           previewLoadingRef.current = false;
 
           // 프리뷰 결과로 Sharpe ratio 재정렬
-          setStrategies(prev => {
-            const sorted = [...prev].sort((a, b) => {
-              const previewA = previewResults.find(p => p.id === a.id)?.preview;
-              const previewB = previewResults.find(p => p.id === b.id)?.preview;
-              const sharpeA = previewA?.sharpeRatio ?? a.sharpeRatio;
-              const sharpeB = previewB?.sharpeRatio ?? b.sharpeRatio;
-              return sharpeB - sharpeA;
-            });
-            return sorted;
+          const sortedStrategies = [...mergedResults].sort((a, b) => {
+            const previewA = previewResults.find(p => p.id === a.id)?.preview;
+            const previewB = previewResults.find(p => p.id === b.id)?.preview;
+            const sharpeA = previewA?.sharpeRatio ?? a.sharpeRatio;
+            const sharpeB = previewB?.sharpeRatio ?? b.sharpeRatio;
+            return sharpeB - sharpeA;
           });
+          setStrategies(sortedStrategies);
+
+          // === 모든 백테스트 완료 후 최고 Sharpe 전략 자동 선택 ===
+          // 저장된 전략 ID가 있으면 해당 전략 복원
+          if (savedStrategyIdRef.current !== null) {
+            const savedStrategy = sortedStrategies.find(s => s.id === savedStrategyIdRef.current);
+            if (savedStrategy) {
+              setSelectedStrategy(savedStrategy);
+              console.log('[Strategy] Restored saved strategy:', savedStrategy.id);
+            } else {
+              // 저장된 전략이 목록에 없으면 최고 Sharpe 선택
+              setSelectedStrategy(sortedStrategies[0]);
+              console.log('[Strategy] Saved strategy not found, auto-selected best Sharpe:', sortedStrategies[0].id);
+            }
+          } else if (!manuallySelectedRef.current) {
+            // 수동 선택이 없으면 최고 Sharpe 자동 선택
+            setSelectedStrategy(sortedStrategies[0]);
+            console.log('[Strategy] Auto-selected best Sharpe strategy:', sortedStrategies[0].id,
+              'Sharpe:', previewResults.find(p => p.id === sortedStrategies[0].id)?.preview?.sharpeRatio ?? sortedStrategies[0].sharpeRatio);
+          }
+
+          // 로딩 완료
+          setIsLoadingAllStrategies(false);
         }
       } catch (err) {
         console.error('Failed to load strategies:', err);
+        setIsLoadingAllStrategies(false);
       }
     };
     loadStrategies();
@@ -1898,7 +1915,12 @@ export default function RealtimeChart() {
           <div className='flex items-center gap-2'>
             {/* 현재 선택된 전략 표시 (하단 패널에서 선택) */}
             <div className='px-3 py-1.5 bg-zinc-800 rounded text-xs min-w-[180px]'>
-              {selectedStrategy ? (
+              {isLoadingAllStrategies ? (
+                <div className='flex items-center gap-2'>
+                  <div className='w-3 h-3 rounded-full bg-blue-400 animate-pulse' />
+                  <span className='text-zinc-400'>전략 분석중...</span>
+                </div>
+              ) : selectedStrategy ? (
                 <span className='text-white'>
                   {getStrategyDisplayName(selectedStrategy)}
                   {backtestStats && (
@@ -1907,7 +1929,9 @@ export default function RealtimeChart() {
                     </span>
                   )}
                 </span>
-              ) : null}
+              ) : (
+                <span className='text-zinc-500'>전략 없음</span>
+              )}
             </div>
 
             {/* 타임프레임 표시 */}
@@ -2378,10 +2402,34 @@ export default function RealtimeChart() {
       {/* 우측: 전략 리스트 */}
       <div className='flex flex-col gap-2 min-w-0 h-full'>
         <div className='bg-zinc-900 p-3 rounded-lg flex-1 min-h-0 flex flex-col'>
-          <h3 className='text-sm font-medium text-zinc-400 mb-2 shrink-0'>
+          <h3 className='text-sm font-medium text-zinc-400 mb-2 shrink-0 flex items-center gap-2'>
             전략 목록 ({strategies.length})
+            {isLoadingAllStrategies && (
+              <span className='text-[10px] text-blue-400 flex items-center gap-1'>
+                <span className='w-2 h-2 rounded-full bg-blue-400 animate-pulse' />
+                분석중
+              </span>
+            )}
           </h3>
           <div className='flex-1 overflow-y-auto space-y-1 min-h-0 custom-scrollbar'>
+            {/* 스켈레톤 로딩 표시 */}
+            {isLoadingAllStrategies && strategies.length === 0 && (
+              <>
+                {[...Array(8)].map((_, i) => (
+                  <div key={`skeleton-${i}`} className='w-full px-2 py-1.5 bg-zinc-800 rounded animate-pulse'>
+                    <div className='flex justify-between items-center'>
+                      <div className='h-3 bg-zinc-700 rounded w-24' />
+                      <div className='h-3 bg-zinc-700 rounded w-12' />
+                    </div>
+                    <div className='flex items-center gap-1 mt-1.5'>
+                      <div className='h-2.5 bg-zinc-700 rounded w-8' />
+                      <div className='h-2.5 bg-zinc-700 rounded w-10' />
+                      <div className='h-2.5 bg-zinc-700 rounded w-6' />
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
             {strategies.slice(0, 15).map((strategy) => {
               const preview = strategyPreviews.get(strategy.id);
               const isRolling = strategy.id < 0;
