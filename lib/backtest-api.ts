@@ -1,14 +1,15 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // ============== 전략 타입 ==============
-export type StrategyType = 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo';
+export type StrategyType = 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator';
 
 export const STRATEGIES = [
   { id: 'classic_rsi_div' as const, label: '반전매매(RSI DIV)', desc: '가격-RSI 다이버전스 감지' },
-  { id: 'bb_reversion' as const, label: '평균회귀(Z-Score)', desc: 'Z-Score 평균회귀 + HMM 레짐 필터' },
+  { id: 'bb_reversion' as const, label: '평균회귀(Z-Score)', desc: 'Z-Score 평균회귀 + ADX 레짐 필터' },
   { id: 'ema_adx' as const, label: '돌파매매(EMA+ADX+거래량)', desc: 'EMA 추세 + ADX 강도 기반 거래량 돌파' },
   { id: 'hybrid_regime' as const, label: '머신러닝 추세추론(HMM)', desc: 'HMM 기반 시장 방향 추론 후 전략 전환' },
-  { id: 'trend_reversal_combo' as const, label: '추세+역추세 콤보', desc: 'HMM 레짐 기반 브레이크아웃 + RSI 다이버전스 조합' },
+  { id: 'trend_reversal_combo' as const, label: '추세+역추세 콤보 (레거시)', desc: 'HMM 레짐 기반 브레이크아웃 + RSI 다이버전스' },
+  { id: 'hmm_orchestrator' as const, label: 'HMM 오케스트레이터', desc: 'HMM 횡보 감지 + 평균회귀 (SR 5.25)' },
 ];
 
 export interface BacktestParams {
@@ -42,6 +43,24 @@ export interface BacktestParams {
   volFilter?: number;
   volThreshold?: number;
   rsiConfirm?: number;
+  // v6: BB Reversion 추세 필터 파라미터
+  blockInTrend?: number;
+  adxTrendThreshold?: number;
+  useEmaTrendFilter?: number;
+  emaPeriod?: number;
+  emaDistancePct?: number;
+  useVolumeConfirm?: number;
+  lowVolEntryZ?: number;
+  highVolEntryZ?: number;
+  useStochConfirm?: number;
+  stochThreshold?: number;
+  useRsiConfirm?: number;
+  rsiThreshold?: number;
+  useMiniSideways?: number;
+  bbBandwidthThreshold?: number;
+  useChannelDetection?: number;
+  channelR2Threshold?: number;
+  channelOnlyMode?: number;
   // EMA+ADX (Momentum Breakout) 파라미터
   smaPeriod?: number;
   atrPeriod?: number;
@@ -54,6 +73,10 @@ export interface BacktestParams {
   volumeMult?: number;
   adxThreshold?: number;
   cooldownBars?: number;
+  // HMM Orchestrator 파라미터
+  bbLookback?: number;
+  bbVolumeMult?: number;
+  breakoutVolumeMult?: number;
   // 리얼타임 차트용: 캐시 대신 API에서 데이터 가져오기
   useLiveData?: boolean;
 }
@@ -162,6 +185,91 @@ export async function checkBacktestHealth(): Promise<{ valid: boolean; message: 
 export async function getTimeframes(): Promise<string[]> {
   const response = await fetch(`${API_BASE}/backtest/timeframes`);
   return response.json();
+}
+
+// ============== Strategy Defaults API (JSON Single Source of Truth) ==============
+
+export interface StrategyDefaultsResult {
+  strategy: string;
+  displayName?: string;
+  params: Record<string, any>;
+}
+
+// 캐시 (API 호출 최소화)
+let _strategyDefaultsCache: Map<string, StrategyDefaultsResult> | null = null;
+let _allDefaultsCacheTime: number = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5분 캐시
+
+/**
+ * 단일 전략 기본값 가져오기 (API에서 로드)
+ */
+export async function fetchStrategyDefaults(strategy: string): Promise<StrategyDefaultsResult | null> {
+  try {
+    // 캐시 확인
+    if (_strategyDefaultsCache && _strategyDefaultsCache.has(strategy)) {
+      return _strategyDefaultsCache.get(strategy)!;
+    }
+
+    const response = await fetch(`${API_BASE}/backtest/strategy/defaults/${strategy}`);
+    if (!response.ok) return null;
+
+    const data = await response.json();
+
+    // 캐시 저장
+    if (!_strategyDefaultsCache) _strategyDefaultsCache = new Map();
+    _strategyDefaultsCache.set(strategy, data);
+
+    return data;
+  } catch (err) {
+    console.error(`Failed to fetch strategy defaults for ${strategy}:`, err);
+    return null;
+  }
+}
+
+/**
+ * 모든 전략 기본값 가져오기 (API에서 로드)
+ */
+export async function fetchAllStrategyDefaults(): Promise<StrategyDefaultsResult[]> {
+  try {
+    // 캐시 확인
+    if (_strategyDefaultsCache && _allDefaultsCacheTime > Date.now() - CACHE_TTL) {
+      return Array.from(_strategyDefaultsCache.values());
+    }
+
+    const response = await fetch(`${API_BASE}/backtest/strategy/defaults`);
+    if (!response.ok) return [];
+
+    const data: StrategyDefaultsResult[] = await response.json();
+
+    // 캐시 저장
+    _strategyDefaultsCache = new Map();
+    for (const item of data) {
+      _strategyDefaultsCache.set(item.strategy, item);
+    }
+    _allDefaultsCacheTime = Date.now();
+
+    return data;
+  } catch (err) {
+    console.error('Failed to fetch all strategy defaults:', err);
+    return [];
+  }
+}
+
+/**
+ * 전략 기본값 캐시 초기화 (앱 시작시 호출)
+ */
+export async function preloadStrategyDefaults(): Promise<void> {
+  await fetchAllStrategyDefaults();
+}
+
+/**
+ * 캐시된 전략 기본값 가져오기 (동기, 캐시가 없으면 빈 객체)
+ */
+export function getCachedStrategyDefaults(strategy: string): Record<string, any> {
+  if (_strategyDefaultsCache && _strategyDefaultsCache.has(strategy)) {
+    return _strategyDefaultsCache.get(strategy)!.params;
+  }
+  return {};
 }
 
 // 최적화 관련 타입
@@ -428,6 +536,24 @@ export interface SavedOptimizeResult {
   volFilter?: number;      // 변동성 필터 (0=OFF, 1=ON)
   volThreshold?: number;   // 변동성 임계값
   rsiConfirm?: number;     // RSI 확인 필터 (0=OFF, 1=ON)
+  // v6: BB Reversion 추세 필터 파라미터
+  blockInTrend?: number;           // 추세 시 거래 차단 (0=OFF, 1=ON)
+  adxTrendThreshold?: number;      // ADX 추세 임계값
+  useEmaTrendFilter?: number;      // EMA 추세 필터 (0=OFF, 1=ON)
+  emaPeriod?: number;              // EMA 기간
+  emaDistancePct?: number;         // EMA 거리 임계값 (%)
+  useVolumeConfirm?: number;       // 볼륨 확인 (0=OFF, 1=ON)
+  lowVolEntryZ?: number;           // 저변동성 진입 Z-Score
+  highVolEntryZ?: number;          // 고변동성 진입 Z-Score
+  useStochConfirm?: number;        // 스토캐스틱 확인 (0=OFF, 1=ON)
+  stochThreshold?: number;         // 스토캐스틱 임계값
+  useRsiConfirm?: number;          // RSI 확인 v6 (0=OFF, 1=ON)
+  rsiThreshold?: number;           // RSI 임계값
+  useMiniSideways?: number;        // 미니횡보 감지 (0=OFF, 1=ON)
+  bbBandwidthThreshold?: number;   // BB 밴드폭 임계값
+  useChannelDetection?: number;    // 채널 감지 (0=OFF, 1=ON)
+  channelR2Threshold?: number;     // 채널 R² 임계값
+  channelOnlyMode?: number;        // 채널 전용 모드 (0=OFF, 1=ON)
   // EMA+ADX (Momentum Breakout) 파라미터
   smaPeriod?: number;
   atrPeriod?: number;
@@ -440,6 +566,10 @@ export interface SavedOptimizeResult {
   adxThreshold?: number;   // ADX 임계값 (추세/횡보 판단)
   volumeMult?: number;     // 볼륨 배수
   cooldownBars?: number;   // 쿨다운 바 수
+  // HMM Orchestrator 파라미터
+  bbLookback?: number;           // BB 룩백 기간
+  bbVolumeMult?: number;         // BB 볼륨 배수
+  breakoutVolumeMult?: number;   // 브레이크아웃 볼륨 배수
   // 공통 결과
   totalTrades: number;
   winRate: number;

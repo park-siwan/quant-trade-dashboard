@@ -26,7 +26,14 @@ import {
   deleteSavedResult,
 } from '@/lib/backtest-api';
 import { X } from 'lucide-react';
-import { convertApiParams, getDefaultParams, TrendReversalComboDefaults } from '@/lib/strategy-params';
+import {
+  convertApiParams,
+  getDefaultParams,
+  TrendReversalComboDefaults,
+  BbReversionDefaults,
+  HmmOrchestratorDefaults
+} from '@/lib/strategy-params';
+import { preloadStrategyDefaults } from '@/lib/backtest-api';
 import { CHART } from '@/lib/constants';
 import { useAtomValue } from 'jotai';
 import { symbolAtom } from '@/stores/symbolAtom';
@@ -41,6 +48,7 @@ const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
   'ema_adx': '돌파매매(EMA+ADX+거래량)',
   'hybrid_regime': '머신러닝 추세추론(HMM)',
   'trend_reversal_combo': '추세+역추세 콤보',
+  'hmm_orchestrator': 'HMM 오케스트레이터',
 };
 
 // 전략 ID에서 표시 이름 추출
@@ -170,6 +178,13 @@ export default function RealtimeChart() {
         setTimeframe(savedTf);
       }
     }
+  }, []);
+
+  // JSON Single Source of Truth: 전략 기본값 프리로드
+  useEffect(() => {
+    preloadStrategyDefaults().then(() => {
+      console.log('[Strategy] Strategy defaults preloaded from API');
+    });
   }, []);
 
   // 전략별 미리보기 결과 (상위 10개 전략의 실시간 백테스트 결과)
@@ -548,7 +563,7 @@ export default function RealtimeChart() {
     sharpeRatio: number;
   } | null> => {
     try {
-      const strategyType = (strategy.strategy || 'classic_rsi_div') as 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo';
+      const strategyType = (strategy.strategy || 'classic_rsi_div') as 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator';
       const indicators = strategy.indicators
         ? strategy.indicators.split(',').filter(Boolean)
         : ['rsi'];
@@ -589,17 +604,25 @@ export default function RealtimeChart() {
         rocPeriod: strategy.rocPeriod,
         rocThreshold: strategy.rocThreshold,
         volumeConfirm: strategy.volumeConfirm,
-        // Trend Reversal Combo 파라미터 (undefined 방어 로직 추가)
-        volumeMult: strategy.volumeMult ?? TrendReversalComboDefaults.volumeMult ?? 1.5,
-        adxThreshold: strategy.adxThreshold ?? TrendReversalComboDefaults.adxThreshold ?? 25,
-        cooldownBars: strategy.cooldownBars ?? TrendReversalComboDefaults.cooldownBars ?? 5,
-        // RSI Divergence 레거시 파라미터 (해당 전략일 때만 유효)
-        rsiPeriod: strategy.rsiPeriod,
-        pivotLeftBars: strategy.pivotLeft,
-        pivotRightBars: strategy.pivotRight,
-        minDistance: strategy.minDistance,
-        maxDistance: strategy.maxDistance,
-        minDivergencePct: strategy.minDivPct,
+        // Trend Reversal Combo / HMM Orchestrator 파라미터
+        volumeMult: strategy.volumeMult ?? (strategyType === 'hmm_orchestrator' ? 1.5 : TrendReversalComboDefaults.volumeMult ?? 1.5),
+        adxThreshold: strategy.adxThreshold ?? (strategyType === 'hmm_orchestrator' ? HmmOrchestratorDefaults.adxThreshold ?? 25 : TrendReversalComboDefaults.adxThreshold ?? 25),
+        cooldownBars: strategy.cooldownBars ?? (strategyType === 'hmm_orchestrator' ? HmmOrchestratorDefaults.cooldownBars ?? 5 : TrendReversalComboDefaults.cooldownBars ?? 5),
+        // HMM Orchestrator 전용 파라미터
+        bbLookback: strategy.bbLookback ?? HmmOrchestratorDefaults.bbLookback ?? 20,
+        bbVolumeMult: strategy.bbVolumeMult ?? HmmOrchestratorDefaults.bbVolumeMult ?? 0.8,
+        breakoutVolumeMult: strategy.breakoutVolumeMult ?? HmmOrchestratorDefaults.breakoutVolumeMult ?? 1.5,
+        lowVolEntryZ: strategy.lowVolEntryZ ?? HmmOrchestratorDefaults.lowVolEntryZ ?? 1.5,
+        highVolEntryZ: strategy.highVolEntryZ ?? HmmOrchestratorDefaults.highVolEntryZ ?? 2.5,
+        rsiOversold: strategy.rsiOversold ?? HmmOrchestratorDefaults.rsiOversold ?? 35,
+        rsiOverbought: strategy.rsiOverbought ?? HmmOrchestratorDefaults.rsiOverbought ?? 65,
+        // RSI Divergence 파라미터 (hmm_orchestrator는 기본값 적용)
+        rsiPeriod: strategy.rsiPeriod ?? (strategyType === 'hmm_orchestrator' ? HmmOrchestratorDefaults.rsiPeriod ?? 14 : undefined),
+        pivotLeftBars: strategy.pivotLeft ?? (strategyType === 'hmm_orchestrator' ? HmmOrchestratorDefaults.pivotLeft ?? 5 : undefined),
+        pivotRightBars: strategy.pivotRight ?? (strategyType === 'hmm_orchestrator' ? HmmOrchestratorDefaults.pivotRight ?? 1 : undefined),
+        minDistance: strategy.minDistance ?? (strategyType === 'hmm_orchestrator' ? HmmOrchestratorDefaults.minDistance ?? 5 : undefined),
+        maxDistance: strategy.maxDistance ?? (strategyType === 'hmm_orchestrator' ? HmmOrchestratorDefaults.maxDistance ?? 100 : undefined),
+        minDivergencePct: strategy.minDivPct ?? (strategyType === 'hmm_orchestrator' ? HmmOrchestratorDefaults.minRsiDiff ?? 3 : undefined),
         indicators,
         trendFilter: strategy.trendFilter,
         volatilityFilter: strategy.volatilityFilter,
@@ -670,13 +693,33 @@ export default function RealtimeChart() {
       base.rsiExtremeFilter = convertedParams.volumeConfirm ? 'extreme' : 'OFF';
     } else if (strategyType === 'bb_reversion') {
       // 적응형 평균회귀 (학술 기반)
-      base.lookback = convertedParams.lookback ?? defaults.lookback ?? 15;
+      base.lookback = convertedParams.lookback ?? defaults.lookback ?? 20;
       base.entryZ = convertedParams.entryZ ?? defaults.entryZ ?? 1.5;
-      base.exitZ = convertedParams.exitZ ?? defaults.exitZ ?? 0;
+      base.exitZ = convertedParams.exitZ ?? defaults.exitZ ?? 0.25;
       base.stopZ = convertedParams.stopZ ?? defaults.stopZ ?? 2.5;
       base.volFilter = convertedParams.volFilter ?? defaults.volFilter ?? 0;
       base.volThreshold = convertedParams.volThreshold ?? defaults.volThreshold ?? 1.5;
       base.rsiConfirm = convertedParams.rsiConfirm ?? defaults.rsiConfirm ?? 0;
+      // v6: 추세 필터 파라미터
+      base.blockInTrend = convertedParams.blockInTrend ?? defaults.blockInTrend ?? 1;
+      base.adxTrendThreshold = convertedParams.adxTrendThreshold ?? defaults.adxTrendThreshold ?? 20;
+      base.useEmaTrendFilter = convertedParams.useEmaTrendFilter ?? defaults.useEmaTrendFilter ?? 0;
+      base.emaPeriod = convertedParams.emaPeriod ?? defaults.emaPeriod ?? 20;
+      base.emaDistancePct = convertedParams.emaDistancePct ?? defaults.emaDistancePct ?? 1.0;
+      base.useVolumeConfirm = convertedParams.useVolumeConfirm ?? defaults.useVolumeConfirm ?? 1;
+      base.volumeMult = convertedParams.volumeMult ?? defaults.volumeMult ?? 0.8;
+      base.cooldownBars = convertedParams.cooldownBars ?? defaults.cooldownBars ?? 10;
+      base.lowVolEntryZ = convertedParams.lowVolEntryZ ?? defaults.lowVolEntryZ ?? 1.5;
+      base.highVolEntryZ = convertedParams.highVolEntryZ ?? defaults.highVolEntryZ ?? 2.5;
+      base.useStochConfirm = convertedParams.useStochConfirm ?? defaults.useStochConfirm ?? 0;
+      base.stochThreshold = convertedParams.stochThreshold ?? defaults.stochThreshold ?? 25;
+      base.useRsiConfirm = convertedParams.useRsiConfirm ?? defaults.useRsiConfirm ?? 0;
+      base.rsiThreshold = convertedParams.rsiThreshold ?? defaults.rsiThreshold ?? 35;
+      base.useMiniSideways = convertedParams.useMiniSideways ?? defaults.useMiniSideways ?? 0;
+      base.bbBandwidthThreshold = convertedParams.bbBandwidthThreshold ?? defaults.bbBandwidthThreshold ?? 0.03;
+      base.useChannelDetection = convertedParams.useChannelDetection ?? defaults.useChannelDetection ?? 0;
+      base.channelR2Threshold = convertedParams.channelR2Threshold ?? defaults.channelR2Threshold ?? 0.6;
+      base.channelOnlyMode = convertedParams.channelOnlyMode ?? defaults.channelOnlyMode ?? 0;
       base.volatilityFilter = base.volFilter ? 'atr' : 'OFF';
       base.rsiExtremeFilter = base.rsiConfirm ? 'extreme' : 'OFF';
     } else if (strategyType === 'ema_adx') {
@@ -702,6 +745,33 @@ export default function RealtimeChart() {
       base.cooldownBars = convertedParams.cooldownBars ?? defaults.cooldownBars ?? 5;
       base.tpAtr = convertedParams.tpAtr ?? 1.7;
       base.slAtr = convertedParams.slAtr ?? 3.5;
+    } else if (strategyType === 'hmm_orchestrator') {
+      // HMM 오케스트레이터 v2 (횡보=RSI Divergence+평균회귀, 추세=브레이크아웃)
+      const hmmDefaults = HmmOrchestratorDefaults;
+      // RSI Divergence 파라미터 (콤보 동일)
+      base.pivotLeft = convertedParams.pivotLeft ?? hmmDefaults.pivotLeft ?? 5;
+      base.pivotRight = convertedParams.pivotRight ?? hmmDefaults.pivotRight ?? 1;
+      base.rsiPeriod = convertedParams.rsiPeriod ?? hmmDefaults.rsiPeriod ?? 14;
+      base.minRsiDiff = convertedParams.minRsiDiff ?? hmmDefaults.minRsiDiff ?? 3;
+      base.minDistance = convertedParams.minDistance ?? hmmDefaults.minDistance ?? 5;
+      base.maxDistance = convertedParams.maxDistance ?? hmmDefaults.maxDistance ?? 100;
+      base.rsiOversold = convertedParams.rsiOversold ?? hmmDefaults.rsiOversold ?? 35;
+      base.rsiOverbought = convertedParams.rsiOverbought ?? hmmDefaults.rsiOverbought ?? 65;
+      // 평균회귀 파라미터
+      base.bbLookback = convertedParams.bbLookback ?? hmmDefaults.bbLookback ?? 20;
+      base.lowVolEntryZ = convertedParams.lowVolEntryZ ?? hmmDefaults.lowVolEntryZ ?? 1.5;
+      base.highVolEntryZ = convertedParams.highVolEntryZ ?? hmmDefaults.highVolEntryZ ?? 2.5;
+      base.exitZ = convertedParams.exitZ ?? hmmDefaults.exitZ ?? 0.25;
+      base.bbVolumeMult = convertedParams.bbVolumeMult ?? hmmDefaults.bbVolumeMult ?? 0.8;
+      // 브레이크아웃 파라미터
+      base.breakoutPeriod = convertedParams.breakoutPeriod ?? hmmDefaults.breakoutPeriod ?? 20;
+      base.breakoutVolumeMult = convertedParams.breakoutVolumeMult ?? hmmDefaults.breakoutVolumeMult ?? 1.5;
+      base.adxThreshold = convertedParams.adxThreshold ?? hmmDefaults.adxThreshold ?? 25;
+      base.volumeMult = convertedParams.volumeMult ?? hmmDefaults.volumeMult ?? 1.5;
+      // 공통
+      base.cooldownBars = convertedParams.cooldownBars ?? hmmDefaults.cooldownBars ?? 5;
+      base.tpAtr = convertedParams.tpAtr ?? hmmDefaults.tpAtr ?? 1.7;
+      base.slAtr = convertedParams.slAtr ?? hmmDefaults.slAtr ?? 3.5;
     }
 
     return base;
@@ -715,9 +785,68 @@ export default function RealtimeChart() {
       setSelectedStrategy(null); // 로딩 중에는 전략 선택 해제
 
       try {
-        // 1. 베이지안 최적화 결과 로드
+        // 1. 베이지안 최적화 결과 로드 (v6 파라미터 기본값 적용)
         const bayesianResults = await getTopSavedResults('sharpe', 50);
-        const filteredBayesian = bayesianResults.filter(r => r.timeframe === timeframe);
+        const filteredBayesian = bayesianResults
+          .filter(r => r.timeframe === timeframe)
+          .map(r => {
+            // bb_reversion 전략에 v6 파라미터 기본값 적용
+            if (r.strategy === 'bb_reversion') {
+              return {
+                ...r,
+                blockInTrend: r.blockInTrend ?? BbReversionDefaults.blockInTrend ?? 1,
+                adxTrendThreshold: r.adxTrendThreshold ?? BbReversionDefaults.adxTrendThreshold ?? 20,
+                useEmaTrendFilter: r.useEmaTrendFilter ?? BbReversionDefaults.useEmaTrendFilter ?? 0,
+                emaPeriod: r.emaPeriod ?? BbReversionDefaults.emaPeriod ?? 20,
+                emaDistancePct: r.emaDistancePct ?? BbReversionDefaults.emaDistancePct ?? 1.0,
+                useVolumeConfirm: r.useVolumeConfirm ?? BbReversionDefaults.useVolumeConfirm ?? 1,
+                volumeMult: r.volumeMult ?? BbReversionDefaults.volumeMult ?? 0.8,
+                cooldownBars: r.cooldownBars ?? BbReversionDefaults.cooldownBars ?? 10,
+                lowVolEntryZ: r.lowVolEntryZ ?? BbReversionDefaults.lowVolEntryZ ?? 1.5,
+                highVolEntryZ: r.highVolEntryZ ?? BbReversionDefaults.highVolEntryZ ?? 2.5,
+                useStochConfirm: r.useStochConfirm ?? BbReversionDefaults.useStochConfirm ?? 0,
+                stochThreshold: r.stochThreshold ?? BbReversionDefaults.stochThreshold ?? 25,
+                useRsiConfirm: r.useRsiConfirm ?? BbReversionDefaults.useRsiConfirm ?? 0,
+                rsiThreshold: r.rsiThreshold ?? BbReversionDefaults.rsiThreshold ?? 35,
+                useMiniSideways: r.useMiniSideways ?? BbReversionDefaults.useMiniSideways ?? 0,
+                bbBandwidthThreshold: r.bbBandwidthThreshold ?? BbReversionDefaults.bbBandwidthThreshold ?? 0.03,
+                useChannelDetection: r.useChannelDetection ?? BbReversionDefaults.useChannelDetection ?? 0,
+                channelR2Threshold: r.channelR2Threshold ?? BbReversionDefaults.channelR2Threshold ?? 0.6,
+                channelOnlyMode: r.channelOnlyMode ?? BbReversionDefaults.channelOnlyMode ?? 0,
+              };
+            }
+            // hmm_orchestrator 전략에 기본값 적용
+            if (r.strategy === 'hmm_orchestrator') {
+              return {
+                ...r,
+                // RSI Divergence 파라미터
+                pivotLeft: r.pivotLeft ?? HmmOrchestratorDefaults.pivotLeft ?? 5,
+                pivotRight: r.pivotRight ?? HmmOrchestratorDefaults.pivotRight ?? 1,
+                rsiPeriod: r.rsiPeriod ?? HmmOrchestratorDefaults.rsiPeriod ?? 14,
+                minRsiDiff: r.minRsiDiff ?? HmmOrchestratorDefaults.minRsiDiff ?? 3,
+                minDistance: r.minDistance ?? HmmOrchestratorDefaults.minDistance ?? 5,
+                maxDistance: r.maxDistance ?? HmmOrchestratorDefaults.maxDistance ?? 100,
+                rsiOversold: r.rsiOversold ?? HmmOrchestratorDefaults.rsiOversold ?? 35,
+                rsiOverbought: r.rsiOverbought ?? HmmOrchestratorDefaults.rsiOverbought ?? 65,
+                // 평균회귀 파라미터
+                bbLookback: r.bbLookback ?? HmmOrchestratorDefaults.bbLookback ?? 20,
+                lowVolEntryZ: r.lowVolEntryZ ?? HmmOrchestratorDefaults.lowVolEntryZ ?? 1.5,
+                highVolEntryZ: r.highVolEntryZ ?? HmmOrchestratorDefaults.highVolEntryZ ?? 2.5,
+                exitZ: r.exitZ ?? HmmOrchestratorDefaults.exitZ ?? 0.25,
+                bbVolumeMult: r.bbVolumeMult ?? HmmOrchestratorDefaults.bbVolumeMult ?? 0.8,
+                // 브레이크아웃 파라미터
+                breakoutPeriod: r.breakoutPeriod ?? HmmOrchestratorDefaults.breakoutPeriod ?? 20,
+                breakoutVolumeMult: r.breakoutVolumeMult ?? HmmOrchestratorDefaults.breakoutVolumeMult ?? 1.5,
+                adxThreshold: r.adxThreshold ?? HmmOrchestratorDefaults.adxThreshold ?? 25,
+                volumeMult: r.volumeMult ?? HmmOrchestratorDefaults.volumeMult ?? 1.5,
+                // 공통
+                cooldownBars: r.cooldownBars ?? HmmOrchestratorDefaults.cooldownBars ?? 5,
+                tpAtr: r.tpAtr ?? HmmOrchestratorDefaults.tpAtr ?? 1.7,
+                slAtr: r.slAtr ?? HmmOrchestratorDefaults.slAtr ?? 3.5,
+              };
+            }
+            return r;
+          });
 
         // 2. 롤링 최적화 결과 로드
         let rollingConverted: SavedOptimizeResult[] = [];
@@ -938,19 +1067,19 @@ export default function RealtimeChart() {
       });
       // 전략의 타임프레임과 동일한 candleCount 사용 (미리보기와 일치)
       const result = await runBacktest({
-        strategy: (strategy.strategy || 'classic_rsi_div') as 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo',
+        strategy: (strategy.strategy || 'classic_rsi_div') as 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator',
         symbol: currentSymbol.slashFormat,
         timeframe: timeframe,
         candleCount: 5000, // 미리보기와 동일한 데이터 범위 사용
-        // RSI Divergence 파라미터
-        rsiPeriod: strategy.rsiPeriod,
-        pivotLeftBars: strategy.pivotLeft,
-        pivotRightBars: strategy.pivotRight,
-        minDistance: strategy.minDistance,
-        maxDistance: strategy.maxDistance,
+        // RSI Divergence 파라미터 (hmm_orchestrator는 기본값 적용)
+        rsiPeriod: strategy.rsiPeriod ?? (strategy.strategy === 'hmm_orchestrator' ? HmmOrchestratorDefaults.rsiPeriod ?? 14 : undefined),
+        pivotLeftBars: strategy.pivotLeft ?? (strategy.strategy === 'hmm_orchestrator' ? HmmOrchestratorDefaults.pivotLeft ?? 5 : undefined),
+        pivotRightBars: strategy.pivotRight ?? (strategy.strategy === 'hmm_orchestrator' ? HmmOrchestratorDefaults.pivotRight ?? 1 : undefined),
+        minDistance: strategy.minDistance ?? (strategy.strategy === 'hmm_orchestrator' ? HmmOrchestratorDefaults.minDistance ?? 5 : undefined),
+        maxDistance: strategy.maxDistance ?? (strategy.strategy === 'hmm_orchestrator' ? HmmOrchestratorDefaults.maxDistance ?? 100 : undefined),
         takeProfitAtr: strategy.tpAtr,
         stopLossAtr: strategy.slAtr,
-        minDivergencePct: strategy.minDivPct,
+        minDivergencePct: strategy.minDivPct ?? (strategy.strategy === 'hmm_orchestrator' ? HmmOrchestratorDefaults.minRsiDiff ?? 3 : undefined),
         initialCapital: 1000,
         positionSizePercent: 100,
         indicators,
@@ -967,6 +1096,24 @@ export default function RealtimeChart() {
         volFilter: strategy.volFilter,
         volThreshold: strategy.volThreshold,
         rsiConfirm: strategy.rsiConfirm,
+        // v6: BB Reversion 추세 필터 파라미터
+        blockInTrend: strategy.blockInTrend ?? BbReversionDefaults.blockInTrend ?? 1,
+        adxTrendThreshold: strategy.adxTrendThreshold ?? BbReversionDefaults.adxTrendThreshold ?? 20,
+        useEmaTrendFilter: strategy.useEmaTrendFilter ?? BbReversionDefaults.useEmaTrendFilter ?? 0,
+        emaPeriod: strategy.emaPeriod ?? BbReversionDefaults.emaPeriod ?? 20,
+        emaDistancePct: strategy.emaDistancePct ?? BbReversionDefaults.emaDistancePct ?? 1.0,
+        useVolumeConfirm: strategy.useVolumeConfirm ?? BbReversionDefaults.useVolumeConfirm ?? 1,
+        lowVolEntryZ: strategy.lowVolEntryZ ?? BbReversionDefaults.lowVolEntryZ ?? 1.5,
+        highVolEntryZ: strategy.highVolEntryZ ?? BbReversionDefaults.highVolEntryZ ?? 2.5,
+        useStochConfirm: strategy.useStochConfirm ?? BbReversionDefaults.useStochConfirm ?? 0,
+        stochThreshold: strategy.stochThreshold ?? BbReversionDefaults.stochThreshold ?? 25,
+        useRsiConfirm: strategy.useRsiConfirm ?? BbReversionDefaults.useRsiConfirm ?? 0,
+        rsiThreshold: strategy.rsiThreshold ?? BbReversionDefaults.rsiThreshold ?? 35,
+        useMiniSideways: strategy.useMiniSideways ?? BbReversionDefaults.useMiniSideways ?? 0,
+        bbBandwidthThreshold: strategy.bbBandwidthThreshold ?? BbReversionDefaults.bbBandwidthThreshold ?? 0.03,
+        useChannelDetection: strategy.useChannelDetection ?? BbReversionDefaults.useChannelDetection ?? 0,
+        channelR2Threshold: strategy.channelR2Threshold ?? BbReversionDefaults.channelR2Threshold ?? 0.6,
+        channelOnlyMode: strategy.channelOnlyMode ?? BbReversionDefaults.channelOnlyMode ?? 0,
         // EMA+ADX (Momentum Breakout) 파라미터
         smaPeriod: strategy.smaPeriod,
         atrPeriod: strategy.atrPeriod,
@@ -975,10 +1122,18 @@ export default function RealtimeChart() {
         rocPeriod: strategy.rocPeriod,
         rocThreshold: strategy.rocThreshold,
         volumeConfirm: strategy.volumeConfirm,
-        // Trend Reversal Combo 파라미터 (undefined 방어 로직 추가)
-        volumeMult: strategy.volumeMult ?? TrendReversalComboDefaults.volumeMult ?? 1.5,
-        adxThreshold: strategy.adxThreshold ?? TrendReversalComboDefaults.adxThreshold ?? 25,
-        cooldownBars: strategy.cooldownBars ?? TrendReversalComboDefaults.cooldownBars ?? 5,
+        // Trend Reversal Combo / HMM Orchestrator 파라미터
+        volumeMult: strategy.volumeMult ?? (strategy.strategy === 'hmm_orchestrator' ? 1.5 : TrendReversalComboDefaults.volumeMult ?? 1.5),
+        adxThreshold: strategy.adxThreshold ?? (strategy.strategy === 'hmm_orchestrator' ? HmmOrchestratorDefaults.adxThreshold ?? 25 : TrendReversalComboDefaults.adxThreshold ?? 25),
+        cooldownBars: strategy.cooldownBars ?? (strategy.strategy === 'hmm_orchestrator' ? HmmOrchestratorDefaults.cooldownBars ?? 5 : TrendReversalComboDefaults.cooldownBars ?? 5),
+        // HMM Orchestrator 전용 파라미터
+        bbLookback: strategy.bbLookback ?? HmmOrchestratorDefaults.bbLookback ?? 20,
+        bbVolumeMult: strategy.bbVolumeMult ?? HmmOrchestratorDefaults.bbVolumeMult ?? 0.8,
+        breakoutVolumeMult: strategy.breakoutVolumeMult ?? HmmOrchestratorDefaults.breakoutVolumeMult ?? 1.5,
+        lowVolEntryZ: strategy.lowVolEntryZ ?? HmmOrchestratorDefaults.lowVolEntryZ ?? 1.5,
+        highVolEntryZ: strategy.highVolEntryZ ?? HmmOrchestratorDefaults.highVolEntryZ ?? 2.5,
+        rsiOversold: strategy.rsiOversold ?? HmmOrchestratorDefaults.rsiOversold ?? 35,
+        rsiOverbought: strategy.rsiOverbought ?? HmmOrchestratorDefaults.rsiOverbought ?? 65,
         // 리얼타임 차트용: 캐시 대신 API에서 데이터 가져오기 (차트와 동일한 데이터)
         useLiveData: true,
       });
