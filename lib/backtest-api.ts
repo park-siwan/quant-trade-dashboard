@@ -77,6 +77,13 @@ export interface BacktestParams {
   bbLookback?: number;
   bbVolumeMult?: number;
   breakoutVolumeMult?: number;
+  rsiOversold?: number;
+  rsiOverbought?: number;
+  minRsiDiff?: number;
+  pivotLeft?: number;
+  pivotRight?: number;
+  tpAtr?: number;
+  slAtr?: number;
   // 리얼타임 차트용: 캐시 대신 API에서 데이터 가져오기
   useLiveData?: boolean;
 }
@@ -593,6 +600,9 @@ export interface SavedOptimizeResult {
   bbLookback?: number;           // BB 룩백 기간
   bbVolumeMult?: number;         // BB 볼륨 배수
   breakoutVolumeMult?: number;   // 브레이크아웃 볼륨 배수
+  rsiOversold?: number;          // RSI 과매도 임계값
+  rsiOverbought?: number;        // RSI 과매수 임계값
+  minRsiDiff?: number;           // 최소 RSI 차이
   // 공통 결과
   totalTrades: number;
   winRate: number;
