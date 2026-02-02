@@ -37,7 +37,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 // 전략 표시 이름 매핑 (학술 기반 + 원본 지표명)
 const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
   'classic_rsi_div': '반전매매(RSI DIV)',
-  'bb_reversion': '평균회귀(볼린저밴드)',
+  'bb_reversion': '평균회귀(Z-Score)',
   'ema_adx': '돌파매매(EMA+ADX+거래량)',
   'hybrid_regime': '머신러닝 추세추론(HMM)',
   'trend_reversal_combo': '추세+역추세 콤보',
