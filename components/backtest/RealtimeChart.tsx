@@ -36,11 +36,10 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // 전략 표시 이름 매핑 (학술 기반 + 원본 지표명)
 const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
-  'rsi_divergence': 'OBV 다이버전스 (가격-거래량)',
-  'classic_rsi_div': 'RSI 다이버전스 (클래식)',
+  'classic_rsi_div': 'RSI 다이버전스',
   'bb_reversion': '적응형 평균회귀 (볼린저밴드)',
   'ema_adx': '돌파매매(EMA+ADX+거래량)',
-  'hybrid_regime': '머신러닝 방향추론',
+  'hybrid_regime': '머신러닝 추세추론(HMM)',
   'stoch_rsi': '다중 지표 확인 (Stoch RSI)',
   'trend_reversal_combo': '추세+역추세 콤보',
 };
