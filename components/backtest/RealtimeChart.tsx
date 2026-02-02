@@ -33,7 +33,7 @@ import {
   BbReversionDefaults,
   HmmOrchestratorDefaults
 } from '@/lib/strategy-params';
-import { preloadStrategyDefaults } from '@/lib/backtest-api';
+import { preloadStrategyDefaults, getCachedStrategyDisplayName } from '@/lib/backtest-api';
 import { CHART } from '@/lib/constants';
 import { useAtomValue } from 'jotai';
 import { symbolAtom } from '@/stores/symbolAtom';
@@ -41,22 +41,13 @@ import { toSeconds, formatKST, getTimeframeSeconds } from '@/lib/utils/timestamp
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-// 전략 표시 이름 매핑 (학술 기반 + 원본 지표명)
-const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
-  'classic_rsi_div': '반전매매(RSI DIV)',
-  'bb_reversion': '평균회귀(Z-Score)',
-  'ema_adx': '돌파매매(EMA+ADX+거래량)',
-  'hybrid_regime': '머신러닝 추세추론(HMM)',
-  'trend_reversal_combo': '추세+역추세 콤보',
-  'hmm_orchestrator': 'HMM 오케스트레이터',
-};
-
-// 전략 ID에서 표시 이름 추출
+// 전략 ID에서 표시 이름 추출 (JSON Single Source of Truth)
 const getStrategyDisplayName = (strategy: SavedOptimizeResult): string => {
-  // note에서 전략 타입 추출: "[롤링] bb_reversion" → "bb_reversion"
+  // note에서 전략 타입 추출: "[롤링] z_score" → "z_score"
   const match = strategy.note?.match(/\[롤링\]\s*(\w+)/);
-  const strategyType = match?.[1] || (strategy as any).strategy || 'classic_rsi_div';
-  return STRATEGY_DISPLAY_NAMES[strategyType] || strategyType;
+  const strategyType = match?.[1] || (strategy as any).strategy || 'rsi_div';
+  // API 캐시에서 displayName 가져오기 (old ID 자동 변환)
+  return getCachedStrategyDisplayName(strategyType);
 };
 
 // 전략 변경 요청
@@ -563,7 +554,7 @@ export default function RealtimeChart() {
     sharpeRatio: number;
   } | null> => {
     try {
-      const strategyType = (strategy.strategy || 'classic_rsi_div') as 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator';
+      const strategyType = (strategy.strategy || 'rsi_div') as 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator';
       const indicators = strategy.indicators
         ? strategy.indicators.split(',').filter(Boolean)
         : ['rsi'];
@@ -646,7 +637,7 @@ export default function RealtimeChart() {
   // param_registry.py 기반 자동 변환 사용
   const convertRollingToSaved = (rolling: RollingParamResult, index: number): SavedOptimizeResult => {
     // 모든 전략 지원
-    const strategyType = rolling.strategy as 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo';
+    const strategyType = rolling.strategy as 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo';
 
     // 1. API 파라미터 (snake_case) → 프론트엔드 (camelCase) 자동 변환
     const rawParams = rolling.params as Record<string, unknown>;
@@ -685,13 +676,13 @@ export default function RealtimeChart() {
     };
 
     // 4. 전략별 추가 파라미터 및 필터 문자열 설정
-    if (strategyType === 'classic_rsi_div') {
+    if (strategyType === 'rsi_div') {
       // 반전매매(RSI DIV) (학술 기반)
       base.minDivPct = convertedParams.minRsiDiff ?? defaults.minRsiDiff ?? 3;
       base.trendFilter = convertedParams.regimeFilter ? 'regime' : 'OFF';
       base.volatilityFilter = convertedParams.volFilter ? 'atr' : 'OFF';
       base.rsiExtremeFilter = convertedParams.volumeConfirm ? 'extreme' : 'OFF';
-    } else if (strategyType === 'bb_reversion') {
+    } else if (strategyType === 'z_score') {
       // 적응형 평균회귀 (학술 기반)
       base.lookback = convertedParams.lookback ?? defaults.lookback ?? 20;
       base.entryZ = convertedParams.entryZ ?? defaults.entryZ ?? 1.5;
@@ -722,7 +713,7 @@ export default function RealtimeChart() {
       base.channelOnlyMode = convertedParams.channelOnlyMode ?? defaults.channelOnlyMode ?? 0;
       base.volatilityFilter = base.volFilter ? 'atr' : 'OFF';
       base.rsiExtremeFilter = base.rsiConfirm ? 'extreme' : 'OFF';
-    } else if (strategyType === 'ema_adx') {
+    } else if (strategyType === 'vol_breakout') {
       // 돌파매매 (학술 기반)
       base.smaPeriod = convertedParams.smaPeriod ?? defaults.smaPeriod ?? 50;
       base.atrPeriod = convertedParams.atrPeriod ?? defaults.atrPeriod ?? 14;
@@ -732,7 +723,7 @@ export default function RealtimeChart() {
       base.rocThreshold = convertedParams.rocThreshold ?? defaults.rocThreshold ?? 1.0;
       base.volumeConfirm = convertedParams.volumeConfirm ?? defaults.volumeConfirm ?? 0;
       base.volatilityFilter = base.volumeConfirm ? 'volume' : 'OFF';
-    } else if (strategyType === 'hybrid_regime') {
+    } else if (strategyType === 'ml_hmm') {
       // 레짐 적응형 (학술 기반)
       base.tpAtr = convertedParams.tpAtr ?? 2.0;
       base.slAtr = convertedParams.slAtr ?? 1.5;
@@ -790,8 +781,8 @@ export default function RealtimeChart() {
         const filteredBayesian = bayesianResults
           .filter(r => r.timeframe === timeframe)
           .map(r => {
-            // bb_reversion 전략에 v6 파라미터 기본값 적용
-            if (r.strategy === 'bb_reversion') {
+            // z_score 전략에 v6 파라미터 기본값 적용
+            if (r.strategy === 'z_score') {
               return {
                 ...r,
                 blockInTrend: r.blockInTrend ?? BbReversionDefaults.blockInTrend ?? 1,
@@ -1067,7 +1058,7 @@ export default function RealtimeChart() {
       });
       // 전략의 타임프레임과 동일한 candleCount 사용 (미리보기와 일치)
       const result = await runBacktest({
-        strategy: (strategy.strategy || 'classic_rsi_div') as 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator',
+        strategy: (strategy.strategy || 'rsi_div') as 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator',
         symbol: currentSymbol.slashFormat,
         timeframe: timeframe,
         candleCount: 5000, // 미리보기와 동일한 데이터 범위 사용

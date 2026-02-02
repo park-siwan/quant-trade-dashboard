@@ -311,13 +311,13 @@ export function getDefaultParams(strategy: string): Record<string, number> {
   // 2순위: 정적 fallback (API 로드 전 또는 오류 시)
   switch (strategy) {
     case 'rsi_divergence':
-    case 'classic_rsi_div':
+    case 'rsi_div':
       return { ...RsiDivergenceDefaults };
-    case 'bb_reversion':
+    case 'z_score':
       return { ...BbReversionDefaults };
-    case 'ema_adx':
+    case 'vol_breakout':
       return { ...EmaAdxDefaults };
-    case 'hybrid_regime':
+    case 'ml_hmm':
       return { ...HybridRegimeDefaults };
     case 'stoch_rsi':
       return { ...StochRsiDefaults };

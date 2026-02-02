@@ -1,15 +1,15 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // ============== 전략 타입 ==============
-export type StrategyType = 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator';
+export type StrategyType = 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator';
 
 export const STRATEGIES = [
-  { id: 'classic_rsi_div' as const, label: '반전매매(RSI DIV)', desc: '가격-RSI 다이버전스 감지' },
-  { id: 'bb_reversion' as const, label: '평균회귀(Z-Score)', desc: 'Z-Score 평균회귀 + ADX 레짐 필터' },
-  { id: 'ema_adx' as const, label: '돌파매매(EMA+ADX+거래량)', desc: 'EMA 추세 + ADX 강도 기반 거래량 돌파' },
-  { id: 'hybrid_regime' as const, label: '머신러닝 추세추론(HMM)', desc: 'HMM 기반 시장 방향 추론 후 전략 전환' },
-  { id: 'trend_reversal_combo' as const, label: '추세+역추세 콤보 (레거시)', desc: 'HMM 레짐 기반 브레이크아웃 + RSI 다이버전스' },
-  { id: 'hmm_orchestrator' as const, label: 'HMM 오케스트레이터', desc: 'HMM 횡보 감지 + 평균회귀 (SR 5.25)' },
+  { id: 'rsi_div' as const, label: '반전매매(RSI DIV)', desc: '가격-RSI 다이버전스 감지' },
+  { id: 'z_score' as const, label: '평균회귀(Z-Score)', desc: 'Z-Score 평균회귀 + ADX 레짐 필터' },
+  { id: 'vol_breakout' as const, label: '돌파매매(거래량+ADX)', desc: '거래량 확인 + ADX 강도 기반 브레이크아웃' },
+  { id: 'ml_hmm' as const, label: '머신러닝 추세추론(HMM)', desc: 'HMM 기반 시장 방향 추론 후 전략 전환' },
+  { id: 'trend_reversal_combo' as const, label: '추세+역추세 콤보', desc: 'HMM 레짐 기반 브레이크아웃 + RSI 다이버전스' },
+  { id: 'hmm_orchestrator' as const, label: 'HMM 오케스트레이터', desc: 'HMM 횡보 감지 + 평균회귀' },
 ];
 
 export interface BacktestParams {
@@ -270,6 +270,29 @@ export function getCachedStrategyDefaults(strategy: string): Record<string, any>
     return _strategyDefaultsCache.get(strategy)!.params;
   }
   return {};
+}
+
+/**
+ * 전략 ID → displayName 매핑 (old ID 호환)
+ */
+const STRATEGY_ID_MIGRATION: Record<string, string> = {
+  'bb_reversion': 'z_score',
+  'ema_adx': 'vol_breakout',
+  'hybrid_regime': 'ml_hmm',
+  'classic_rsi_div': 'rsi_div',
+};
+
+/**
+ * 캐시된 전략 표시 이름 가져오기 (JSON Single Source of Truth)
+ */
+export function getCachedStrategyDisplayName(strategy: string): string {
+  // old ID → new ID 마이그레이션
+  const migratedId = STRATEGY_ID_MIGRATION[strategy] || strategy;
+
+  if (_strategyDefaultsCache && _strategyDefaultsCache.has(migratedId)) {
+    return _strategyDefaultsCache.get(migratedId)!.displayName || migratedId;
+  }
+  return migratedId;
 }
 
 // 최적화 관련 타입
