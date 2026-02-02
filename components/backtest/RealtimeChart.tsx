@@ -40,7 +40,6 @@ const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
   'bb_reversion': '적응형 평균회귀 (볼린저밴드)',
   'ema_adx': '돌파매매(EMA+ADX+거래량)',
   'hybrid_regime': '머신러닝 추세추론(HMM)',
-  'stoch_rsi': '다중 지표 확인 (Stoch RSI)',
   'trend_reversal_combo': '추세+역추세 콤보',
 };
 
