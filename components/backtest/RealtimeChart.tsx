@@ -1187,10 +1187,10 @@ export default function RealtimeChart() {
       }
       // 새 캔들이 더 최신이면 추가
       else if (newTime > lastTime) {
-        // 최대 500개 유지
+        // 최대 5000개 유지 (백테스트 데이터와 동일)
         const updated = [...prev, newCandle];
-        if (updated.length > 500) {
-          return updated.slice(-500);
+        if (updated.length > 5000) {
+          return updated.slice(-5000);
         }
         return updated;
       }
