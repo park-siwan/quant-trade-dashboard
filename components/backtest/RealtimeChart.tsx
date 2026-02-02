@@ -47,7 +47,7 @@ const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
 const getStrategyDisplayName = (strategy: SavedOptimizeResult): string => {
   // note에서 전략 타입 추출: "[롤링] bb_reversion" → "bb_reversion"
   const match = strategy.note?.match(/\[롤링\]\s*(\w+)/);
-  const strategyType = match?.[1] || (strategy as any).strategy || 'rsi_divergence';
+  const strategyType = match?.[1] || (strategy as any).strategy || 'classic_rsi_div';
   return STRATEGY_DISPLAY_NAMES[strategyType] || strategyType;
 };
 
@@ -548,7 +548,7 @@ export default function RealtimeChart() {
     sharpeRatio: number;
   } | null> => {
     try {
-      const strategyType = strategy.strategy || 'rsi_divergence';
+      const strategyType = (strategy.strategy || 'classic_rsi_div') as 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo';
       const indicators = strategy.indicators
         ? strategy.indicators.split(',').filter(Boolean)
         : ['rsi'];
@@ -623,7 +623,7 @@ export default function RealtimeChart() {
   // param_registry.py 기반 자동 변환 사용
   const convertRollingToSaved = (rolling: RollingParamResult, index: number): SavedOptimizeResult => {
     // 모든 전략 지원
-    const strategyType = rolling.strategy as 'rsi_divergence' | 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'stoch_rsi' | 'classic_rsi_div' | 'trend_reversal_combo';
+    const strategyType = rolling.strategy as 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo';
 
     // 1. API 파라미터 (snake_case) → 프론트엔드 (camelCase) 자동 변환
     const rawParams = rolling.params as Record<string, unknown>;
@@ -662,8 +662,8 @@ export default function RealtimeChart() {
     };
 
     // 4. 전략별 추가 파라미터 및 필터 문자열 설정
-    if (strategyType === 'rsi_divergence') {
-      // 가격-거래량 다이버전스 (학술 기반)
+    if (strategyType === 'classic_rsi_div') {
+      // 반전매매(RSI DIV) (학술 기반)
       base.minDivPct = convertedParams.minRsiDiff ?? defaults.minRsiDiff ?? 3;
       base.trendFilter = convertedParams.regimeFilter ? 'regime' : 'OFF';
       base.volatilityFilter = convertedParams.volFilter ? 'atr' : 'OFF';
@@ -690,13 +690,9 @@ export default function RealtimeChart() {
       base.volumeConfirm = convertedParams.volumeConfirm ?? defaults.volumeConfirm ?? 0;
       base.volatilityFilter = base.volumeConfirm ? 'volume' : 'OFF';
     } else if (strategyType === 'hybrid_regime') {
-      // 레짐 적응형 (학술 기반) - 새 전략
+      // 레짐 적응형 (학술 기반)
       base.tpAtr = convertedParams.tpAtr ?? 2.0;
       base.slAtr = convertedParams.slAtr ?? 1.5;
-    } else if (strategyType === 'stoch_rsi') {
-      // 다중 지표 확인 (학술 기반) - 새 전략
-      base.tpAtr = convertedParams.tpAtr ?? 1.5;
-      base.slAtr = convertedParams.slAtr ?? 2.0;
     } else if (strategyType === 'trend_reversal_combo') {
       // 추세+역추세 콤보 (HMM 레짐 기반)
       base.breakoutPeriod = convertedParams.breakoutPeriod ?? defaults.breakoutPeriod ?? 20;
@@ -942,7 +938,7 @@ export default function RealtimeChart() {
       });
       // 전략의 타임프레임과 동일한 candleCount 사용 (미리보기와 일치)
       const result = await runBacktest({
-        strategy: strategy.strategy || 'rsi_divergence',
+        strategy: (strategy.strategy || 'classic_rsi_div') as 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'classic_rsi_div' | 'trend_reversal_combo',
         symbol: currentSymbol.slashFormat,
         timeframe: timeframe,
         candleCount: 5000, // 미리보기와 동일한 데이터 범위 사용
