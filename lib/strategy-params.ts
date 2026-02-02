@@ -167,6 +167,17 @@ export const StochRsiDefaults: Record<string, number> = {
   slAtr: 2.0,
 };
 
+// 추세+역추세 콤보 전략 (Trend Reversal Combo)
+export const TrendReversalComboDefaults: Record<string, number> = {
+  tpAtr: 1.7,
+  slAtr: 3.5,
+  volumeMult: 1.5,
+  adxThreshold: 25,
+  cooldownBars: 5,
+  breakoutPeriod: 20,
+  volumeConfirm: 1,
+};
+
 // ===== 변환 유틸리티 함수 =====
 
 /**
@@ -199,6 +210,7 @@ export function convertToApiParams(params: Record<string, unknown>): Record<stri
 export function getDefaultParams(strategy: string): Record<string, number> {
   switch (strategy) {
     case 'rsi_divergence':
+    case 'classic_rsi_div':
       return { ...RsiDivergenceDefaults };
     case 'bb_reversion':
       return { ...BbReversionDefaults };
@@ -208,6 +220,8 @@ export function getDefaultParams(strategy: string): Record<string, number> {
       return { ...HybridRegimeDefaults };
     case 'stoch_rsi':
       return { ...StochRsiDefaults };
+    case 'trend_reversal_combo':
+      return { ...TrendReversalComboDefaults };
     default:
       return { ...RsiDivergenceDefaults };
   }

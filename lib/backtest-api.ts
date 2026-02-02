@@ -5,7 +5,7 @@ export type StrategyType = 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'class
 
 export const STRATEGIES = [
   { id: 'classic_rsi_div' as const, label: '반전매매(RSI DIV)', desc: '가격-RSI 다이버전스 감지' },
-  { id: 'bb_reversion' as const, label: '적응형 평균회귀 (볼린저밴드)', desc: '볼린저밴드 기반 Z-Score 평균회귀 + 레짐 필터' },
+  { id: 'bb_reversion' as const, label: '평균회귀(볼린저밴드)', desc: 'Z-Score 평균회귀 + HMM 레짐 필터' },
   { id: 'ema_adx' as const, label: '돌파매매(EMA+ADX+거래량)', desc: 'EMA 추세 + ADX 강도 기반 거래량 돌파' },
   { id: 'hybrid_regime' as const, label: '머신러닝 추세추론(HMM)', desc: 'HMM 기반 시장 방향 추론 후 전략 전환' },
   { id: 'trend_reversal_combo' as const, label: '추세+역추세 콤보', desc: 'HMM 레짐 기반 브레이크아웃 + RSI 다이버전스 조합' },

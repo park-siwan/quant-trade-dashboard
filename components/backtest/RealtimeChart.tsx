@@ -37,7 +37,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 // 전략 표시 이름 매핑 (학술 기반 + 원본 지표명)
 const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
   'classic_rsi_div': '반전매매(RSI DIV)',
-  'bb_reversion': '적응형 평균회귀 (볼린저밴드)',
+  'bb_reversion': '평균회귀(볼린저밴드)',
   'ema_adx': '돌파매매(EMA+ADX+거래량)',
   'hybrid_regime': '머신러닝 추세추론(HMM)',
   'trend_reversal_combo': '추세+역추세 콤보',
@@ -622,8 +622,8 @@ export default function RealtimeChart() {
   // 롤링 파라미터를 SavedOptimizeResult 형식으로 변환
   // param_registry.py 기반 자동 변환 사용
   const convertRollingToSaved = (rolling: RollingParamResult, index: number): SavedOptimizeResult => {
-    // 모든 5개 전략 지원
-    const strategyType = rolling.strategy as 'rsi_divergence' | 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'stoch_rsi';
+    // 모든 전략 지원
+    const strategyType = rolling.strategy as 'rsi_divergence' | 'bb_reversion' | 'ema_adx' | 'hybrid_regime' | 'stoch_rsi' | 'classic_rsi_div' | 'trend_reversal_combo';
 
     // 1. API 파라미터 (snake_case) → 프론트엔드 (camelCase) 자동 변환
     const rawParams = rolling.params as Record<string, unknown>;
