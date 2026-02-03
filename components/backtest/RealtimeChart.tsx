@@ -35,7 +35,7 @@ import {
 const getTrendReversalComboDefaults = () => getDefaultParams('trend_reversal_combo');
 const getBbReversionDefaults = () => getDefaultParams('z_score');
 const getHmmOrchestratorDefaults = () => getDefaultParams('hmm_orchestrator');
-import { preloadStrategyDefaults, getCachedStrategyDisplayName } from '@/lib/backtest-api';
+import { preloadStrategyDefaults, getCachedStrategyDisplayName, fetchStrategyPreviews, StrategyPreview } from '@/lib/backtest-api';
 import { CHART } from '@/lib/constants';
 import { useAtomValue } from 'jotai';
 import { symbolAtom } from '@/stores/symbolAtom';
@@ -45,6 +45,10 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // 전략 ID에서 표시 이름 추출 (JSON Single Source of Truth)
 const getStrategyDisplayName = (strategy: SavedOptimizeResult): string => {
+  // note에 한글 displayName이 있으면 바로 사용 (백엔드 프리뷰 응답)
+  if (strategy.note && /[가-힣]/.test(strategy.note)) {
+    return strategy.note;
+  }
   // note에서 전략 타입 추출: "[롤링] z_score" → "z_score"
   const match = strategy.note?.match(/\[롤링\]\s*(\w+)/);
   const strategyType = match?.[1] || (strategy as any).strategy || 'rsi_div';
@@ -174,11 +178,7 @@ export default function RealtimeChart() {
   }, []);
 
   // JSON Single Source of Truth: 전략 기본값 프리로드
-  useEffect(() => {
-    preloadStrategyDefaults().then(() => {
-      console.log('[Strategy] Strategy defaults preloaded from API');
-    });
-  }, []);
+  // NOTE: loadStrategies useEffect에서 직접 호출하여 race condition 방지
 
   // 전략별 미리보기 결과 (상위 10개 전략의 실시간 백테스트 결과)
   const [strategyPreviews, setStrategyPreviews] = useState<Map<number, {
@@ -549,6 +549,7 @@ export default function RealtimeChart() {
   }, [openPosition, soundEnabled]);
 
   // 전략 미리보기 백테스트 실행 (단일 전략)
+  // 파라미터를 보내지 않고 Python이 JSON 기본값을 사용하도록 함 (race condition 방지)
   const runPreviewBacktest = async (strategy: SavedOptimizeResult): Promise<{
     totalTrades: number;
     winRate: number;
@@ -557,70 +558,17 @@ export default function RealtimeChart() {
   } | null> => {
     try {
       const strategyType = (strategy.strategy || 'rsi_div') as 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator';
-      const indicators = strategy.indicators
-        ? strategy.indicators.split(',').filter(Boolean)
-        : ['rsi'];
 
-      // 공통 파라미터
-      const baseParams = {
+      // 최소 파라미터만 전송 - Python이 JSON 기본값 사용
+      const result = await runBacktest({
         strategy: strategyType,
         symbol: currentSymbol.slashFormat,
         timeframe: strategy.timeframe,
         candleCount: 5000,
         initialCapital: 1000,
         positionSizePercent: 100,
-        useLiveData: true,
-      };
-
-      let result;
-
-      // 학술 기반 전략들: Python에서 기본 파라미터 사용
-      // TP/SL만 오버라이드 (JSON 파일에서 로드된 값)
-      result = await runBacktest({
-        ...baseParams,
-        // 공통 TP/SL (JSON에서 로드됨)
-        takeProfitAtr: strategy.tpAtr,
-        stopLossAtr: strategy.slAtr,
-        // BB Reversion 파라미터 (해당 전략일 때만 유효)
-        lookback: strategy.lookback,
-        entryZ: strategy.entryZ,
-        exitZ: strategy.exitZ,
-        stopZ: strategy.stopZ,
-        volFilter: strategy.volFilter,
-        volThreshold: strategy.volThreshold,
-        rsiConfirm: strategy.rsiConfirm,
-        // EMA+ADX 파라미터 (해당 전략일 때만 유효)
-        smaPeriod: strategy.smaPeriod,
-        atrPeriod: strategy.atrPeriod,
-        compressionMult: strategy.compressionMult,
-        breakoutPeriod: strategy.breakoutPeriod,
-        rocPeriod: strategy.rocPeriod,
-        rocThreshold: strategy.rocThreshold,
-        volumeConfirm: strategy.volumeConfirm,
-        // Trend Reversal Combo / HMM Orchestrator 파라미터
-        volumeMult: strategy.volumeMult ?? (strategyType === 'hmm_orchestrator' ? 1.5 : getTrendReversalComboDefaults().volumeMult ?? 1.5),
-        adxThreshold: strategy.adxThreshold ?? (strategyType === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().adxThreshold ?? 25 : getTrendReversalComboDefaults().adxThreshold ?? 25),
-        cooldownBars: strategy.cooldownBars ?? (strategyType === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().cooldownBars ?? 5 : getTrendReversalComboDefaults().cooldownBars ?? 5),
-        // HMM Orchestrator 전용 파라미터
-        bbLookback: strategy.bbLookback ?? getHmmOrchestratorDefaults().bbLookback ?? 20,
-        bbVolumeMult: strategy.bbVolumeMult ?? getHmmOrchestratorDefaults().bbVolumeMult ?? 0.8,
-        breakoutVolumeMult: strategy.breakoutVolumeMult ?? getHmmOrchestratorDefaults().breakoutVolumeMult ?? 1.5,
-        lowVolEntryZ: strategy.lowVolEntryZ ?? getHmmOrchestratorDefaults().lowVolEntryZ ?? 1.5,
-        highVolEntryZ: strategy.highVolEntryZ ?? getHmmOrchestratorDefaults().highVolEntryZ ?? 2.5,
-        rsiOversold: strategy.rsiOversold ?? getHmmOrchestratorDefaults().rsiOversold ?? 35,
-        rsiOverbought: strategy.rsiOverbought ?? getHmmOrchestratorDefaults().rsiOverbought ?? 65,
-        // RSI Divergence 파라미터 (hmm_orchestrator는 기본값 적용)
-        rsiPeriod: strategy.rsiPeriod ?? (strategyType === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().rsiPeriod ?? 14 : undefined),
-        pivotLeftBars: strategy.pivotLeft ?? (strategyType === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().pivotLeft ?? 5 : undefined),
-        pivotRightBars: strategy.pivotRight ?? (strategyType === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().pivotRight ?? 1 : undefined),
-        minDistance: strategy.minDistance ?? (strategyType === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().minDistance ?? 5 : undefined),
-        maxDistance: strategy.maxDistance ?? (strategyType === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().maxDistance ?? 100 : undefined),
-        minDivergencePct: strategy.minDivPct ?? (strategyType === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().minRsiDiff ?? 3 : undefined),
-        indicators,
-        trendFilter: strategy.trendFilter,
-        volatilityFilter: strategy.volatilityFilter,
-        rsiExtremeFilter: strategy.rsiExtremeFilter,
-        indicatorPreset: strategy.indicatorPreset,
+        useLiveData: false, // 인메모리 캐시 사용
+        // 파라미터 전송 안 함 → Python에서 JSON 기본값 사용
       });
 
       return {
@@ -770,178 +718,86 @@ export default function RealtimeChart() {
     return base;
   };
 
-  // 상위 전략 목록 로드 (타임프레임 필터링) + 미리보기 백테스트
+  // 상위 전략 목록 로드 - 백엔드에서 모든 전략 프리뷰 가져오기 (race condition 없음)
   useEffect(() => {
     const loadStrategies = async () => {
       // 로딩 시작
       setIsLoadingAllStrategies(true);
-      setSelectedStrategy(null); // 로딩 중에는 전략 선택 해제
+      setSelectedStrategy(null);
 
       try {
-        // 1. 베이지안 최적화 결과 로드 (v6 파라미터 기본값 적용)
-        const bayesianResults = await getTopSavedResults('sharpe', 50);
-        const filteredBayesian = bayesianResults
-          .filter(r => r.timeframe === timeframe)
-          .map(r => {
-            // z_score 전략에 v6 파라미터 기본값 적용
-            if (r.strategy === 'z_score') {
-              return {
-                ...r,
-                blockInTrend: r.blockInTrend ?? getBbReversionDefaults().blockInTrend ?? 1,
-                adxTrendThreshold: r.adxTrendThreshold ?? getBbReversionDefaults().adxTrendThreshold ?? 20,
-                useEmaTrendFilter: r.useEmaTrendFilter ?? getBbReversionDefaults().useEmaTrendFilter ?? 0,
-                emaPeriod: r.emaPeriod ?? getBbReversionDefaults().emaPeriod ?? 20,
-                emaDistancePct: r.emaDistancePct ?? getBbReversionDefaults().emaDistancePct ?? 1.0,
-                useVolumeConfirm: r.useVolumeConfirm ?? getBbReversionDefaults().useVolumeConfirm ?? 1,
-                volumeMult: r.volumeMult ?? getBbReversionDefaults().volumeMult ?? 0.8,
-                cooldownBars: r.cooldownBars ?? getBbReversionDefaults().cooldownBars ?? 10,
-                lowVolEntryZ: r.lowVolEntryZ ?? getBbReversionDefaults().lowVolEntryZ ?? 1.5,
-                highVolEntryZ: r.highVolEntryZ ?? getBbReversionDefaults().highVolEntryZ ?? 2.5,
-                useStochConfirm: r.useStochConfirm ?? getBbReversionDefaults().useStochConfirm ?? 0,
-                stochThreshold: r.stochThreshold ?? getBbReversionDefaults().stochThreshold ?? 25,
-                useRsiConfirm: r.useRsiConfirm ?? getBbReversionDefaults().useRsiConfirm ?? 0,
-                rsiThreshold: r.rsiThreshold ?? getBbReversionDefaults().rsiThreshold ?? 35,
-                useMiniSideways: r.useMiniSideways ?? getBbReversionDefaults().useMiniSideways ?? 0,
-                bbBandwidthThreshold: r.bbBandwidthThreshold ?? getBbReversionDefaults().bbBandwidthThreshold ?? 0.03,
-                useChannelDetection: r.useChannelDetection ?? getBbReversionDefaults().useChannelDetection ?? 0,
-                channelR2Threshold: r.channelR2Threshold ?? getBbReversionDefaults().channelR2Threshold ?? 0.6,
-                channelOnlyMode: r.channelOnlyMode ?? getBbReversionDefaults().channelOnlyMode ?? 0,
-              };
-            }
-            // hmm_orchestrator 전략에 기본값 적용
-            if (r.strategy === 'hmm_orchestrator') {
-              return {
-                ...r,
-                // RSI Divergence 파라미터
-                pivotLeft: r.pivotLeft ?? getHmmOrchestratorDefaults().pivotLeft ?? 5,
-                pivotRight: r.pivotRight ?? getHmmOrchestratorDefaults().pivotRight ?? 1,
-                rsiPeriod: r.rsiPeriod ?? getHmmOrchestratorDefaults().rsiPeriod ?? 14,
-                minRsiDiff: r.minRsiDiff ?? getHmmOrchestratorDefaults().minRsiDiff ?? 3,
-                minDistance: r.minDistance ?? getHmmOrchestratorDefaults().minDistance ?? 5,
-                maxDistance: r.maxDistance ?? getHmmOrchestratorDefaults().maxDistance ?? 100,
-                rsiOversold: r.rsiOversold ?? getHmmOrchestratorDefaults().rsiOversold ?? 35,
-                rsiOverbought: r.rsiOverbought ?? getHmmOrchestratorDefaults().rsiOverbought ?? 65,
-                // 평균회귀 파라미터
-                bbLookback: r.bbLookback ?? getHmmOrchestratorDefaults().bbLookback ?? 20,
-                lowVolEntryZ: r.lowVolEntryZ ?? getHmmOrchestratorDefaults().lowVolEntryZ ?? 1.5,
-                highVolEntryZ: r.highVolEntryZ ?? getHmmOrchestratorDefaults().highVolEntryZ ?? 2.5,
-                exitZ: r.exitZ ?? getHmmOrchestratorDefaults().exitZ ?? 0.25,
-                bbVolumeMult: r.bbVolumeMult ?? getHmmOrchestratorDefaults().bbVolumeMult ?? 0.8,
-                // 브레이크아웃 파라미터
-                breakoutPeriod: r.breakoutPeriod ?? getHmmOrchestratorDefaults().breakoutPeriod ?? 20,
-                breakoutVolumeMult: r.breakoutVolumeMult ?? getHmmOrchestratorDefaults().breakoutVolumeMult ?? 1.5,
-                adxThreshold: r.adxThreshold ?? getHmmOrchestratorDefaults().adxThreshold ?? 25,
-                volumeMult: r.volumeMult ?? getHmmOrchestratorDefaults().volumeMult ?? 1.5,
-                // 공통
-                cooldownBars: r.cooldownBars ?? getHmmOrchestratorDefaults().cooldownBars ?? 5,
-                tpAtr: r.tpAtr ?? getHmmOrchestratorDefaults().tpAtr ?? 1.7,
-                slAtr: r.slAtr ?? getHmmOrchestratorDefaults().slAtr ?? 3.5,
-              };
-            }
-            return r;
-          });
+        // 백엔드에서 모든 전략 프리뷰 가져오기 (JSON 기본값으로 백테스트)
+        console.log('[Strategy] Fetching strategy previews from backend...');
+        const previews = await fetchStrategyPreviews(
+          currentSymbol.slashFormat,
+          timeframe,
+          5000
+        );
 
-        // 2. 롤링 최적화 결과 로드
-        let rollingConverted: SavedOptimizeResult[] = [];
-        try {
-          const rollingResults = await getRollingParams(timeframe);
-          const validRolling = rollingResults.filter(r => r.isValid);
-          rollingConverted = validRolling.map((r, i) => convertRollingToSaved(r, i));
-        } catch {
-          console.log('No rolling params found');
-        }
-
-        // 3. Sharpe ratio 순으로 정렬 (높은 순)
-        const mergedResults = [...rollingConverted, ...filteredBayesian]
-          .sort((a, b) => b.sharpeRatio - a.sharpeRatio);
-        setStrategies(mergedResults);
-
-        // 전략이 없으면 로딩 완료
-        if (mergedResults.length === 0) {
+        if (previews.length === 0) {
+          console.log('[Strategy] No previews returned');
+          setStrategies([]);
           setSelectedStrategy(null);
-          manuallySelectedRef.current = false;
-          savedStrategyIdRef.current = null;
-          localStorage.removeItem('selectedStrategyId');
-          localStorage.removeItem('selectedStrategyTimeframe');
           setIsLoadingAllStrategies(false);
           return;
         }
 
-        // 미리보기 초기화 (로딩 상태로)
-        const initialPreviews = new Map<number, { totalTrades: number; winRate: number; totalPnlPercent: number; sharpeRatio: number; loading: boolean }>();
-        mergedResults.slice(0, 10).forEach(s => {
-          initialPreviews.set(s.id, { totalTrades: 0, winRate: 0, totalPnlPercent: 0, sharpeRatio: 0, loading: true });
+        // StrategyPreview → SavedOptimizeResult 변환 (UI 호환성)
+        const convertedResults: SavedOptimizeResult[] = previews.map((p, idx) => ({
+          id: idx + 1,
+          strategy: p.strategy as 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator',
+          symbol: currentSymbol.slashFormat,
+          timeframe,
+          sharpeRatio: p.sharpeRatio,
+          totalTrades: p.totalTrades,
+          winRate: p.winRate,
+          totalPnlPercent: p.totalPnlPercent,
+          maxDrawdownPercent: 0,
+          profitFactor: 0,
+          createdAt: new Date().toISOString(),
+          note: p.displayName,
+          // 필수 필드 (JSON 기본값 사용)
+          candleCount: 5000,
+          indicators: 'rsi',
+          metric: 'sharpe',
+          optimizeMethod: 'bayesian',
+          pivotLeft: 0,
+          pivotRight: 0,
+          rsiPeriod: 0,
+          minDistance: 0,
+          maxDistance: 0,
+          tpAtr: 0,
+          slAtr: 0,
+          minDivPct: 0,
+          oosValidation: false,
+          maxDrawdown: 0,
+          rank: idx + 1,
+        }));
+
+        setStrategies(convertedResults);
+        console.log('[Strategy] Loaded', convertedResults.length, 'strategies from backend');
+
+        // 미리보기 맵 업데이트
+        const previewMap = new Map<number, { totalTrades: number; winRate: number; totalPnlPercent: number; sharpeRatio: number; loading: boolean }>();
+        convertedResults.forEach(s => {
+          previewMap.set(s.id, {
+            totalTrades: s.totalTrades ?? 0,
+            winRate: s.winRate ?? 0,
+            totalPnlPercent: s.totalPnlPercent ?? 0,
+            sharpeRatio: s.sharpeRatio ?? 0,
+            loading: false,
+          });
         });
-        setStrategyPreviews(initialPreviews);
+        setStrategyPreviews(previewMap);
 
-        // 상위 10개 전략 미리보기 백테스트 실행 (병렬)
-        if (!previewLoadingRef.current) {
-          previewLoadingRef.current = true;
-          const strategiesToPreview = mergedResults.slice(0, 10);
-
-          // 병렬 실행 - 각 결과가 완료되면 즉시 UI 업데이트
-          const previewPromises = strategiesToPreview.map(async (strategy) => {
-            try {
-              const preview = await runPreviewBacktest(strategy);
-              // 각 결과가 완료되면 즉시 상태 업데이트
-              setStrategyPreviews(prev => {
-                const newMap = new Map(prev);
-                if (preview) {
-                  newMap.set(strategy.id, { ...preview, loading: false });
-                } else {
-                  // null인 경우 (BB/EMA 전략) - 로딩 완료로 표시
-                  newMap.set(strategy.id, { totalTrades: 0, winRate: 0, totalPnlPercent: 0, sharpeRatio: 0, loading: false });
-                }
-                return newMap;
-              });
-              return { id: strategy.id, preview, strategy };
-            } catch (err) {
-              console.error(`Preview failed for strategy ${strategy.id}:`, err);
-              setStrategyPreviews(prev => {
-                const newMap = new Map(prev);
-                newMap.set(strategy.id, { totalTrades: 0, winRate: 0, totalPnlPercent: 0, sharpeRatio: 0, loading: false });
-                return newMap;
-              });
-              return { id: strategy.id, preview: null, strategy };
-            }
-          });
-
-          // 모든 병렬 작업 완료 대기
-          const previewResults = await Promise.all(previewPromises);
-          previewLoadingRef.current = false;
-
-          // 프리뷰 결과로 Sharpe ratio 재정렬
-          const sortedStrategies = [...mergedResults].sort((a, b) => {
-            const previewA = previewResults.find(p => p.id === a.id)?.preview;
-            const previewB = previewResults.find(p => p.id === b.id)?.preview;
-            const sharpeA = previewA?.sharpeRatio ?? a.sharpeRatio;
-            const sharpeB = previewB?.sharpeRatio ?? b.sharpeRatio;
-            return sharpeB - sharpeA;
-          });
-          setStrategies(sortedStrategies);
-
-          // === 모든 백테스트 완료 후 최고 Sharpe 전략 자동 선택 ===
-          // 저장된 전략 ID가 있으면 해당 전략 복원
-          if (savedStrategyIdRef.current !== null) {
-            const savedStrategy = sortedStrategies.find(s => s.id === savedStrategyIdRef.current);
-            if (savedStrategy) {
-              setSelectedStrategy(savedStrategy);
-              console.log('[Strategy] Restored saved strategy:', savedStrategy.id);
-            } else {
-              // 저장된 전략이 목록에 없으면 최고 Sharpe 선택
-              setSelectedStrategy(sortedStrategies[0]);
-              console.log('[Strategy] Saved strategy not found, auto-selected best Sharpe:', sortedStrategies[0].id);
-            }
-          } else if (!manuallySelectedRef.current) {
-            // 수동 선택이 없으면 최고 Sharpe 자동 선택
-            setSelectedStrategy(sortedStrategies[0]);
-            console.log('[Strategy] Auto-selected best Sharpe strategy:', sortedStrategies[0].id,
-              'Sharpe:', previewResults.find(p => p.id === sortedStrategies[0].id)?.preview?.sharpeRatio ?? sortedStrategies[0].sharpeRatio);
-          }
-
-          // 로딩 완료
-          setIsLoadingAllStrategies(false);
+        // 최고 Sharpe 전략 자동 선택
+        if (convertedResults.length > 0) {
+          const bestStrategy = convertedResults[0]; // 이미 Sharpe 순 정렬됨
+          setSelectedStrategy(bestStrategy);
+          console.log('[Strategy] Auto-selected best Sharpe:', bestStrategy.strategy, 'SR:', bestStrategy.sharpeRatio);
         }
+
+        setIsLoadingAllStrategies(false);
       } catch (err) {
         console.error('Failed to load strategies:', err);
         setIsLoadingAllStrategies(false);
@@ -1043,90 +899,17 @@ export default function RealtimeChart() {
       const indicators = strategy.indicators
         ? strategy.indicators.split(',').filter(Boolean)
         : ['rsi'];
-      console.log('[Backtest] Running for strategy:', startedForStrategyId, 'type:', strategy.strategy, 'params:', {
-        rsiPeriod: strategy.rsiPeriod,
-        pivotLeft: strategy.pivotLeft,
-        pivotRight: strategy.pivotRight,
-        minDistance: strategy.minDistance,
-        maxDistance: strategy.maxDistance,
-        tpAtr: strategy.tpAtr,
-        slAtr: strategy.slAtr,
-        // BB Reversion 필터
-        volFilter: strategy.volFilter,
-        volThreshold: strategy.volThreshold,
-        rsiConfirm: strategy.rsiConfirm,
-        // EMA+ADX 필터
-        volumeConfirm: strategy.volumeConfirm,
-      });
-      // 전략의 타임프레임과 동일한 candleCount 사용 (미리보기와 일치)
+      console.log('[Backtest] Running for strategy:', startedForStrategyId, 'type:', strategy.strategy);
+      // 최소 파라미터만 전송 - Python이 JSON 기본값 사용 (프리뷰와 동일)
       const result = await runBacktest({
         strategy: (strategy.strategy || 'rsi_div') as 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator',
         symbol: currentSymbol.slashFormat,
         timeframe: timeframe,
-        candleCount: 5000, // 미리보기와 동일한 데이터 범위 사용
-        // RSI Divergence 파라미터 (hmm_orchestrator는 기본값 적용)
-        rsiPeriod: strategy.rsiPeriod ?? (strategy.strategy === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().rsiPeriod ?? 14 : undefined),
-        pivotLeftBars: strategy.pivotLeft ?? (strategy.strategy === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().pivotLeft ?? 5 : undefined),
-        pivotRightBars: strategy.pivotRight ?? (strategy.strategy === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().pivotRight ?? 1 : undefined),
-        minDistance: strategy.minDistance ?? (strategy.strategy === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().minDistance ?? 5 : undefined),
-        maxDistance: strategy.maxDistance ?? (strategy.strategy === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().maxDistance ?? 100 : undefined),
-        takeProfitAtr: strategy.tpAtr,
-        stopLossAtr: strategy.slAtr,
-        minDivergencePct: strategy.minDivPct ?? (strategy.strategy === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().minRsiDiff ?? 3 : undefined),
+        candleCount: 5000,
         initialCapital: 1000,
         positionSizePercent: 100,
-        indicators,
-        // 필터 파라미터 전달 (최적화 결과에서 가져옴)
-        trendFilter: strategy.trendFilter,
-        volatilityFilter: strategy.volatilityFilter,
-        rsiExtremeFilter: strategy.rsiExtremeFilter,
-        indicatorPreset: strategy.indicatorPreset,
-        // BB Reversion 파라미터
-        lookback: strategy.lookback,
-        entryZ: strategy.entryZ,
-        exitZ: strategy.exitZ,
-        stopZ: strategy.stopZ,
-        volFilter: strategy.volFilter,
-        volThreshold: strategy.volThreshold,
-        rsiConfirm: strategy.rsiConfirm,
-        // v6: BB Reversion 추세 필터 파라미터
-        blockInTrend: strategy.blockInTrend ?? getBbReversionDefaults().blockInTrend ?? 1,
-        adxTrendThreshold: strategy.adxTrendThreshold ?? getBbReversionDefaults().adxTrendThreshold ?? 20,
-        useEmaTrendFilter: strategy.useEmaTrendFilter ?? getBbReversionDefaults().useEmaTrendFilter ?? 0,
-        emaPeriod: strategy.emaPeriod ?? getBbReversionDefaults().emaPeriod ?? 20,
-        emaDistancePct: strategy.emaDistancePct ?? getBbReversionDefaults().emaDistancePct ?? 1.0,
-        useVolumeConfirm: strategy.useVolumeConfirm ?? getBbReversionDefaults().useVolumeConfirm ?? 1,
-        lowVolEntryZ: strategy.lowVolEntryZ ?? getBbReversionDefaults().lowVolEntryZ ?? 1.5,
-        highVolEntryZ: strategy.highVolEntryZ ?? getBbReversionDefaults().highVolEntryZ ?? 2.5,
-        useStochConfirm: strategy.useStochConfirm ?? getBbReversionDefaults().useStochConfirm ?? 0,
-        stochThreshold: strategy.stochThreshold ?? getBbReversionDefaults().stochThreshold ?? 25,
-        useRsiConfirm: strategy.useRsiConfirm ?? getBbReversionDefaults().useRsiConfirm ?? 0,
-        rsiThreshold: strategy.rsiThreshold ?? getBbReversionDefaults().rsiThreshold ?? 35,
-        useMiniSideways: strategy.useMiniSideways ?? getBbReversionDefaults().useMiniSideways ?? 0,
-        bbBandwidthThreshold: strategy.bbBandwidthThreshold ?? getBbReversionDefaults().bbBandwidthThreshold ?? 0.03,
-        useChannelDetection: strategy.useChannelDetection ?? getBbReversionDefaults().useChannelDetection ?? 0,
-        channelR2Threshold: strategy.channelR2Threshold ?? getBbReversionDefaults().channelR2Threshold ?? 0.6,
-        channelOnlyMode: strategy.channelOnlyMode ?? getBbReversionDefaults().channelOnlyMode ?? 0,
-        // EMA+ADX (Momentum Breakout) 파라미터
-        smaPeriod: strategy.smaPeriod,
-        atrPeriod: strategy.atrPeriod,
-        compressionMult: strategy.compressionMult,
-        breakoutPeriod: strategy.breakoutPeriod,
-        rocPeriod: strategy.rocPeriod,
-        rocThreshold: strategy.rocThreshold,
-        volumeConfirm: strategy.volumeConfirm,
-        // Trend Reversal Combo / HMM Orchestrator 파라미터
-        volumeMult: strategy.volumeMult ?? (strategy.strategy === 'hmm_orchestrator' ? 1.5 : getTrendReversalComboDefaults().volumeMult ?? 1.5),
-        adxThreshold: strategy.adxThreshold ?? (strategy.strategy === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().adxThreshold ?? 25 : getTrendReversalComboDefaults().adxThreshold ?? 25),
-        cooldownBars: strategy.cooldownBars ?? (strategy.strategy === 'hmm_orchestrator' ? getHmmOrchestratorDefaults().cooldownBars ?? 5 : getTrendReversalComboDefaults().cooldownBars ?? 5),
-        // HMM Orchestrator 전용 파라미터
-        bbLookback: strategy.bbLookback ?? getHmmOrchestratorDefaults().bbLookback ?? 20,
-        bbVolumeMult: strategy.bbVolumeMult ?? getHmmOrchestratorDefaults().bbVolumeMult ?? 0.8,
-        breakoutVolumeMult: strategy.breakoutVolumeMult ?? getHmmOrchestratorDefaults().breakoutVolumeMult ?? 1.5,
-        rsiOversold: strategy.rsiOversold ?? getHmmOrchestratorDefaults().rsiOversold ?? 35,
-        rsiOverbought: strategy.rsiOverbought ?? getHmmOrchestratorDefaults().rsiOverbought ?? 65,
-        // 리얼타임 차트용: 캐시 대신 API에서 데이터 가져오기 (차트와 동일한 데이터)
-        useLiveData: true,
+        useLiveData: false, // 인메모리 캐시 사용
+        // 파라미터 전송 안 함 → Python에서 JSON 기본값 사용
       });
 
       // 백테스트 완료 후 전략이 변경되었으면 결과 무시 (데이터 bleeding 방지)

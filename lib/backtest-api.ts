@@ -270,6 +270,36 @@ export async function preloadStrategyDefaults(): Promise<void> {
 }
 
 /**
+ * 모든 전략 미리보기 가져오기 (백엔드에서 JSON 기본값으로 백테스트)
+ * 프론트엔드에서 파라미터 구성 불필요 - race condition 없음
+ */
+export interface StrategyPreview {
+  strategy: string;
+  displayName: string;
+  totalTrades: number;
+  winRate: number;
+  totalPnlPercent: number;
+  sharpeRatio: number;
+}
+
+export async function fetchStrategyPreviews(
+  symbol: string = 'BTCUSDT',
+  timeframe: string = '5m',
+  candleCount: number = 5000,
+): Promise<StrategyPreview[]> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/backtest/strategy/previews?symbol=${symbol}&timeframe=${timeframe}&candleCount=${candleCount}`
+    );
+    if (!response.ok) return [];
+    return await response.json();
+  } catch (err) {
+    console.error('Failed to fetch strategy previews:', err);
+    return [];
+  }
+}
+
+/**
  * 캐시된 전략 기본값 가져오기 (동기, 캐시가 없으면 빈 객체)
  */
 export function getCachedStrategyDefaults(strategy: string): Record<string, any> {
