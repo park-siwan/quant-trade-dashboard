@@ -35,11 +35,12 @@ import {
 const getTrendReversalComboDefaults = () => getDefaultParams('trend_reversal_combo');
 const getBbReversionDefaults = () => getDefaultParams('z_score');
 const getHmmOrchestratorDefaults = () => getDefaultParams('hmm_orchestrator');
-import { preloadStrategyDefaults, getCachedStrategyDisplayName, fetchStrategyPreviews, StrategyPreview } from '@/lib/backtest-api';
+import { preloadStrategyDefaults, getCachedStrategyDisplayName, fetchStrategyPreviews, StrategyPreview, fetchRollingSharpe, RollingSharpeResult } from '@/lib/backtest-api';
 import { CHART } from '@/lib/constants';
 import { useAtomValue } from 'jotai';
-import { symbolAtom } from '@/stores/symbolAtom';
+import { symbolAtom, symbolIdAtom } from '@/stores/symbolAtom';
 import { toSeconds, formatKST, getTimeframeSeconds } from '@/lib/utils/timestamp';
+import { useAutoOptimize } from '@/hooks/useAutoOptimize';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -87,6 +88,7 @@ export default function RealtimeChart() {
 
   // 현재 선택된 심볼
   const currentSymbol = useAtomValue(symbolAtom);
+  const symbolId = useAtomValue(symbolIdAtom); // 문자열 심볼 ID (BTCUSDT)
 
   const [candles, setCandles] = useState<CandlestickData[]>([]);
   const [timeframe, setTimeframe] = useState('5m');
@@ -137,6 +139,9 @@ export default function RealtimeChart() {
 
   // 설정 패널 상태
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // 자동 최적화 설정
+  const [autoOptimizeEnabled, setAutoOptimizeEnabled] = useState(false);
 
   // 레버리지 설정
   const [leverage, setLeverage] = useState(20);
@@ -189,6 +194,23 @@ export default function RealtimeChart() {
     loading: boolean;
   }>>(new Map());
   const previewLoadingRef = useRef(false);
+
+  // 롤링 기간별 Sharpe Ratio 데이터 (1주/2주/1개월/3개월)
+  const [rollingSharpeMap, setRollingSharpeMap] = useState<Map<string, RollingSharpeResult>>(new Map());
+
+  // 자동 최적화 훅 (캔들 마감 시 트리거)
+  const {
+    isOptimizing: isAutoOptimizing,
+    lastOptimizeTime,
+    lastResult: autoOptimizeResult,
+    triggerManual: triggerManualOptimize,
+  } = useAutoOptimize({
+    symbol: symbolId,
+    timeframe,
+    enabled: autoOptimizeEnabled,
+    strategies: ['orchestrator', 'trend_reversal_combo', 'vol_breakout'],
+    candleCount: 3000,
+  });
 
   // 8bit 스타일 소리 알림 함수 (Web Audio API)
   const playAlertSound = async (
@@ -799,6 +821,23 @@ export default function RealtimeChart() {
           });
         });
         setStrategyPreviews(previewMap);
+
+        // 롤링 기간별 Sharpe 데이터 로드 (백엔드에서 5분마다 자동 계산)
+        fetchRollingSharpe(currentSymbol.id, timeframe).then((rollingData) => {
+          console.log('[Strategy] Rolling Sharpe response:', rollingData);
+          if (rollingData && rollingData.length > 0) {
+            const rollingMap = new Map<string, RollingSharpeResult>();
+            rollingData.forEach((d) => {
+              rollingMap.set(d.strategy, d);
+            });
+            setRollingSharpeMap(rollingMap);
+            console.log('[Strategy] Loaded rolling Sharpe for', rollingData.length, 'strategies');
+          } else {
+            console.log('[Strategy] No rolling Sharpe data received');
+          }
+        }).catch((err) => {
+          console.error('[Strategy] Failed to load rolling Sharpe:', err);
+        });
 
         // 최고 Sharpe 전략 자동 선택
         if (convertedResults.length > 0) {
@@ -2008,6 +2047,52 @@ export default function RealtimeChart() {
                       </button>
                     </div>
                   </div>
+
+                  {/* 자동 최적화 설정 */}
+                  <div>
+                    <div className='text-xs text-zinc-400 mb-2'>
+                      자동 파라미터 최적화
+                    </div>
+                    <div className='flex items-center gap-3'>
+                      <button
+                        onClick={() => setAutoOptimizeEnabled(!autoOptimizeEnabled)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${
+                          autoOptimizeEnabled
+                            ? 'bg-blue-600/30 text-blue-400'
+                            : 'bg-zinc-700 text-zinc-500'
+                        }`}
+                      >
+                        {autoOptimizeEnabled ? '⚡ 활성화' : '⏸ 비활성화'}
+                      </button>
+                      <button
+                        onClick={() => triggerManualOptimize()}
+                        disabled={isAutoOptimizing}
+                        className='flex-1 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-xs rounded transition-colors disabled:opacity-50'
+                      >
+                        {isAutoOptimizing ? '최적화 중...' : '수동 실행'}
+                      </button>
+                    </div>
+                    {/* 상태 표시 */}
+                    <div className='mt-2 text-xs text-zinc-500'>
+                      {isAutoOptimizing && (
+                        <span className='text-blue-400'>⚡ 최적화 진행 중...</span>
+                      )}
+                      {lastOptimizeTime && !isAutoOptimizing && (
+                        <span>
+                          마지막 실행: {new Date(lastOptimizeTime).toLocaleTimeString()}
+                        </span>
+                      )}
+                      {autoOptimizeResult && !isAutoOptimizing && (
+                        <div className='mt-1'>
+                          {autoOptimizeResult.results.map((r) => (
+                            <div key={r.strategy} className={r.updated ? 'text-green-400' : 'text-zinc-500'}>
+                              {r.strategy}: SR {r.bestSharpe} {r.updated && '✓'}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -2372,75 +2457,31 @@ export default function RealtimeChart() {
                 ))}
               </>
             )}
-            {strategies.slice(0, 15).map((strategy) => {
+            {strategies.slice(0, 30).map((strategy, idx) => {
               const preview = strategyPreviews.get(strategy.id);
-              const isRolling = strategy.id < 0;
+              const isRollingResult = strategy.id < 0;
               const displayName = getStrategyDisplayName(strategy);
               const isSelected = selectedStrategy?.id === strategy.id;
+
+              const strategyType = strategy.strategy || 'rsi_div';
+              const rollingSharpe = rollingSharpeMap.get(strategyType);
+
+              // Debug: 첫 3개만 로그
+              if (idx < 3) {
+                console.log(`[Card ${idx}] strategyType:`, strategyType, 'rollingSharpe:', rollingSharpe?.periods?.length, 'periods');
+              }
+
               return (
                 <div
                   key={strategy.id}
-                  className={`w-full px-2 py-1.5 text-left text-xs rounded transition-colors flex items-start gap-1 ${
+                  className={`w-full px-2 py-2 text-left text-xs rounded transition-colors relative ${
                     isSelected
                       ? 'bg-blue-600/30 border border-blue-500/50'
                       : 'bg-zinc-800 hover:bg-zinc-700'
                   }`}
                 >
-                  <button
-                    onClick={() => handleStrategyChange(strategy)}
-                    className='flex-1 text-left min-w-0'
-                  >
-                    <div className='flex justify-between items-center'>
-                      <span className='text-zinc-300 text-[11px]'>
-                        {displayName}
-                      </span>
-                      <span className='text-yellow-400 text-[9px]'>
-                        SR {(preview?.sharpeRatio ?? strategy.sharpeRatio).toFixed(2)}
-                      </span>
-                    </div>
-                  {/* 백테스트 결과 */}
-                  <div className='flex items-center gap-1 mt-0.5'>
-                    {isSelected && backtestStats ? (
-                      <>
-                        <span className='text-blue-400 text-[8px]'>●</span>
-                        <span className={`text-[10px] font-bold ${backtestStats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                          {backtestStats.winRate.toFixed(0)}%
-                        </span>
-                        <span className='text-zinc-600'>|</span>
-                        <span className={`text-[10px] ${backtestStats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {backtestStats.totalPnlPercent >= 0 ? '+' : ''}{backtestStats.totalPnlPercent.toFixed(1)}%
-                        </span>
-                        <span className='text-zinc-600'>|</span>
-                        <span className='text-[10px] text-zinc-400'>{backtestStats.totalTrades}회</span>
-                      </>
-                    ) : preview?.loading ? (
-                      <span className='text-zinc-500 text-[9px] flex items-center gap-1'>
-                        <span className='w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse' />
-                        분석중
-                      </span>
-                    ) : preview ? (
-                      preview.totalTrades > 0 ? (
-                        <>
-                          <span className={`text-[10px] font-bold ${preview.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                            {preview.winRate.toFixed(0)}%
-                          </span>
-                          <span className='text-zinc-600'>|</span>
-                          <span className={`text-[10px] ${preview.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {preview.totalPnlPercent >= 0 ? '+' : ''}{preview.totalPnlPercent.toFixed(1)}%
-                          </span>
-                          <span className='text-zinc-600'>|</span>
-                          <span className='text-[10px] text-zinc-400'>{preview.totalTrades}회</span>
-                        </>
-                      ) : (
-                        <span className='text-zinc-500 text-[9px]'>—</span>
-                      )
-                    ) : (
-                      <span className='text-zinc-500 text-[9px]'>대기중</span>
-                    )}
-                  </div>
-                  </button>
-                  {/* 삭제 버튼 */}
-                  {!isRolling && (
+                  {/* 삭제 버튼 (우측 상단) */}
+                  {!isRollingResult && (
                     <button
                       onClick={async (e) => {
                         e.stopPropagation();
@@ -2455,12 +2496,132 @@ export default function RealtimeChart() {
                           console.error('삭제 실패:', err);
                         }
                       }}
-                      className='p-0.5 text-zinc-500 hover:text-red-400 transition-colors shrink-0'
+                      className='absolute top-1 right-1 p-0.5 text-zinc-500 hover:text-red-400 transition-colors z-10'
                       title='전략 삭제'
                     >
                       <X size={12} />
                     </button>
                   )}
+
+                  <button
+                    onClick={() => handleStrategyChange(strategy)}
+                    className='w-full text-left'
+                  >
+                    {/* 상단: 전략명 + 최근 Sharpe */}
+                    <div className='flex justify-between items-start mb-1 pr-4'>
+                      <div className='text-zinc-300 text-[11px] font-medium'>
+                        {displayName}
+                      </div>
+                      {rollingSharpe && rollingSharpe.periods && rollingSharpe.periods.length > 0 && (
+                        <div className={`text-[10px] font-bold ${
+                          (rollingSharpe.periods[0].sharpe ?? 0) >= 1 ? 'text-green-400' :
+                          (rollingSharpe.periods[0].sharpe ?? 0) >= 0 ? 'text-yellow-400' : 'text-red-400'
+                        }`}>
+                          SR {rollingSharpe.periods[0].sharpe?.toFixed(1) ?? '—'}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 중간: 승률 | 수익률 | 거래수 */}
+                    <div className='flex items-center gap-1 mb-2'>
+                      {preview?.loading ? (
+                        <span className='text-zinc-500 text-[8px]'>분석중...</span>
+                      ) : preview && preview.totalTrades > 0 ? (
+                        <>
+                          <span className={`text-[9px] ${preview.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                            {preview.winRate.toFixed(0)}%
+                          </span>
+                          <span className='text-zinc-600 text-[9px]'>|</span>
+                          <span className={`text-[9px] ${preview.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {preview.totalPnlPercent >= 0 ? '+' : ''}{preview.totalPnlPercent.toFixed(1)}%
+                          </span>
+                          <span className='text-zinc-600 text-[9px]'>|</span>
+                          <span className='text-zinc-400 text-[9px]'>
+                            {preview.totalTrades}회
+                          </span>
+                        </>
+                      ) : (
+                        <span className='text-zinc-600 text-[8px]'>—</span>
+                      )}
+                    </div>
+
+                    {/* 하단: 전체 너비 라인차트 */}
+                    {rollingSharpe && rollingSharpe.periods && rollingSharpe.periods.length > 0 ? (
+                      <div className='w-full flex gap-1'>
+                        {/* Y축 라벨 (좌측) */}
+                        <div className='flex flex-col justify-between text-[8px] text-zinc-400 py-1 font-mono'>
+                          {(() => {
+                            const reversed = [...rollingSharpe.periods].reverse();
+                            const values = reversed.map(p => p.sharpe ?? 0);
+                            const max = Math.max(...values, 1);
+                            const min = Math.min(...values, -1);
+                            return (
+                              <>
+                                <span>{max.toFixed(1)}</span>
+                                <span>{min.toFixed(1)}</span>
+                              </>
+                            );
+                          })()}
+                        </div>
+
+                        {/* 차트 영역 */}
+                        <div className='flex-1'>
+                          <svg width="100%" height="40" className="w-full" viewBox="0 0 200 40" preserveAspectRatio="none">
+                            {(() => {
+                              // 역순 (3개월 → 1개월 → 2주 → 1주)
+                              const reversed = [...rollingSharpe.periods].reverse();
+                              const values = reversed.map(p => p.sharpe ?? 0);
+                              const max = Math.max(...values, 2);
+                              const min = Math.min(...values, -2);
+                              const range = max - min || 1;
+
+                              // 점들의 좌표 계산
+                              const points = values.map((val, i) => {
+                                const x = 10 + (i / (values.length - 1)) * 180;
+                                const y = 35 - ((val - min) / range) * 30;
+                                return { x, y, val };
+                              });
+
+                              // 선 그리기
+                              const pathD = points.map((p, i) =>
+                                `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
+                              ).join(' ');
+
+                              // 최근(1주) Sharpe에 따라 색상 결정
+                              const latestSr = values[values.length - 1];
+                              const color = latestSr >= 1 ? '#22c55e' : latestSr >= 0 ? '#eab308' : '#ef4444';
+
+                              return (
+                                <>
+                                  {/* 0선 */}
+                                  <line x1="10" y1={35 - ((0 - min) / range) * 30} x2="190" y2={35 - ((0 - min) / range) * 30} stroke="#52525b" strokeWidth="0.5" strokeDasharray="2,2" />
+
+                                  {/* 데이터 선 */}
+                                  <path d={pathD} stroke={color} strokeWidth="2" fill="none" />
+
+                                  {/* 데이터 점 */}
+                                  {points.map((p, i) => (
+                                    <circle key={i} cx={p.x} cy={p.y} r="2.5" fill={color}>
+                                      <title>{reversed[i].label}: {p.val.toFixed(1)}</title>
+                                    </circle>
+                                  ))}
+                                </>
+                              );
+                            })()}
+                          </svg>
+
+                          {/* X축 라벨 */}
+                          <div className='flex justify-between text-[8px] text-zinc-400 mt-1 px-2'>
+                            {[...rollingSharpe.periods].reverse().map((period) => (
+                              <span key={period.label}>{period.label}</span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className='w-full h-12 bg-zinc-700/50 rounded animate-pulse' />
+                    )}
+                  </button>
                 </div>
               );
             })}

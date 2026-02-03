@@ -300,6 +300,71 @@ export async function fetchStrategyPreviews(
 }
 
 /**
+ * 연도별 Sharpe Ratio 결과
+ */
+export interface YearlySharpeResult {
+  strategy: string;
+  displayName: string;
+  yearlySharpe: Record<string, number | null>;  // { "2023": -0.5, "2024": 1.2, ... }
+  avgSharpe: number;
+}
+
+/**
+ * 연도별 Sharpe Ratio 가져오기
+ * 데이터는 Python 스크립트로 미리 계산됨:
+ *   python scripts/calc_yearly_sharpe.py --symbol BTCUSDT --timeframe 5m
+ */
+export async function fetchYearlySharpe(
+  symbol: string = 'BTCUSDT',
+  timeframe: string = '5m',
+): Promise<YearlySharpeResult[]> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/backtest/strategy/yearly-sharpe?symbol=${symbol}&timeframe=${timeframe}`
+    );
+    if (!response.ok) return [];
+    return await response.json();
+  } catch (err) {
+    console.error('Failed to fetch yearly Sharpe:', err);
+    return [];
+  }
+}
+
+/**
+ * 롤링 기간별 Sharpe Ratio 결과
+ */
+export interface RollingSharpeResult {
+  strategy: string;
+  displayName: string;
+  periods: Array<{
+    label: string;   // "1주", "2주", "1개월", "3개월"
+    days: number;
+    sharpe: number | null;
+    trades: number;
+  }>;
+}
+
+/**
+ * 롤링 기간별 Sharpe Ratio 가져오기
+ * 1주, 2주, 1개월, 3개월 기간별 Sharpe 반환
+ */
+export async function fetchRollingSharpe(
+  symbol: string = 'BTCUSDT',
+  timeframe: string = '5m',
+): Promise<RollingSharpeResult[]> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/backtest/strategy/rolling-sharpe?symbol=${symbol}&timeframe=${timeframe}`
+    );
+    if (!response.ok) return [];
+    return await response.json();
+  } catch (err) {
+    console.error('Failed to fetch rolling Sharpe:', err);
+    return [];
+  }
+}
+
+/**
  * 캐시된 전략 기본값 가져오기 (동기, 캐시가 없으면 빈 객체)
  */
 export function getCachedStrategyDefaults(strategy: string): Record<string, any> {
@@ -1357,4 +1422,50 @@ export async function getRollingParams(timeframe?: string): Promise<RollingParam
   }
 
   return response.json();
+}
+
+// ============== Auto Optimization API ==============
+
+export interface AutoOptimizeParams {
+  symbol?: string;
+  timeframe?: string;
+  candleCount?: number;
+  strategies?: string[];
+}
+
+export interface AutoOptimizeResult {
+  success: boolean;
+  results: Array<{
+    strategy: string;
+    bestSharpe: number;
+    bestParams: Record<string, any>;
+    updated: boolean;
+  }>;
+  duration: number;
+}
+
+/**
+ * 자동 파라미터 최적화 트리거
+ * 새 캔들 마감 시 호출하여 최적 파라미터 탐색 및 적용
+ */
+export async function triggerAutoOptimization(
+  params: AutoOptimizeParams = {},
+): Promise<AutoOptimizeResult> {
+  try {
+    const response = await fetch(`${API_BASE}/backtest/optimize/auto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Auto optimization failed');
+    }
+
+    return response.json();
+  } catch (err: any) {
+    console.error('[AutoOptimize] Failed:', err);
+    throw err;
+  }
 }
