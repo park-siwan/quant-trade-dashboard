@@ -832,6 +832,30 @@ export default function RealtimeChart() {
         });
         setStrategyPreviews(previewMap);
 
+        // 백테스트 캐시에 openPosition 저장 (카드에서 포지션 칩 표시용)
+        previews.forEach((p, idx) => {
+          if (p.openPosition) {
+            const strategy = convertedResults[idx];
+            const cacheKey = `${strategy.id}_${currentSymbol.id}_${timeframe}`;
+            backtestCacheRef.current.set(cacheKey, {
+              trades: [],
+              skippedSignals: [],
+              openPosition: p.openPosition,
+              stats: {
+                symbol: currentSymbol.slashFormat,
+                timeframe,
+                totalTrades: p.totalTrades,
+                winRate: p.winRate,
+                totalPnlPercent: p.totalPnlPercent,
+                sharpeRatio: p.sharpeRatio,
+              } as any,
+              equityCurve: [],
+              timestamp: Date.now(),
+            });
+            console.log(`[Cache] Stored openPosition for ${p.strategy}:`, p.openPosition.direction);
+          }
+        });
+
         // 롤링 기간별 Sharpe 데이터 로드 (백엔드에서 5분마다 자동 계산)
         fetchRollingSharpe(currentSymbol.id, timeframe).then((rollingData) => {
           console.log('[Strategy] Rolling Sharpe response:', rollingData);

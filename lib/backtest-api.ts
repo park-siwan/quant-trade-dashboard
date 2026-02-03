@@ -280,6 +280,7 @@ export interface StrategyPreview {
   winRate: number;
   totalPnlPercent: number;
   sharpeRatio: number;
+  openPosition?: OpenPosition | null;
 }
 
 export async function fetchStrategyPreviews(
