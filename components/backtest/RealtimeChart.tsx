@@ -529,6 +529,16 @@ export default function RealtimeChart() {
     // 이미 알림한 경우 스킵
     if (lastEntryAlertRef.current === entryId) return;
 
+    // 30분 이내 진입만 알림 (페이지 새로고침 시 오래된 포지션 알림 방지)
+    const ENTRY_ALERT_WINDOW_MS = 30 * 60 * 1000; // 30분
+    const entryTime = new Date(openPosition.entryTime).getTime();
+    const timeSinceEntry = Date.now() - entryTime;
+    if (timeSinceEntry > ENTRY_ALERT_WINDOW_MS) {
+      console.log(`[Entry Alert] Skipped - entry too old (${Math.round(timeSinceEntry / 60000)}min ago)`);
+      lastEntryAlertRef.current = entryId; // 마킹하여 재시도 방지
+      return;
+    }
+
     lastEntryAlertRef.current = entryId;
     const isLong = openPosition.direction === 'long';
 
@@ -544,7 +554,7 @@ export default function RealtimeChart() {
     );
 
     console.log(
-      `[Entry Alert] ${openPosition.direction.toUpperCase()} @ $${openPosition.entryPrice}`,
+      `[Entry Alert] ${openPosition.direction.toUpperCase()} @ $${openPosition.entryPrice} (${Math.round(timeSinceEntry / 60000)}min ago)`,
     );
   }, [openPosition, soundEnabled]);
 
