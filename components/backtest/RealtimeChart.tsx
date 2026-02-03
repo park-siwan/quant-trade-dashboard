@@ -848,6 +848,8 @@ export default function RealtimeChart() {
                 winRate: p.winRate,
                 totalPnlPercent: p.totalPnlPercent,
                 sharpeRatio: p.sharpeRatio,
+                profitFactor: 0,
+                maxDrawdownPercent: 0,
               } as any,
               equityCurve: [],
               timestamp: Date.now(),
@@ -1846,17 +1848,17 @@ export default function RealtimeChart() {
           <div className='flex items-center gap-1'>
             <span className='text-zinc-500 text-xs'>손익비</span>
             <span className='text-zinc-600 text-[10px]'>(익절/손절)</span>
-            <span className='text-zinc-300 text-sm font-bold'>{backtestStats.profitFactor.toFixed(2)}</span>
+            <span className='text-zinc-300 text-sm font-bold'>{(backtestStats.profitFactor ?? 0).toFixed(2)}</span>
           </div>
           <div className='w-px h-4 bg-zinc-700' />
           {/* MDD (최대 낙폭) - 레버리지 적용 */}
           <div className='flex items-center gap-1'>
             <span className='text-zinc-500 text-xs'>MDD</span>
             <span className='text-zinc-600 text-[10px]'>(최대손실)</span>
-            <span className={`text-sm font-bold ${backtestStats.maxDrawdownPercent * leverage >= 100 ? 'text-red-500' : 'text-zinc-300'}`}>
-              -{(backtestStats.maxDrawdownPercent * leverage).toFixed(1)}%
+            <span className={`text-sm font-bold ${(backtestStats.maxDrawdownPercent ?? 0) * leverage >= 100 ? 'text-red-500' : 'text-zinc-300'}`}>
+              -{((backtestStats.maxDrawdownPercent ?? 0) * leverage).toFixed(1)}%
             </span>
-            {backtestStats.maxDrawdownPercent * leverage >= 100 && (
+            {(backtestStats.maxDrawdownPercent ?? 0) * leverage >= 100 && (
               <span className='text-red-500 text-[10px]'>⚠ 청산</span>
             )}
           </div>
