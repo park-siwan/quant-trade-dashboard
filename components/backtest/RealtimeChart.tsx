@@ -152,6 +152,16 @@ export default function RealtimeChart() {
   const [isBacktestRunning, setIsBacktestRunning] = useState(false);
   const lastCandleTimeRef = useRef<number>(0); // 마지막 캔들 시간 (새 캔들 감지용)
 
+  // 백테스트 결과 캐시 (전략별로 캐시하여 재사용)
+  const backtestCacheRef = useRef<Map<string, {
+    trades: TradeResult[];
+    skippedSignals: SkippedSignal[];
+    openPosition: OpenPosition | null;
+    stats: BacktestResult;
+    equityCurve: EquityPoint[];
+    timestamp: number;
+  }>>(new Map());
+
   // 백테스트 throttling (중복 호출 방지)
   const lastBacktestCallRef = useRef<{
     strategyId: number;
@@ -913,7 +923,7 @@ export default function RealtimeChart() {
     console.log('[Strategy] Manually selected:', strategy.id, 'TF:', strategy.timeframe);
   };
 
-  // 선택된 전략으로 백테스트 실행 (재시도 포함 + throttling)
+  // 선택된 전략으로 백테스트 실행 (재시도 포함 + throttling + 캐싱)
   const loadBacktestTrades = async (
     strategy: SavedOptimizeResult,
     retryCount = 0,
@@ -922,8 +932,28 @@ export default function RealtimeChart() {
     // 백테스트 시작 시 전략 ID 캡처 (완료 후 비교용)
     const startedForStrategyId = strategy.id;
 
-    // Throttling: 동일 전략/타임프레임으로 짧은 시간 내 중복 호출 방지
+    // 캐시 키: 전략ID_심볼_타임프레임
+    const cacheKey = `${strategy.id}_${currentSymbol.id}_${timeframe}`;
     const now = Date.now();
+    const CACHE_TTL_MS = 5 * 60 * 1000; // 5분 캐시
+
+    // 캐시 확인: forceRun이 아니고 최근 캐시가 있으면 재사용
+    if (!forceRun) {
+      const cached = backtestCacheRef.current.get(cacheKey);
+      if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+        console.log('[Backtest] Using cached result for strategy:', startedForStrategyId);
+        setBacktestTrades(cached.trades);
+        setSkippedSignals(cached.skippedSignals);
+        setOpenPosition(cached.openPosition);
+        setBacktestStats(cached.stats);
+        setEquityCurve(cached.equityCurve);
+        setLastBacktestTime(new Date(cached.timestamp));
+        isChangingStrategyRef.current = false;
+        return;
+      }
+    }
+
+    // Throttling: 동일 전략/타임프레임으로 짧은 시간 내 중복 호출 방지
     if (
       !forceRun &&
       lastBacktestCallRef.current &&
@@ -966,6 +996,16 @@ export default function RealtimeChart() {
         console.log('[Backtest] Discarding stale result - strategy changed from', startedForStrategyId, 'to', savedStrategyIdRef.current);
         return;
       }
+
+      // 결과를 캐시에 저장
+      backtestCacheRef.current.set(cacheKey, {
+        trades: result.trades,
+        skippedSignals: result.skippedSignals || [],
+        openPosition: result.openPosition || null,
+        stats: result,
+        equityCurve: result.equityCurve || [],
+        timestamp: now,
+      });
 
       setBacktestTrades(result.trades);
       setSkippedSignals(result.skippedSignals || []);
@@ -2507,10 +2547,31 @@ export default function RealtimeChart() {
                     onClick={() => handleStrategyChange(strategy)}
                     className='w-full text-left'
                   >
-                    {/* 상단: 전략명 + 최근 Sharpe */}
+                    {/* 상단: 전략명 + 포지션 + 최근 Sharpe */}
                     <div className='flex justify-between items-start mb-1 pr-4'>
-                      <div className='text-zinc-300 text-[11px] font-medium'>
-                        {displayName}
+                      <div className='flex items-center gap-1.5'>
+                        <span className='text-zinc-300 text-[11px] font-medium'>
+                          {displayName}
+                        </span>
+                        {/* 현재 포지션 칩 (모든 전략의 캐시된 포지션 표시) */}
+                        {(() => {
+                          // 선택된 전략이면 현재 state 사용, 아니면 캐시 확인
+                          const position = isSelected
+                            ? openPosition
+                            : backtestCacheRef.current.get(`${strategy.id}_${currentSymbol.id}_${timeframe}`)?.openPosition;
+
+                          if (!position) return null;
+
+                          return (
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                              position.direction === 'long'
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            }`}>
+                              {position.direction === 'long' ? '롱' : '숏'}
+                            </span>
+                          );
+                        })()}
                       </div>
                       {rollingSharpe && rollingSharpe.periods && rollingSharpe.periods.length > 0 && (
                         <div className={`text-[10px] font-bold ${
