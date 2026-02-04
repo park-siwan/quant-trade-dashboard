@@ -1470,3 +1470,133 @@ export async function triggerAutoOptimization(
     throw err;
   }
 }
+
+// ============== Walk-Forward Optimization ==============
+
+export interface WeeklyOptimizeRecord {
+  id: number;
+  strategy: string;
+  symbol: string;
+  timeframe: string;
+  weekStart: string;
+  weekEnd: string;
+  params: Record<string, any>;
+  sharpeRatio: number;
+  winRate: number;
+  totalPnlPercent: number;
+  totalTrades: number;
+  createdAt: string;
+}
+
+/**
+ * 주차별 최적화 히스토리 조회
+ */
+export async function fetchWeeklyOptimizeHistory(
+  strategy: string,
+  symbol: string = 'BTCUSDT',
+  timeframe: string = '5m',
+  weeks: number = 12
+): Promise<WeeklyOptimizeRecord[]> {
+  const response = await fetch(
+    `${API_BASE}/backtest/strategy/weekly-optimize-history?strategy=${strategy}&symbol=${symbol}&timeframe=${timeframe}&weeks=${weeks}`
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch weekly optimize history');
+  }
+
+  return response.json();
+}
+
+/**
+ * Walk-Forward 백테스트 실행
+ * 각 주마다 해당 주의 최적화된 파라미터로 백테스트 실행
+ */
+export async function runWalkForwardBacktest(
+  strategy: string,
+  symbol: string = 'BTCUSDT',
+  timeframe: string = '5m',
+  weeks: number = 12
+): Promise<{
+  weeklyResults: Array<{
+    week: number;
+    weekStart: string;
+    weekEnd: string;
+    params: Record<string, any>;
+    sharpeRatio: number;
+    trades: TradeResult[];
+    equityCurve: EquityPoint[];
+  }>;
+  combinedEquityCurve: EquityPoint[];
+}> {
+  // 1. 주차별 최적화 히스토리 가져오기
+  const weeklyHistory = await fetchWeeklyOptimizeHistory(strategy, symbol, timeframe, weeks);
+
+  if (weeklyHistory.length === 0) {
+    throw new Error('No weekly optimize history found');
+  }
+
+  // 2. 각 주에 대해 백테스트 실행
+  const weeklyResults: Array<{
+    week: number;
+    weekStart: string;
+    weekEnd: string;
+    params: Record<string, any>;
+    sharpeRatio: number;
+    trades: TradeResult[];
+    equityCurve: EquityPoint[];
+  }> = [];
+
+  let cumulativeEquity = 1000; // 초기 자본
+
+  for (let i = 0; i < weeklyHistory.length; i++) {
+    const weekRecord = weeklyHistory[i];
+
+    // 해당 주의 파라미터로 백테스트 실행
+    // candleCount를 주 단위로 제한 (5m 기준 1주 = 2016 캔들)
+    const candlesPerWeek = timeframe === '5m' ? 2016 : timeframe === '15m' ? 672 : timeframe === '1h' ? 168 : 2016;
+
+    const backtestResult = await runBacktest({
+      symbol,
+      timeframe,
+      candleCount: candlesPerWeek,
+      strategy: strategy as StrategyType,
+      ...weekRecord.params,
+    });
+
+    // Equity curve를 누적 자본에 맞게 조정
+    const adjustedEquityCurve = backtestResult.equityCurve.map((point, idx) => {
+      if (idx === 0) {
+        return { ...point, equity: cumulativeEquity };
+      }
+      const pnl = point.equity - 1000; // 원래 초기 자본 1000 기준
+      return { ...point, equity: cumulativeEquity + pnl };
+    });
+
+    // 마지막 equity를 다음 주의 시작 자본으로
+    if (adjustedEquityCurve.length > 0) {
+      cumulativeEquity = adjustedEquityCurve[adjustedEquityCurve.length - 1].equity;
+    }
+
+    weeklyResults.push({
+      week: i + 1,
+      weekStart: weekRecord.weekStart,
+      weekEnd: weekRecord.weekEnd,
+      params: weekRecord.params,
+      sharpeRatio: backtestResult.sharpeRatio,
+      trades: backtestResult.trades,
+      equityCurve: adjustedEquityCurve,
+    });
+  }
+
+  // 3. 모든 주의 equity curve를 하나로 결합
+  const combinedEquityCurve: EquityPoint[] = [];
+  weeklyResults.forEach((weekResult) => {
+    combinedEquityCurve.push(...weekResult.equityCurve);
+  });
+
+  return {
+    weeklyResults,
+    combinedEquityCurve,
+  };
+}

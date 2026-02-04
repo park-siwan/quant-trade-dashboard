@@ -18,6 +18,7 @@ import {
   SavedOptimizeResult,
   RollingParamResult,
   runBacktest,
+  runWalkForwardBacktest,
   TradeResult,
   SkippedSignal,
   OpenPosition,
@@ -30,6 +31,8 @@ import {
   convertApiParams,
   getDefaultParams,
 } from '@/lib/strategy-params';
+import MultiStrategyEquityChart from './MultiStrategyEquityChart';
+import WeeklySharpeTimeline from './WeeklySharpeTimeline';
 
 // JSON Single Source of Truth: API 캐시에서 로드된 기본값 사용
 const getTrendReversalComboDefaults = () => getDefaultParams('trend_reversal_combo');
@@ -43,6 +46,21 @@ import { toSeconds, formatKST, getTimeframeSeconds } from '@/lib/utils/timestamp
 import { useAutoOptimize } from '@/hooks/useAutoOptimize';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+// 무지개 색상 배열 (빨주노초파보)
+const RAINBOW_COLORS = [
+  '#ef4444',  // 빨강 (Red)
+  '#f97316',  // 주황 (Orange)
+  '#eab308',  // 노랑 (Yellow)
+  '#22c55e',  // 초록 (Green)
+  '#3b82f6',  // 파랑 (Blue)
+  '#a855f7',  // 보라 (Purple)
+];
+
+// 순서대로 무지개 색상 할당
+const getStrategyColor = (index: number): string => {
+  return RAINBOW_COLORS[index % RAINBOW_COLORS.length];
+};
 
 // 전략 ID에서 표시 이름 추출 (JSON Single Source of Truth)
 const getStrategyDisplayName = (strategy: SavedOptimizeResult): string => {
@@ -93,7 +111,8 @@ export default function RealtimeChart() {
   const [candles, setCandles] = useState<CandlestickData[]>([]);
   const [timeframe, setTimeframe] = useState('5m');
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingAllStrategies, setIsLoadingAllStrategies] = useState(true); // 모든 전략 백테스트 로딩 중
+  const [isLoadingAllStrategies, setIsLoadingAllStrategies] = useState(true); // 모든 전략 목록 로딩 중
+  const [isLoadingEquityCurves, setIsLoadingEquityCurves] = useState(false); // Equity curve 로딩 중
   const [strategies, setStrategies] = useState<SavedOptimizeResult[]>([]);
   const [selectedStrategy, setSelectedStrategy] =
     useState<SavedOptimizeResult | null>(null);
@@ -107,6 +126,11 @@ export default function RealtimeChart() {
   );
   const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([]);
   const [selectedTrade, setSelectedTrade] = useState<TradeResult | null>(null);
+
+  // 멀티 전략 비교용 상태
+  const [allStrategiesEquityCurves, setAllStrategiesEquityCurves] = useState<Map<number, EquityPoint[]>>(new Map());
+  const [highlightedStrategy, setHighlightedStrategy] = useState<number | null>(null);
+  const [useWalkForward, setUseWalkForward] = useState(false); // Walk-Forward 모드
 
   // 툴팁 관련 상태
   const [hoveredTrade, setHoveredTrade] = useState<TradeResult | null>(null);
@@ -890,6 +914,107 @@ export default function RealtimeChart() {
     };
     loadStrategies();
   }, [timeframe, currentSymbol.slashFormat]); // 타임프레임, 심볼 변경 시 재로드
+
+  // 모든 전략의 백테스트 실행 및 equity curve 수집
+  useEffect(() => {
+    if (strategies.length === 0 || isLoadingAllStrategies) return;
+
+    const loadAllEquityCurves = async () => {
+      setIsLoadingEquityCurves(true);
+      const newEquityCurves = new Map<number, EquityPoint[]>();
+
+      // 상위 10개 전략만 차트에 표시 (너무 많으면 복잡함)
+      const topStrategies = strategies.slice(0, 10);
+
+      // 병렬로 모든 전략 백테스트 실행
+      await Promise.all(
+        topStrategies.map(async (strategy) => {
+          try {
+            const cacheKey = `${strategy.id}_${currentSymbol.id}_${timeframe}`;
+
+            // 캐시에 있으면 사용
+            const cached = backtestCacheRef.current.get(cacheKey);
+            if (cached && cached.equityCurve.length > 0) {
+              newEquityCurves.set(strategy.id, cached.equityCurve);
+              return;
+            }
+
+            // 백테스트 실행 - 필요한 파라미터만 추출
+            // 12주(84일) 표시를 위해 더 많은 캔들 필요: 5m=25000, 15m=8500, 1h=2100
+            const candleCountByTimeframe: Record<string, number> = {
+              '5m': 30000,  // 약 104일
+              '15m': 10000, // 약 104일
+              '1h': 2500,   // 약 104일
+            };
+            const backtestParams: any = {
+              symbol: currentSymbol.id,
+              timeframe,
+              candleCount: candleCountByTimeframe[timeframe] || 5000,
+              strategy: strategy.strategy,
+            };
+
+            // indicators가 문자열이면 배열로 변환
+            if (strategy.indicators) {
+              if (typeof strategy.indicators === 'string') {
+                backtestParams.indicators = strategy.indicators.split(',').map(s => s.trim()).filter(Boolean);
+              } else if (Array.isArray(strategy.indicators)) {
+                backtestParams.indicators = strategy.indicators;
+              }
+            }
+
+            // 전략별 파라미터 추출 (백엔드는 snake_case 사용)
+            const paramKeys = [
+              'rsi_period', 'pivot_left', 'pivot_right', 'min_distance', 'max_distance',
+              'tp_atr', 'sl_atr', 'min_rsi_diff', 'rsi_oversold', 'rsi_overbought',
+              'regime_filter', 'volume_confirm', 'lookback', 'entry_z', 'exit_z',
+              'stop_z', 'vol_filter', 'vol_threshold', 'rsi_confirm', 'sma_period',
+              'atr_period', 'compression_mult', 'breakout_period', 'roc_period',
+              'roc_threshold', 'volume_mult', 'adx_threshold', 'cooldown_bars',
+              'block_in_trend', 'adx_trend_threshold', 'use_ema_trend_filter', 'ema_period',
+              'ema_distance_pct', 'use_volume_confirm', 'low_vol_entry_z', 'high_vol_entry_z',
+              'use_stoch_confirm', 'stoch_threshold', 'use_rsi_confirm', 'rsi_threshold',
+              'use_mini_sideways', 'bb_bandwidth_threshold', 'use_channel_detection',
+              'channel_r2_threshold', 'channel_only_mode', 'bb_lookback', 'bb_volume_mult',
+            ];
+
+            paramKeys.forEach(key => {
+              if ((strategy as any)[key] !== undefined) {
+                backtestParams[key] = (strategy as any)[key];
+              }
+            });
+
+            // Walk-Forward 모드일 경우 주별 최적화 백테스트 실행
+            if (useWalkForward) {
+              const wfResult = await runWalkForwardBacktest(
+                strategy.strategy || 'rsi_div',
+                currentSymbol.id,
+                timeframe,
+                12 // 최근 12주
+              );
+
+              if (wfResult.combinedEquityCurve && wfResult.combinedEquityCurve.length > 0) {
+                newEquityCurves.set(strategy.id, wfResult.combinedEquityCurve);
+                // Walk-Forward 결과는 캐시하지 않음 (매번 최신 주차 사용)
+              }
+            } else {
+              const result = await runBacktest(backtestParams);
+
+              if (result.equityCurve && result.equityCurve.length > 0) {
+                newEquityCurves.set(strategy.id, result.equityCurve);
+              }
+            }
+          } catch (error) {
+            console.error(`Failed to load equity curve for strategy ${strategy.id}:`, error);
+          }
+        })
+      );
+
+      setAllStrategiesEquityCurves(newEquityCurves);
+      setIsLoadingEquityCurves(false);
+    };
+
+    loadAllEquityCurves();
+  }, [strategies, timeframe, currentSymbol.id, useWalkForward]);
 
   // 전략 변경 핸들러
   const handleStrategyChange = async (strategy: SavedOptimizeResult) => {
@@ -2159,6 +2284,31 @@ export default function RealtimeChart() {
                       )}
                     </div>
                   </div>
+
+                  {/* Walk-Forward 백테스트 설정 */}
+                  <div>
+                    <div className='text-xs text-zinc-400 mb-2'>
+                      Walk-Forward 백테스트
+                    </div>
+                    <button
+                      onClick={() => setUseWalkForward(!useWalkForward)}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded text-xs transition-colors ${
+                        useWalkForward
+                          ? 'bg-purple-600/30 text-purple-400 ring-1 ring-purple-500/50'
+                          : 'bg-zinc-700 text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      <span>{useWalkForward ? '🔬 활성화' : '📊 비활성화'}</span>
+                      <span className='text-[10px] opacity-70'>
+                        {useWalkForward ? 'Out-of-Sample' : '전체 기간'}
+                      </span>
+                    </button>
+                    <div className='mt-2 text-[10px] text-zinc-500'>
+                      {useWalkForward
+                        ? '각 주마다 과거 데이터로 최적화된 파라미터 사용 (실전 시뮬레이션)'
+                        : '전체 기간 동일한 파라미터 사용 (백테스트)'}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -2532,11 +2682,6 @@ export default function RealtimeChart() {
               const strategyType = strategy.strategy || 'rsi_div';
               const rollingSharpe = rollingSharpeMap.get(strategyType);
 
-              // Debug: 첫 3개만 로그
-              if (idx < 3) {
-                console.log(`[Card ${idx}] strategyType:`, strategyType, 'rollingSharpe:', rollingSharpe?.periods?.length, 'periods');
-              }
-
               return (
                 <div
                   key={strategy.id}
@@ -2573,141 +2718,165 @@ export default function RealtimeChart() {
                     onClick={() => handleStrategyChange(strategy)}
                     className='w-full text-left'
                   >
-                    {/* 상단: 전략명 + 포지션 + 최근 Sharpe */}
-                    <div className='flex justify-between items-start mb-1 pr-4'>
-                      <div className='flex items-center gap-1.5'>
-                        <span className='text-zinc-300 text-[11px] font-medium'>
-                          {displayName}
-                        </span>
-                        {/* 현재 포지션 칩 (모든 전략의 캐시된 포지션 표시) */}
-                        {(() => {
-                          // 선택된 전략이면 현재 state 사용, 아니면 캐시 확인
-                          const position = isSelected
-                            ? openPosition
-                            : backtestCacheRef.current.get(`${strategy.id}_${currentSymbol.id}_${timeframe}`)?.openPosition;
+                    <div className='flex gap-2'>
+                      {/* 왼쪽: 정보 */}
+                      <div className='flex-1 min-w-0'>
+                        {/* 상단: 전략명 + 포지션 + 최근 Sharpe */}
+                        <div className='flex justify-between items-start mb-1'>
+                          <div className='flex items-center gap-1.5 min-w-0'>
+                            <span className='text-zinc-300 text-[11px] font-medium truncate'>
+                              {displayName}
+                            </span>
+                            {/* 현재 포지션 칩 (모든 전략의 캐시된 포지션 표시) */}
+                            {(() => {
+                              // 선택된 전략이면 현재 state 사용, 아니면 캐시 확인
+                              const position = isSelected
+                                ? openPosition
+                                : backtestCacheRef.current.get(`${strategy.id}_${currentSymbol.id}_${timeframe}`)?.openPosition;
 
-                          if (!position) return null;
+                              if (!position) return null;
+
+                              return (
+                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold shrink-0 ${
+                                  position.direction === 'long'
+                                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                }`}>
+                                  {position.direction === 'long' ? '롱' : '숏'}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                          {rollingSharpe && rollingSharpe.periods && rollingSharpe.periods.length > 0 && (
+                            <div className={`text-[10px] font-bold shrink-0 ${
+                              (rollingSharpe.periods[0].sharpe ?? 0) >= 1 ? 'text-green-400' :
+                              (rollingSharpe.periods[0].sharpe ?? 0) >= 0 ? 'text-yellow-400' : 'text-red-400'
+                            }`}>
+                              SR {rollingSharpe.periods[0].sharpe?.toFixed(1) ?? '—'}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 중간: 승률 | 수익률 | 거래수 */}
+                        <div className='flex items-center gap-1'>
+                          {preview?.loading ? (
+                            <span className='text-zinc-500 text-[8px]'>분석중...</span>
+                          ) : preview && preview.totalTrades > 0 ? (
+                            <>
+                              <span className={`text-[9px] ${preview.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                                {preview.winRate.toFixed(0)}%
+                              </span>
+                              <span className='text-zinc-600 text-[9px]'>|</span>
+                              <span className={`text-[9px] ${preview.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {preview.totalPnlPercent >= 0 ? '+' : ''}{preview.totalPnlPercent.toFixed(1)}%
+                              </span>
+                              <span className='text-zinc-600 text-[9px]'>|</span>
+                              <span className='text-zinc-400 text-[9px]'>
+                                {preview.totalTrades}회
+                              </span>
+                            </>
+                          ) : (
+                            <span className='text-zinc-600 text-[8px]'>—</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 오른쪽: Equity Curve 차트 (최근 12주 수익률) */}
+                      <div className='w-11 shrink-0'>
+                        {(() => {
+                          const equityCurve = allStrategiesEquityCurves.get(strategy.id);
+                          if (!equityCurve || equityCurve.length === 0) {
+                            return (
+                              <div className='w-full h-8 flex items-center justify-center text-[7px] text-zinc-600'>
+                                -
+                              </div>
+                            );
+                          }
+
+                          // 최근 12주 데이터 필터링
+                          const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+                          const WEEKS_TO_SHOW = 12;
+                          const lastPoint = equityCurve[equityCurve.length - 1];
+                          const endTime = typeof lastPoint.timestamp === 'number'
+                            ? lastPoint.timestamp
+                            : new Date(lastPoint.timestamp).getTime();
+                          const startTime = endTime - WEEKS_TO_SHOW * WEEK_MS;
+
+                          const filteredCurve = equityCurve.filter((point) => {
+                            const timestamp = typeof point.timestamp === 'number'
+                              ? point.timestamp
+                              : new Date(point.timestamp).getTime();
+                            return timestamp >= startTime;
+                          });
+
+                          if (filteredCurve.length < 2) {
+                            return (
+                              <div className='w-full h-8 flex items-center justify-center text-[7px] text-zinc-600'>
+                                -
+                              </div>
+                            );
+                          }
+
+                          // 12주 시작점 기준 수익률 계산
+                          const startEquity = filteredCurve[0].equity;
+                          const returns = filteredCurve.map(p => ((p.equity - startEquity) / startEquity) * 100);
+
+                          const finalReturn = returns[returns.length - 1];
+                          const color = finalReturn >= 0 ? '#22c55e' : '#ef4444';
+
+                          // 실제 데이터 범위 계산 (고정값 대신)
+                          const actualMax = Math.max(...returns);
+                          const actualMin = Math.min(...returns);
+                          const max = Math.max(actualMax, 0.1); // 최소 범위 보장
+                          const min = Math.min(actualMin, -0.1);
+                          const range = max - min || 0.2;
+
+                          // 점들의 좌표 계산
+                          const points = returns.map((val, i) => {
+                            const x = 2 + (i / (returns.length - 1)) * 36;
+                            const y = 18 - ((val - min) / range) * 14;
+                            return { x, y, val };
+                          });
+
+                          // 선 그리기
+                          const pathD = points.map((p, i) =>
+                            `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
+                          ).join(' ');
 
                           return (
-                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
-                              position.direction === 'long'
-                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                            }`}>
-                              {position.direction === 'long' ? '롱' : '숏'}
-                            </span>
+                            <div className='w-full'>
+                              <svg width="100%" height="20" viewBox="0 0 40 20" className="w-full">
+                                {/* 0선 */}
+                                <line
+                                  x1="2"
+                                  y1={18 - ((0 - min) / range) * 14}
+                                  x2="38"
+                                  y2={18 - ((0 - min) / range) * 14}
+                                  stroke="#52525b"
+                                  strokeWidth="0.3"
+                                  strokeDasharray="1,1"
+                                />
+
+                                {/* 데이터 선 */}
+                                <path d={pathD} stroke={color} strokeWidth="1" fill="none" />
+
+                                {/* 끝점 표시 */}
+                                <circle
+                                  cx={points[points.length - 1].x}
+                                  cy={points[points.length - 1].y}
+                                  r="1"
+                                  fill={color}
+                                />
+                              </svg>
+                              {/* 수익률 표시 */}
+                              <div className='text-center text-[8px] -mt-0.5' style={{ color }}>
+                                {finalReturn >= 0 ? '+' : ''}{finalReturn.toFixed(1)}%
+                              </div>
+                            </div>
                           );
                         })()}
                       </div>
-                      {rollingSharpe && rollingSharpe.periods && rollingSharpe.periods.length > 0 && (
-                        <div className={`text-[10px] font-bold ${
-                          (rollingSharpe.periods[0].sharpe ?? 0) >= 1 ? 'text-green-400' :
-                          (rollingSharpe.periods[0].sharpe ?? 0) >= 0 ? 'text-yellow-400' : 'text-red-400'
-                        }`}>
-                          SR {rollingSharpe.periods[0].sharpe?.toFixed(1) ?? '—'}
-                        </div>
-                      )}
                     </div>
-
-                    {/* 중간: 승률 | 수익률 | 거래수 */}
-                    <div className='flex items-center gap-1 mb-2'>
-                      {preview?.loading ? (
-                        <span className='text-zinc-500 text-[8px]'>분석중...</span>
-                      ) : preview && preview.totalTrades > 0 ? (
-                        <>
-                          <span className={`text-[9px] ${preview.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                            {preview.winRate.toFixed(0)}%
-                          </span>
-                          <span className='text-zinc-600 text-[9px]'>|</span>
-                          <span className={`text-[9px] ${preview.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {preview.totalPnlPercent >= 0 ? '+' : ''}{preview.totalPnlPercent.toFixed(1)}%
-                          </span>
-                          <span className='text-zinc-600 text-[9px]'>|</span>
-                          <span className='text-zinc-400 text-[9px]'>
-                            {preview.totalTrades}회
-                          </span>
-                        </>
-                      ) : (
-                        <span className='text-zinc-600 text-[8px]'>—</span>
-                      )}
-                    </div>
-
-                    {/* 하단: 전체 너비 라인차트 */}
-                    {rollingSharpe && rollingSharpe.periods && rollingSharpe.periods.length > 0 ? (
-                      <div className='w-full flex gap-1'>
-                        {/* Y축 라벨 (좌측) */}
-                        <div className='flex flex-col justify-between text-[8px] text-zinc-400 py-1 font-mono'>
-                          {(() => {
-                            const reversed = [...rollingSharpe.periods].reverse();
-                            const values = reversed.map(p => p.sharpe ?? 0);
-                            const max = Math.max(...values, 1);
-                            const min = Math.min(...values, -1);
-                            return (
-                              <>
-                                <span>{max.toFixed(1)}</span>
-                                <span>{min.toFixed(1)}</span>
-                              </>
-                            );
-                          })()}
-                        </div>
-
-                        {/* 차트 영역 */}
-                        <div className='flex-1'>
-                          <svg width="100%" height="40" className="w-full" viewBox="0 0 200 40" preserveAspectRatio="none">
-                            {(() => {
-                              // 역순 (3개월 → 1개월 → 2주 → 1주)
-                              const reversed = [...rollingSharpe.periods].reverse();
-                              const values = reversed.map(p => p.sharpe ?? 0);
-                              const max = Math.max(...values, 2);
-                              const min = Math.min(...values, -2);
-                              const range = max - min || 1;
-
-                              // 점들의 좌표 계산
-                              const points = values.map((val, i) => {
-                                const x = 10 + (i / (values.length - 1)) * 180;
-                                const y = 35 - ((val - min) / range) * 30;
-                                return { x, y, val };
-                              });
-
-                              // 선 그리기
-                              const pathD = points.map((p, i) =>
-                                `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
-                              ).join(' ');
-
-                              // 최근(1주) Sharpe에 따라 색상 결정
-                              const latestSr = values[values.length - 1];
-                              const color = latestSr >= 1 ? '#22c55e' : latestSr >= 0 ? '#eab308' : '#ef4444';
-
-                              return (
-                                <>
-                                  {/* 0선 */}
-                                  <line x1="10" y1={35 - ((0 - min) / range) * 30} x2="190" y2={35 - ((0 - min) / range) * 30} stroke="#52525b" strokeWidth="0.5" strokeDasharray="2,2" />
-
-                                  {/* 데이터 선 */}
-                                  <path d={pathD} stroke={color} strokeWidth="2" fill="none" />
-
-                                  {/* 데이터 점 */}
-                                  {points.map((p, i) => (
-                                    <circle key={i} cx={p.x} cy={p.y} r="2.5" fill={color}>
-                                      <title>{reversed[i].label}: {p.val.toFixed(1)}</title>
-                                    </circle>
-                                  ))}
-                                </>
-                              );
-                            })()}
-                          </svg>
-
-                          {/* X축 라벨 */}
-                          <div className='flex justify-between text-[8px] text-zinc-400 mt-1 px-2'>
-                            {[...rollingSharpe.periods].reverse().map((period) => (
-                              <span key={period.label}>{period.label}</span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className='w-full h-12 bg-zinc-700/50 rounded animate-pulse' />
-                    )}
                   </button>
                 </div>
               );
@@ -2716,6 +2885,100 @@ export default function RealtimeChart() {
         </div>
       </div>
       </div>
+
+      {/* 멀티 전략 비교 차트 */}
+      {(isLoadingAllStrategies || isLoadingEquityCurves) ? (
+        <div className="bg-zinc-900 p-4 rounded-lg animate-pulse">
+          <div className="flex justify-between items-center mb-4">
+            <div className="h-4 w-32 bg-zinc-800 rounded"></div>
+            <div className="h-3 w-24 bg-zinc-800 rounded"></div>
+          </div>
+          <div className="flex flex-wrap gap-3 mb-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-6 w-32 bg-zinc-800 rounded"></div>
+            ))}
+          </div>
+          <div className="w-full h-[500px] bg-zinc-800 rounded flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+              <div className="text-sm text-zinc-400">차트 로딩 중...</div>
+            </div>
+          </div>
+        </div>
+      ) : allStrategiesEquityCurves.size > 0 ? (
+        <MultiStrategyEquityChart
+          strategies={Array.from(allStrategiesEquityCurves.entries()).map(([strategyId, equityCurve], index) => {
+            const strategy = strategies.find(s => s.id === strategyId);
+            if (!strategy) return null;
+
+            const strategyType = strategy.strategy || 'rsi_div';
+            return {
+              strategyId,
+              strategyName: getStrategyDisplayName(strategy),
+              strategyType,
+              color: getStrategyColor(index),
+              equityCurve,
+            };
+          }).filter(Boolean) as any[]}
+          highlightedStrategyId={highlightedStrategy}
+          leverage={leverage}
+          onStrategyClick={(strategyId) => {
+            setHighlightedStrategy(strategyId === highlightedStrategy ? null : strategyId);
+            // 해당 전략 선택
+            const strategy = strategies.find(s => s.id === strategyId);
+            if (strategy) {
+              handleStrategyChange(strategy);
+            }
+          }}
+        />
+      ) : null}
+
+      {/* 주별 Sharpe Ratio 타임라인 */}
+      {(isLoadingAllStrategies || isLoadingEquityCurves) ? (
+        <div className="bg-zinc-900 p-4 rounded-lg animate-pulse">
+          <div className="flex justify-between items-center mb-4">
+            <div className="h-4 w-48 bg-zinc-800 rounded"></div>
+            <div className="h-3 w-20 bg-zinc-800 rounded"></div>
+          </div>
+          <div className="flex flex-wrap gap-3 mb-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-8 w-40 bg-zinc-800 rounded"></div>
+            ))}
+          </div>
+          <div className="w-full h-[400px] bg-zinc-800 rounded flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+              <div className="text-sm text-zinc-400">주별 Sharpe 계산 중...</div>
+            </div>
+          </div>
+          <div className="mt-2 h-3 w-full bg-zinc-800 rounded"></div>
+        </div>
+      ) : allStrategiesEquityCurves.size > 0 ? (
+        <WeeklySharpeTimeline
+          strategies={Array.from(allStrategiesEquityCurves.entries()).map(([strategyId, equityCurve], index) => {
+            const strategy = strategies.find(s => s.id === strategyId);
+            if (!strategy) return null;
+
+            const strategyType = strategy.strategy || 'rsi_div';
+            return {
+              strategyId,
+              strategyName: getStrategyDisplayName(strategy),
+              strategyType,
+              color: getStrategyColor(index),
+              equityCurve,
+            };
+          }).filter(Boolean) as any[]}
+          highlightedStrategyId={highlightedStrategy}
+          leverage={leverage}
+          onStrategyClick={(strategyId) => {
+            setHighlightedStrategy(strategyId === highlightedStrategy ? null : strategyId);
+            const strategy = strategies.find(s => s.id === strategyId);
+            if (strategy) {
+              handleStrategyChange(strategy);
+            }
+          }}
+        />
+      ) : null}
 
       {/* 하단: 자산곡선 + 거래 히스토리 */}
       <div className='grid grid-cols-1 md:grid-cols-3 gap-4 mt-4'>
