@@ -1615,13 +1615,27 @@ export async function getDailyRollingSharpeTimeline(
   displayName: string;
   rollingSharpe: Array<{ timestamp: number; sharpe: number }>;
 }>> {
-  const res = await fetch(
-    `${API_BASE}/backtest/strategy/daily-rolling-sharpe?symbol=${symbol}&timeframe=${timeframe}&weeks=${weeks}&windowDays=${windowDays}`,
-  );
+  // 120초 타임아웃 설정 (6개 전략 × 12주 백테스트는 시간이 오래 걸림)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-  if (!res.ok) {
-    throw new Error(`Failed to fetch daily rolling sharpe: ${res.statusText}`);
+  try {
+    const res = await fetch(
+      `${API_BASE}/backtest/strategy/daily-rolling-sharpe?symbol=${symbol}&timeframe=${timeframe}&weeks=${weeks}&windowDays=${windowDays}`,
+      { signal: controller.signal },
+    );
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch daily rolling sharpe: ${res.statusText}`);
+    }
+
+    return res.json();
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('Rolling Sharpe 계산 타임아웃: 백엔드 계산이 너무 오래 걸립니다');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return res.json();
 }

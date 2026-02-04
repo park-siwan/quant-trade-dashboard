@@ -47,6 +47,13 @@ import { toSeconds, formatKST, getTimeframeSeconds } from '@/lib/utils/timestamp
 import { useAutoOptimize } from '@/hooks/useAutoOptimize';
 import { usePerformanceMonitor, performanceMonitor } from '@/lib/performance-monitor';
 
+// ✅ Custom Hooks
+import { useChartData } from './hooks/useChartData';
+import { useStrategyList } from './hooks/useStrategyList';
+import { useBacktestRunner } from './hooks/useBacktestRunner';
+import { useRealtimeUpdates } from './hooks/useRealtimeUpdates';
+import { useSoundAlerts } from './hooks/useSoundAlerts';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // 무지개 색상 배열 (빨주노초파보)
@@ -113,130 +120,108 @@ export default function RealtimeChart() {
   const currentSymbol = useAtomValue(symbolAtom);
   const symbolId = useAtomValue(symbolIdAtom); // 문자열 심볼 ID (BTCUSDT)
 
-  const [candles, setCandles] = useState<CandlestickData[]>([]);
+  // ==================== Local UI State (not from hooks) ====================
   const [timeframe, setTimeframe] = useState('5m');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingAllStrategies, setIsLoadingAllStrategies] = useState(true); // 모든 전략 목록 로딩 중
-  const [isLoadingEquityCurves, setIsLoadingEquityCurves] = useState(false); // Equity curve 로딩 중
-  const [strategies, setStrategies] = useState<SavedOptimizeResult[]>([]);
-  const [selectedStrategy, setSelectedStrategy] =
-    useState<SavedOptimizeResult | null>(null);
-  // 선택된 전략 ID 저장 (새로고침 후 복원용)
-  const savedStrategyIdRef = useRef<number | null>(null);
-  const [backtestTrades, setBacktestTrades] = useState<TradeResult[]>([]);
-  const [skippedSignals, setSkippedSignals] = useState<SkippedSignal[]>([]);
-  const [openPosition, setOpenPosition] = useState<OpenPosition | null>(null);
-  const [backtestStats, setBacktestStats] = useState<BacktestResult | null>(
-    null,
-  );
-  const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([]);
+  const [selectedStrategy, setSelectedStrategy] = useState<SavedOptimizeResult | null>(null);
   const [selectedTrade, setSelectedTrade] = useState<TradeResult | null>(null);
-
-  // 멀티 전략 비교용 상태
-  const [allStrategiesEquityCurves, setAllStrategiesEquityCurves] = useState<Map<number, EquityPoint[]>>(new Map());
   const [highlightedStrategy, setHighlightedStrategy] = useState<number | null>(null);
-  const [rollingSharpeData, setRollingSharpeData] = useState<Map<string, Array<{ timestamp: number; sharpe: number }>>>(new Map());
-  const [useWalkForward, setUseWalkForward] = useState(false); // Walk-Forward 모드
+  const [useWalkForward, setUseWalkForward] = useState(false);
 
-  // 툴팁 관련 상태
+  // Tooltip 상태
   const [hoveredTrade, setHoveredTrade] = useState<TradeResult | null>(null);
-  const [hoveredSkipped, setHoveredSkipped] = useState<SkippedSignal | null>(
-    null,
-  );
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(
-    null,
-  );
-  const tradeMapRef = useRef<
-    Map<
-      number,
-      {
-        trade?: TradeResult;
-        skipped?: SkippedSignal;
-        type: 'entry' | 'exit' | 'skipped';
-      }
-    >
-  >(new Map());
-  const initialCandlesLoadedRef = useRef(false);
-  const [chartKey, setChartKey] = useState(0); // 차트 재생성 트리거
+  const [hoveredSkipped, setHoveredSkipped] = useState<SkippedSignal | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const tradeMapRef = useRef<Map<number, { trade?: TradeResult; skipped?: SkippedSignal; type: 'entry' | 'exit' | 'skipped' }>>(new Map());
 
-  // 알림 관련 상태
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [soundVolume, setSoundVolume] = useState(1); // 0 ~ 1 (기본 100%)
-  const lastSignalIdRef = useRef<string | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const lastExitAlertRef = useRef<string | null>(null); // TP/SL 알림 중복 방지
-  const lastEntryAlertRef = useRef<string | null>(null); // 진입 알림 중복 방지
-
-  // 설정 패널 상태
+  // Settings
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  // 자동 최적화 설정
   const [autoOptimizeEnabled, setAutoOptimizeEnabled] = useState(false);
-
-  // 레버리지 설정
   const [leverage, setLeverage] = useState(20);
-
-  // 백테스트 갱신 상태
-  const [lastBacktestTime, setLastBacktestTime] = useState<Date | null>(null);
   const [nextCandleCountdown, setNextCandleCountdown] = useState<number>(0);
-  const [isBacktestRunning, setIsBacktestRunning] = useState(false);
-  const lastCandleTimeRef = useRef<number>(0); // 마지막 캔들 시간 (새 캔들 감지용)
 
-  // 백테스트 결과 캐시 (전략별로 캐시하여 재사용)
-  const backtestCacheRef = useRef<Map<string, {
-    trades: TradeResult[];
-    skippedSignals: SkippedSignal[];
-    openPosition: OpenPosition | null;
-    stats: BacktestResult;
-    equityCurve: EquityPoint[];
-    timestamp: number;
-  }>>(new Map());
-
-  // 백테스트 throttling (중복 호출 방지)
-  const lastBacktestCallRef = useRef<{
-    strategyId: number;
-    timeframe: string;
-    timestamp: number;
-  } | null>(null);
-  const BACKTEST_THROTTLE_MS = 2000; // 동일 전략/타임프레임으로 2초 내 재호출 방지
-
-  // 수동 전략 선택 추적 (자동 선택 방지)
+  // Refs for tracking
+  const savedStrategyIdRef = useRef<number | null>(null);
+  const lastCandleTimeRef = useRef<number>(0);
+  const lastSignalIdRef = useRef<string | null>(null);
+  const lastExitAlertRef = useRef<string | null>(null);
+  const lastEntryAlertRef = useRef<string | null>(null);
   const manuallySelectedRef = useRef(false);
-
-  // 전략 변경 중 추적 (마커 useEffect 스킵용)
   const isChangingStrategyRef = useRef(false);
 
-  // localStorage에서 저장된 전략 ID 및 타임프레임 복원
+  // ==================== Custom Hooks ====================
+
+  // 1. Chart Data (candles loading)
+  const {
+    candles,
+    isLoading,
+    chartKey,
+    initialCandlesLoaded,
+  } = useChartData(symbolId, timeframe, subscribeKline);
+
+  // Expose setCandles for real-time updates
+  const candlesRef = useRef(candles);
+  candlesRef.current = candles;
+
+  // 2. Strategy List
+  const {
+    strategies,
+    isLoading: isLoadingAllStrategies,
+    rollingSharpeMap,
+    strategyPreviews,
+    refetch: refetchStrategies,
+  } = useStrategyList(currentSymbol.slashFormat, symbolId, timeframe);
+
+  // 3. Backtest Runner (equity curves + rolling sharpe timeline)
+  const {
+    equityCurves: allStrategiesEquityCurves,
+    isLoading: isLoadingEquityCurves,
+    rollingSharpeData,
+    backtestCacheRef,
+  } = useBacktestRunner(strategies, symbolId, timeframe, useWalkForward);
+
+  // 4. Real-time Updates (selected strategy backtest)
+  const {
+    backtestTrades,
+    skippedSignals,
+    openPosition,
+    backtestStats,
+    equityCurve,
+    lastBacktestTime,
+    isBacktestRunning,
+    loadBacktestTrades,
+  } = useRealtimeUpdates(
+    selectedStrategy,
+    symbolId,
+    currentSymbol.slashFormat,
+    timeframe,
+    candles.length,
+    isLoading
+  );
+
+  // 5. Sound Alerts
+  const {
+    soundEnabled,
+    setSoundEnabled,
+    soundVolume,
+    setSoundVolume,
+    playAlertSound,
+    playExitSound,
+  } = useSoundAlerts();
+
+  // ==================== localStorage 복원 ====================
   useEffect(() => {
     const savedId = localStorage.getItem('selectedStrategyId');
     const savedTf = localStorage.getItem('selectedStrategyTimeframe');
     if (savedId) {
       savedStrategyIdRef.current = parseInt(savedId, 10);
-      manuallySelectedRef.current = true; // 저장된 선택이 있으면 수동 선택으로 간주
+      manuallySelectedRef.current = true;
       console.log('[Strategy] Restored saved strategy ID:', savedStrategyIdRef.current);
-      // 저장된 타임프레임이 있으면 해당 타임프레임으로 변경
       if (savedTf && savedTf !== timeframe) {
         console.log('[Strategy] Restoring saved timeframe:', savedTf);
         setTimeframe(savedTf);
       }
     }
   }, []);
-
-  // JSON Single Source of Truth: 전략 기본값 프리로드
-  // NOTE: loadStrategies useEffect에서 직접 호출하여 race condition 방지
-
-  // 전략별 미리보기 결과 (상위 10개 전략의 실시간 백테스트 결과)
-  const [strategyPreviews, setStrategyPreviews] = useState<Map<number, {
-    totalTrades: number;
-    winRate: number;
-    totalPnlPercent: number;
-    sharpeRatio: number;
-    loading: boolean;
-  }>>(new Map());
-  const previewLoadingRef = useRef(false);
-
-  // 롤링 기간별 Sharpe Ratio 데이터 (1주/2주/1개월/3개월)
-  const [rollingSharpeMap, setRollingSharpeMap] = useState<Map<string, RollingSharpeResult>>(new Map());
 
   // 자동 최적화 훅 (캔들 마감 시 트리거)
   const {
@@ -252,145 +237,7 @@ export default function RealtimeChart() {
     candleCount: 3000,
   });
 
-  // 8bit 스타일 소리 알림 함수 (Web Audio API)
-  const playAlertSound = async (
-    direction: 'bullish' | 'bearish',
-    forcePlay = false,
-  ) => {
-    if (!soundEnabled && !forcePlay) return;
-
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (
-          window.AudioContext || (window as any).webkitAudioContext
-        )();
-      }
-      const ctx = audioContextRef.current;
-
-      // macOS Safari: suspended 상태에서 resume 필요
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
-
-      // 8bit 스타일: square wave 사용
-      const playNote = (freq: number, startTime: number, duration: number) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = 'square'; // 8bit 사운드 특징
-        osc.frequency.setValueAtTime(freq, startTime);
-        gain.gain.setValueAtTime(soundVolume * 0.3, startTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-        osc.start(startTime);
-        osc.stop(startTime + duration);
-      };
-
-      const t = ctx.currentTime;
-      if (direction === 'bullish') {
-        // 롱 신호: 밝고 경쾌한 상승 멜로디 (마리오 코인 + 레벨업)
-        playNote(523.25, t, 0.08); // C5
-        playNote(659.25, t + 0.08, 0.08); // E5
-        playNote(783.99, t + 0.16, 0.08); // G5
-        playNote(1046.5, t + 0.24, 0.12); // C6
-        playNote(1318.51, t + 0.36, 0.12); // E6
-        playNote(1567.98, t + 0.48, 0.25); // G6 (높게 마무리)
-      } else {
-        // 숏 신호: 신비롭고 쿨한 하강 멜로디 (보물 발견 느낌)
-        playNote(1046.5, t, 0.08); // C6
-        playNote(932.33, t + 0.08, 0.08); // Bb5
-        playNote(783.99, t + 0.16, 0.08); // G5
-        playNote(622.25, t + 0.24, 0.12); // Eb5
-        playNote(523.25, t + 0.36, 0.12); // C5
-        playNote(392.0, t + 0.48, 0.25); // G4 (낮게 마무리)
-      }
-    } catch (err) {
-      console.error('Failed to play alert sound:', err);
-    }
-  };
-
-  // TP/SL 청산 알림 함수 (익절: 캐셔 소리, 손절: 경고음)
-  const playExitSound = (isProfit: boolean, forcePlay = false) => {
-    if (!soundEnabled && !forcePlay) return;
-
-    try {
-      if (isProfit) {
-        // 익절: 캐셔 소리 파일 재생
-        const audio = new Audio('/sounds/cashier.mp3');
-        audio.volume = soundVolume;
-        audio.play().catch((err) => {
-          console.error('Failed to play cashier sound:', err);
-          // 폴백: Web Audio API 사용
-          playFallbackExitSound(true);
-        });
-      } else {
-        // 손절: Web Audio API로 경고음 재생
-        playFallbackExitSound(false);
-      }
-    } catch (err) {
-      console.error('Failed to play exit sound:', err);
-    }
-  };
-
-  // 8bit 스타일 폴백 소리 (오디오 파일 재생 실패 시)
-  const playFallbackExitSound = async (isProfit: boolean) => {
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (
-          window.AudioContext || (window as any).webkitAudioContext
-        )();
-      }
-      const ctx = audioContextRef.current;
-
-      // macOS Safari: suspended 상태에서 resume 필요
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
-
-      const playNote = (
-        freq: number,
-        startTime: number,
-        duration: number,
-        type: OscillatorType = 'square',
-      ) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, startTime);
-        gain.gain.setValueAtTime(soundVolume * 0.3, startTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-        osc.start(startTime);
-        osc.stop(startTime + duration);
-      };
-
-      const t = ctx.currentTime;
-      if (isProfit) {
-        // 익절: 8bit 승리 팡파레 (젤다 아이템 획득 느낌)
-        playNote(523.25, t, 0.08); // C5
-        playNote(659.25, t + 0.08, 0.08); // E5
-        playNote(783.99, t + 0.16, 0.08); // G5
-        playNote(1046.5, t + 0.24, 0.15); // C6
-        playNote(783.99, t + 0.4, 0.08); // G5
-        playNote(1046.5, t + 0.48, 0.08); // C6
-        playNote(1318.51, t + 0.56, 0.25); // E6 (길게)
-        playNote(1567.98, t + 0.82, 0.35); // G6 (더 길게, 마무리)
-      } else {
-        // 손절: 8bit 실패/데미지 사운드 (팩맨 죽음 느낌)
-        playNote(493.88, t, 0.12, 'sawtooth'); // B4
-        playNote(440.0, t + 0.12, 0.12, 'sawtooth'); // A4
-        playNote(392.0, t + 0.24, 0.12, 'sawtooth'); // G4
-        playNote(349.23, t + 0.36, 0.12, 'sawtooth'); // F4
-        playNote(329.63, t + 0.48, 0.15, 'sawtooth'); // E4
-        playNote(293.66, t + 0.64, 0.15, 'sawtooth'); // D4
-        playNote(261.63, t + 0.8, 0.2, 'sawtooth'); // C4
-        playNote(196.0, t + 1.0, 0.35, 'sawtooth'); // G3 (낮게 마무리)
-      }
-    } catch (err) {
-      console.error('Failed to play fallback exit sound:', err);
-    }
-  };
+  // ==================== Helper Functions ====================
 
   // 마커 인스턴스 재사용 유틸 함수 (누적 방지)
   const updateSeriesMarkers = (markers: SeriesMarker<Time>[]) => {
@@ -461,37 +308,7 @@ export default function RealtimeChart() {
     }
   }, []);
 
-  // macOS Safari: 사용자 상호작용 시 AudioContext 초기화 (suspended 문제 해결)
-  useEffect(() => {
-    const initAudioContext = async () => {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (
-          window.AudioContext || (window as any).webkitAudioContext
-        )();
-      }
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
-      }
-    };
-
-    const handleUserInteraction = () => {
-      initAudioContext();
-      // 한 번 초기화 후 이벤트 제거
-      ['click', 'touchstart', 'keydown'].forEach((event) => {
-        document.removeEventListener(event, handleUserInteraction);
-      });
-    };
-
-    ['click', 'touchstart', 'keydown'].forEach((event) => {
-      document.addEventListener(event, handleUserInteraction, { once: true });
-    });
-
-    return () => {
-      ['click', 'touchstart', 'keydown'].forEach((event) => {
-        document.removeEventListener(event, handleUserInteraction);
-      });
-    };
-  }, []);
+  // Note: Sound initialization is now handled by useSoundAlerts hook
 
   // 다음 캔들까지 카운트다운 타이머
   useEffect(() => {
@@ -790,327 +607,13 @@ export default function RealtimeChart() {
     return base;
   };
 
-  // 상위 전략 목록 로드 - 백엔드에서 모든 전략 프리뷰 가져오기 (race condition 없음)
-  useEffect(() => {
-    const loadStrategies = async () => {
-      const perfEnd = performanceMonitor.start('loadStrategies');
+  // ==================== Strategy Loading & Backtesting ====================
+  // Note: Strategy loading, equity curves, and rolling sharpe are now handled by custom hooks:
+  // - useStrategyList: loads strategies from backend
+  // - useBacktestRunner: runs backtests and collects equity curves
+  // Old useEffect blocks (lines 610-970) have been removed to avoid duplication
 
-      // 로딩 시작
-      setIsLoadingAllStrategies(true);
-      setSelectedStrategy(null);
-
-      try {
-        // 백엔드에서 모든 전략 프리뷰 가져오기 (JSON 기본값으로 백테스트)
-        console.log('[Strategy] Fetching strategy previews from backend...');
-        const previews = await performanceMonitor.measureAsync(
-          'fetchStrategyPreviews',
-          () => fetchStrategyPreviews(
-            currentSymbol.slashFormat,
-            timeframe,
-            5000
-          )
-        );
-
-        if (previews.length === 0) {
-          console.log('[Strategy] No previews returned');
-          setStrategies([]);
-          setSelectedStrategy(null);
-          setIsLoadingAllStrategies(false);
-          return;
-        }
-
-        // StrategyPreview → SavedOptimizeResult 변환 (UI 호환성)
-        const convertedResults: SavedOptimizeResult[] = previews.map((p, idx) => ({
-          id: idx + 1,
-          strategy: p.strategy as 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator',
-          symbol: currentSymbol.slashFormat,
-          timeframe,
-          sharpeRatio: p.sharpeRatio,
-          totalTrades: p.totalTrades,
-          winRate: p.winRate,
-          totalPnlPercent: p.totalPnlPercent,
-          maxDrawdownPercent: 0,
-          profitFactor: 0,
-          createdAt: new Date().toISOString(),
-          note: p.displayName,
-          // 필수 필드 (JSON 기본값 사용)
-          candleCount: 5000,
-          indicators: 'rsi',
-          metric: 'sharpe',
-          optimizeMethod: 'bayesian',
-          pivotLeft: 0,
-          pivotRight: 0,
-          rsiPeriod: 0,
-          minDistance: 0,
-          maxDistance: 0,
-          tpAtr: 0,
-          slAtr: 0,
-          minDivPct: 0,
-          oosValidation: false,
-          maxDrawdown: 0,
-          rank: idx + 1,
-        }));
-
-        // 참조 안정화: API 응답 내용이 동일하면 기존 배열 참조 유지
-        setStrategies(prev => {
-          if (prev.length === convertedResults.length) {
-            const allMatch = convertedResults.every((newS, idx) => {
-              const prevS = prev[idx];
-              return prevS &&
-                     prevS.strategy === newS.strategy &&
-                     prevS.sharpeRatio === newS.sharpeRatio &&
-                     prevS.totalTrades === newS.totalTrades &&
-                     prevS.winRate === newS.winRate &&
-                     prevS.totalPnlPercent === newS.totalPnlPercent;
-            });
-            if (allMatch) {
-              console.log('[loadStrategies] Previews unchanged, reusing array');
-              return prev;
-            }
-          }
-          console.log('[loadStrategies] Previews changed, creating new array');
-          return convertedResults;
-        });
-        console.log('[Strategy] Loaded', convertedResults.length, 'strategies from backend');
-
-        // 미리보기 맵 업데이트
-        const previewMap = new Map<number, { totalTrades: number; winRate: number; totalPnlPercent: number; sharpeRatio: number; loading: boolean }>();
-        convertedResults.forEach(s => {
-          previewMap.set(s.id, {
-            totalTrades: s.totalTrades ?? 0,
-            winRate: s.winRate ?? 0,
-            totalPnlPercent: s.totalPnlPercent ?? 0,
-            sharpeRatio: s.sharpeRatio ?? 0,
-            loading: false,
-          });
-        });
-        setStrategyPreviews(previewMap);
-
-        // 백테스트 캐시에 openPosition 저장 (카드에서 포지션 칩 표시용)
-        previews.forEach((p, idx) => {
-          if (p.openPosition) {
-            const strategy = convertedResults[idx];
-            const cacheKey = `${strategy.id}_${currentSymbol.id}_${timeframe}`;
-            backtestCacheRef.current.set(cacheKey, {
-              trades: [],
-              skippedSignals: [],
-              openPosition: p.openPosition,
-              stats: {
-                symbol: currentSymbol.slashFormat,
-                timeframe,
-                totalTrades: p.totalTrades,
-                winRate: p.winRate,
-                totalPnlPercent: p.totalPnlPercent,
-                sharpeRatio: p.sharpeRatio,
-                profitFactor: 0,
-                maxDrawdownPercent: 0,
-              } as any,
-              equityCurve: [],
-              timestamp: Date.now(),
-            });
-            console.log(`[Cache] Stored openPosition for ${p.strategy}:`, p.openPosition.direction);
-          }
-        });
-
-        // 롤링 기간별 Sharpe 데이터 로드 (백엔드에서 5분마다 자동 계산)
-        fetchRollingSharpe(currentSymbol.id, timeframe).then((rollingData) => {
-          console.log('[Strategy] Rolling Sharpe response:', rollingData);
-          if (rollingData && rollingData.length > 0) {
-            const rollingMap = new Map<string, RollingSharpeResult>();
-            rollingData.forEach((d) => {
-              rollingMap.set(d.strategy, d);
-            });
-            setRollingSharpeMap(rollingMap);
-            console.log('[Strategy] Loaded rolling Sharpe for', rollingData.length, 'strategies');
-          } else {
-            console.log('[Strategy] No rolling Sharpe data received');
-          }
-        }).catch((err) => {
-          console.error('[Strategy] Failed to load rolling Sharpe:', err);
-        });
-
-        // 최고 Sharpe 전략 자동 선택
-        if (convertedResults.length > 0) {
-          const bestStrategy = convertedResults[0]; // 이미 Sharpe 순 정렬됨
-          setSelectedStrategy(bestStrategy);
-          console.log('[Strategy] Auto-selected best Sharpe:', bestStrategy.strategy, 'SR:', bestStrategy.sharpeRatio);
-        }
-
-        setIsLoadingAllStrategies(false);
-        perfEnd();
-      } catch (err) {
-        console.error('Failed to load strategies:', err);
-        setIsLoadingAllStrategies(false);
-        perfEnd();
-      }
-    };
-    loadStrategies();
-  }, [timeframe, currentSymbol.slashFormat]); // 타임프레임, 심볼 변경 시 재로드
-
-  // 모든 전략의 백테스트 실행 및 equity curve 수집
-  useEffect(() => {
-    if (strategies.length === 0 || isLoadingAllStrategies) return;
-
-    const loadAllEquityCurves = async () => {
-      console.log('[loadAllEquityCurves] START - strategies:', strategies.length);
-      setIsLoadingEquityCurves(true);
-      const newEquityCurves = new Map<number, EquityPoint[]>();
-
-      // 상위 10개 전략만 차트에 표시 (너무 많으면 복잡함)
-      const topStrategies = strategies.slice(0, 10);
-      console.log('[loadAllEquityCurves] Top strategies count:', topStrategies.length);
-
-      // 병렬로 모든 전략 백테스트 실행
-      await Promise.all(
-        topStrategies.map(async (strategy) => {
-          try {
-            const cacheKey = `${strategy.id}_${currentSymbol.id}_${timeframe}`;
-
-            // 캐시에 있으면 사용
-            const cached = backtestCacheRef.current.get(cacheKey);
-            if (cached && cached.equityCurve.length > 0) {
-              newEquityCurves.set(strategy.id, cached.equityCurve);
-              return;
-            }
-
-            // 백테스트 실행 - 필요한 파라미터만 추출
-            // 12주(84일) 표시를 위해 더 많은 캔들 필요: 5m=25000, 15m=8500, 1h=2100
-            const candleCountByTimeframe: Record<string, number> = {
-              '5m': 30000,  // 약 104일
-              '15m': 10000, // 약 104일
-              '1h': 2500,   // 약 104일
-            };
-            const backtestParams: any = {
-              symbol: currentSymbol.id,
-              timeframe,
-              candleCount: candleCountByTimeframe[timeframe] || 5000,
-              strategy: strategy.strategy,
-            };
-
-            // indicators가 문자열이면 배열로 변환
-            if (strategy.indicators) {
-              if (typeof strategy.indicators === 'string') {
-                backtestParams.indicators = strategy.indicators.split(',').map(s => s.trim()).filter(Boolean);
-              } else if (Array.isArray(strategy.indicators)) {
-                backtestParams.indicators = strategy.indicators;
-              }
-            }
-
-            // 전략별 파라미터 추출 (백엔드는 snake_case 사용)
-            const paramKeys = [
-              'rsi_period', 'pivot_left', 'pivot_right', 'min_distance', 'max_distance',
-              'tp_atr', 'sl_atr', 'min_rsi_diff', 'rsi_oversold', 'rsi_overbought',
-              'regime_filter', 'volume_confirm', 'lookback', 'entry_z', 'exit_z',
-              'stop_z', 'vol_filter', 'vol_threshold', 'rsi_confirm', 'sma_period',
-              'atr_period', 'compression_mult', 'breakout_period', 'roc_period',
-              'roc_threshold', 'volume_mult', 'adx_threshold', 'cooldown_bars',
-              'block_in_trend', 'adx_trend_threshold', 'use_ema_trend_filter', 'ema_period',
-              'ema_distance_pct', 'use_volume_confirm', 'low_vol_entry_z', 'high_vol_entry_z',
-              'use_stoch_confirm', 'stoch_threshold', 'use_rsi_confirm', 'rsi_threshold',
-              'use_mini_sideways', 'bb_bandwidth_threshold', 'use_channel_detection',
-              'channel_r2_threshold', 'channel_only_mode', 'bb_lookback', 'bb_volume_mult',
-            ];
-
-            paramKeys.forEach(key => {
-              if ((strategy as any)[key] !== undefined) {
-                backtestParams[key] = (strategy as any)[key];
-              }
-            });
-
-            // Walk-Forward 모드일 경우 주별 최적화 백테스트 실행
-            if (useWalkForward) {
-              const wfResult = await runWalkForwardBacktest(
-                strategy.strategy || 'rsi_div',
-                currentSymbol.id,
-                timeframe,
-                12 // 최근 12주
-              );
-
-              if (wfResult.combinedEquityCurve && wfResult.combinedEquityCurve.length > 0) {
-                newEquityCurves.set(strategy.id, wfResult.combinedEquityCurve);
-                console.log(`[loadAllEquityCurves] Strategy ${strategy.id} WF result:`, {
-                  equityCurveLength: wfResult.combinedEquityCurve.length,
-                });
-                // Walk-Forward 결과는 캐시하지 않음 (매번 최신 주차 사용)
-              } else {
-                console.warn(`[loadAllEquityCurves] Strategy ${strategy.id} WF - no equity curve`);
-              }
-            } else {
-              const result = await runBacktest(backtestParams);
-
-              if (result.equityCurve && result.equityCurve.length > 0) {
-                newEquityCurves.set(strategy.id, result.equityCurve);
-                console.log(`[loadAllEquityCurves] Strategy ${strategy.id} result:`, {
-                  equityCurveLength: result.equityCurve.length,
-                });
-              } else {
-                console.warn(`[loadAllEquityCurves] Strategy ${strategy.id} - no equity curve`);
-              }
-            }
-          } catch (error) {
-            console.error(`Failed to load equity curve for strategy ${strategy.id}:`, error);
-          }
-        })
-      );
-
-      console.log('[loadAllEquityCurves] COMPLETE - Map size:', newEquityCurves.size);
-
-      // 참조 안정화: 내용이 동일하면 기존 Map 참조 유지
-      setAllStrategiesEquityCurves(prev => {
-        if (prev.size === newEquityCurves.size) {
-          let isEqual = true;
-          for (const [id, curve] of newEquityCurves.entries()) {
-            const prevCurve = prev.get(id);
-            if (!prevCurve || prevCurve.length !== curve.length) {
-              isEqual = false;
-              break;
-            }
-            // 첫/마지막 포인트 비교 (성능 최적화)
-            if (prevCurve[0]?.timestamp !== curve[0]?.timestamp ||
-                prevCurve[prevCurve.length - 1]?.timestamp !== curve[curve.length - 1]?.timestamp) {
-              isEqual = false;
-              break;
-            }
-          }
-          if (isEqual) {
-            console.log('[loadAllEquityCurves] Data unchanged, reusing Map');
-            return prev; // 동일한 참조 반환 → 리렌더링 방지
-          }
-        }
-        console.log('[loadAllEquityCurves] Data changed, updating Map');
-        return newEquityCurves;
-      });
-      setIsLoadingEquityCurves(false);
-    };
-
-    loadAllEquityCurves();
-  }, [strategies, timeframe, currentSymbol.id, useWalkForward]);
-
-  // Rolling Sharpe 데이터 로딩 (백엔드에서 계산)
-  useEffect(() => {
-    if (strategies.length === 0) return;
-
-    const loadRollingSharpe = async () => {
-      try {
-        console.log('[loadRollingSharpe] Fetching from backend...');
-        const data = await getDailyRollingSharpeTimeline(currentSymbol.id, timeframe, 12, 14);
-
-        // Map으로 변환 (strategy type -> rollingSharpe 데이터)
-        const newRollingSharpeMap = new Map<string, Array<{ timestamp: number; sharpe: number }>>();
-        data.forEach(item => {
-          newRollingSharpeMap.set(item.strategy, item.rollingSharpe);
-        });
-
-        setRollingSharpeData(newRollingSharpeMap);
-        console.log('[loadRollingSharpe] Loaded rolling sharpe for', data.length, 'strategies');
-      } catch (error) {
-        console.error('[loadRollingSharpe] Failed to load rolling sharpe:', error);
-      }
-    };
-
-    loadRollingSharpe();
-  }, [strategies, timeframe, currentSymbol.id]);
-
+  // ==================== Event Handlers ====================
   // 전략 변경 핸들러
   const handleStrategyChange = async (strategy: SavedOptimizeResult) => {
     console.log('[Strategy] User clicked strategy:', strategy.id, 'params:', {
@@ -1143,20 +646,12 @@ export default function RealtimeChart() {
       console.log('[Strategy Clear] Cleared price lines');
     }
 
-    // 백테스트 실행 중 상태로 설정
-    setIsBacktestRunning(true);
+    // Note: Backtest execution and state management is now handled by useRealtimeUpdates hook
 
     manuallySelectedRef.current = true;
     savedStrategyIdRef.current = strategy.id;
     localStorage.setItem('selectedStrategyId', String(strategy.id));
     localStorage.setItem('selectedStrategyTimeframe', strategy.timeframe);
-
-    // 이전 백테스트 데이터 초기화
-    setBacktestStats(null);
-    setBacktestTrades([]);
-    setSkippedSignals([]);
-    setOpenPosition(null);
-    setEquityCurve([]);
 
     // 전략의 타임프레임으로 변경
     if (strategy.timeframe && strategy.timeframe !== timeframe) {
@@ -1198,212 +693,19 @@ export default function RealtimeChart() {
     }
   }, [highlightedStrategy, strategies, handleStrategyChange]);
 
-  // 선택된 전략으로 백테스트 실행 (재시도 포함 + throttling + 캐싱)
-  const loadBacktestTrades = async (
-    strategy: SavedOptimizeResult,
-    retryCount = 0,
-    forceRun = false,
-  ) => {
-    // 백테스트 시작 시 전략 ID 캡처 (완료 후 비교용)
-    const startedForStrategyId = strategy.id;
+  // ==================== useEffects (심볼 변경 시 리셋) ====================
+  // Note: loadBacktestTrades, candle loading은 이제 hooks에서 처리됨
 
-    // 캐시 키: 전략ID_심볼_타임프레임
-    const cacheKey = `${strategy.id}_${currentSymbol.id}_${timeframe}`;
-    const now = Date.now();
-    const CACHE_TTL_MS = 5 * 60 * 1000; // 5분 캐시
-
-    // 캐시 확인: forceRun이 아니고 최근 캐시가 있으면 재사용
-    if (!forceRun) {
-      const cached = backtestCacheRef.current.get(cacheKey);
-      if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
-        console.log('[Backtest] Using cached result for strategy:', startedForStrategyId);
-        setBacktestTrades(cached.trades);
-        setSkippedSignals(cached.skippedSignals);
-        setOpenPosition(cached.openPosition);
-        setBacktestStats(cached.stats);
-        setEquityCurve(cached.equityCurve);
-        setLastBacktestTime(new Date(cached.timestamp));
-        isChangingStrategyRef.current = false;
-        return;
-      }
-    }
-
-    // Throttling: 동일 전략/타임프레임으로 짧은 시간 내 중복 호출 방지
-    if (
-      !forceRun &&
-      lastBacktestCallRef.current &&
-      lastBacktestCallRef.current.strategyId === strategy.id &&
-      lastBacktestCallRef.current.timeframe === timeframe &&
-      now - lastBacktestCallRef.current.timestamp < BACKTEST_THROTTLE_MS
-    ) {
-      console.log('[Backtest] Skipped duplicate call (throttled)');
-      return;
-    }
-
-    lastBacktestCallRef.current = {
-      strategyId: strategy.id,
-      timeframe,
-      timestamp: now,
-    };
-
-    // 백테스트 시작 - isBacktestRunning이 마커 클리어를 담당
-    // isChangingStrategyRef는 백테스트 완료 후에 false로 설정
-    setIsBacktestRunning(true);
-    try {
-      const indicators = strategy.indicators
-        ? strategy.indicators.split(',').filter(Boolean)
-        : ['rsi'];
-      console.log('[Backtest] Running for strategy:', startedForStrategyId, 'type:', strategy.strategy);
-      // 최소 파라미터만 전송 - Python이 JSON 기본값 사용 (프리뷰와 동일)
-      const result = await runBacktest({
-        strategy: (strategy.strategy || 'rsi_div') as 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator',
-        symbol: currentSymbol.slashFormat,
-        timeframe: timeframe,
-        candleCount: 5000,
-        initialCapital: 1000,
-        positionSizePercent: 100,
-        useLiveData: false, // 인메모리 캐시 사용
-        // 파라미터 전송 안 함 → Python에서 JSON 기본값 사용
-      });
-
-      // 백테스트 완료 후 전략이 변경되었으면 결과 무시 (데이터 bleeding 방지)
-      if (savedStrategyIdRef.current !== startedForStrategyId) {
-        console.log('[Backtest] Discarding stale result - strategy changed from', startedForStrategyId, 'to', savedStrategyIdRef.current);
-        return;
-      }
-
-      // 결과를 캐시에 저장
-      backtestCacheRef.current.set(cacheKey, {
-        trades: result.trades,
-        skippedSignals: result.skippedSignals || [],
-        openPosition: result.openPosition || null,
-        stats: result,
-        equityCurve: result.equityCurve || [],
-        timestamp: now,
-      });
-
-      setBacktestTrades(result.trades);
-      setSkippedSignals(result.skippedSignals || []);
-      setOpenPosition(result.openPosition || null);
-      setBacktestStats(result);
-      setEquityCurve(result.equityCurve || []);
-      setLastBacktestTime(new Date());
-      console.log('[Backtest] Applied result for strategy:', startedForStrategyId, 'Open position:', result.openPosition);
-      // 디버그: 트레이드 목록 상세 출력
-      console.log('[Backtest] Trade entries for strategy', startedForStrategyId, ':',
-        result.trades.map(t => `${t.direction}@${t.entryTime}`).join(', '));
-    } catch (err) {
-      console.error('Failed to load backtest trades:', err);
-      // 최대 2번 재시도
-      if (retryCount < 2) {
-        setTimeout(() => loadBacktestTrades(strategy, retryCount + 1), 1000);
-      } else {
-        setBacktestTrades([]);
-        setSkippedSignals([]);
-        setOpenPosition(null);
-      }
-    } finally {
-      setIsBacktestRunning(false);
-      isChangingStrategyRef.current = false; // 전략 변경 완전 완료
-    }
-  };
-
-  // 전략/타임프레임 변경 시 백테스트 실행
-  // candles.length > 0 조건만 확인 (length 변화 자체는 의존성에서 제외)
-  const hasCandlesRef = useRef(false);
+  // 심볼 변경 시 로컬 refs 리셋
   useEffect(() => {
-    hasCandlesRef.current = candles.length > 0;
-  }, [candles.length]);
-
-  useEffect(() => {
-    console.log('[Backtest Trigger] Check:', {
-      hasStrategy: !!selectedStrategy,
-      strategyId: selectedStrategy?.id,
-      hasCandles: hasCandlesRef.current,
-      candlesLength: candles.length,
-      isLoading,
-    });
-
-    // candles.length로 직접 체크 (ref 타이밍 문제 방지)
-    if (selectedStrategy && candles.length > 0 && !isLoading) {
-      // 백테스트 시작 전 ref 동기화 (자동/수동 선택 모두 커버)
-      savedStrategyIdRef.current = selectedStrategy.id;
-      console.log('[Backtest Trigger] Scheduling backtest for strategy:', selectedStrategy.id);
-      const timer = setTimeout(() => {
-        loadBacktestTrades(selectedStrategy);
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedStrategy, timeframe, isLoading, currentSymbol.id, candles.length > 0]); // candles.length > 0을 의존성에 추가
-
-  // 심볼 변경 시 포지션/트레이드 데이터 즉시 초기화 (잘못된 알림 방지)
-  useEffect(() => {
-    setOpenPosition(null);
-    setBacktestTrades([]);
-    setSkippedSignals([]);
-    setBacktestStats(null);
-    setEquityCurve([]);
     lastExitAlertRef.current = null;
     lastEntryAlertRef.current = null;
-    manuallySelectedRef.current = false; // 심볼 변경 시 수동 선택 플래그 리셋
+    manuallySelectedRef.current = false;
     savedStrategyIdRef.current = null;
     localStorage.removeItem('selectedStrategyId');
     localStorage.removeItem('selectedStrategyTimeframe');
-    console.log(`[Symbol Change] Reset position data for ${currentSymbol.id}`);
+    console.log(`[Symbol Change] Reset refs for ${currentSymbol.id}`);
   }, [currentSymbol.id]);
-
-  // 초기 캔들 데이터 로드
-  useEffect(() => {
-    const loadCandles = async () => {
-      setIsLoading(true);
-      initialCandlesLoadedRef.current = false;
-      try {
-        const response = await fetch(
-          `${API_BASE}/exchange/candles?symbol=${encodeURIComponent(currentSymbol.slashFormat)}&timeframe=${timeframe}&limit=5000`,
-        );
-        const data = await response.json();
-        const candlesArray = data.data?.candles || data.candles;
-
-        if (candlesArray && candlesArray.length > 0) {
-          const formattedCandles: CandlestickData[] = candlesArray.map(
-            (c: number[]) => ({
-              time: (c[0] / 1000) as Time,
-              open: c[1],
-              high: c[2],
-              low: c[3],
-              close: c[4],
-            }),
-          );
-
-          // 디버그 로그
-          const firstTs = candlesArray[0][0];
-          const lastTs = candlesArray[candlesArray.length - 1][0];
-          console.log('[Candles] Loaded:', candlesArray.length);
-          console.log(
-            '[Candles] First:',
-            new Date(firstTs).toLocaleString('ko-KR'),
-          );
-          console.log(
-            '[Candles] Last:',
-            new Date(lastTs).toLocaleString('ko-KR'),
-          );
-          console.log('[Candles] Now:', new Date().toLocaleString('ko-KR'));
-
-          setCandles(formattedCandles);
-          initialCandlesLoadedRef.current = true;
-          // 차트 재생성 트리거
-          setChartKey((prev) => prev + 1);
-        }
-      } catch (err) {
-        console.error('Failed to load candles:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadCandles();
-    subscribeKline(timeframe);
-  }, [timeframe, subscribeKline, currentSymbol.id]);
 
   // 현재 타임프레임의 kline 가져오기
   const kline = getKline(timeframe);
@@ -1426,14 +728,14 @@ export default function RealtimeChart() {
       lastCandleTimeRef.current > 0 &&
       newCandleTime > lastCandleTimeRef.current;
 
-    // 캔들 확정 시 또는 새 캔들 시작 시 백테스트 재실행
+    // 캔들 확정 시 또는 새 캔들 시작 시 백테스트 재실행 (hook의 loadBacktestTrades 사용)
     if (selectedStrategy && (isNewCandle || kline.isFinal)) {
       if (isNewCandle) {
         console.log('[Candle] New candle started, refreshing backtest...');
       } else if (kline.isFinal) {
         console.log('[Candle] Candle confirmed (isFinal), refreshing backtest...');
       }
-      loadBacktestTrades(selectedStrategy);
+      loadBacktestTrades(selectedStrategy); // from useRealtimeUpdates hook
     }
 
     lastCandleTimeRef.current = newCandleTime;
@@ -1466,37 +768,15 @@ export default function RealtimeChart() {
       }
     }
 
-    // candles state도 업데이트 (마지막 캔들만 갱신, 차트 재생성 방지)
-    setCandles((prev) => {
-      if (prev.length === 0) return prev;
-
-      const lastCandle = prev[prev.length - 1];
-      const lastTime = lastCandle.time as number;
-      const newTime = newCandle.time as number;
-
-      // 같은 시간의 캔들이면 업데이트
-      if (lastTime === newTime) {
-        return [...prev.slice(0, -1), newCandle];
-      }
-      // 새 캔들이 더 최신이면 추가
-      else if (newTime > lastTime) {
-        // 최대 5000개 유지 (백테스트 데이터와 동일)
-        const updated = [...prev, newCandle];
-        if (updated.length > 5000) {
-          return updated.slice(-5000);
-        }
-        return updated;
-      }
-      return prev;
-    });
-  }, [kline, openPosition, selectedStrategy]);
+    // Note: candles state는 useChartData hook에서 관리됨
+  }, [kline, openPosition, selectedStrategy, loadBacktestTrades]);
 
   // 차트 초기 생성 (타임프레임 변경 또는 초기 로드 시에만)
   useEffect(() => {
     if (
       !containerRef.current ||
       candles.length === 0 ||
-      !initialCandlesLoadedRef.current
+      !initialCandlesLoaded
     )
       return;
 
@@ -2002,16 +1282,92 @@ export default function RealtimeChart() {
 
   // 총 포지션 보유시간 계산 (모든 거래의 보유시간 합계)
   const totalHoldingTime = backtestTrades.reduce((acc, trade) => {
-    const entrySeconds = toSeconds(trade.entryTime);
-    const exitSeconds = toSeconds(trade.exitTime);
-    // toSeconds는 초 단위 반환, formatDuration은 밀리초 필요
-    return acc + (exitSeconds - entrySeconds) * 1000;
+    try {
+      const entrySeconds = toSeconds(trade.entryTime);
+      const exitSeconds = toSeconds(trade.exitTime);
+
+      // 유효성 검증
+      if (isNaN(entrySeconds) || isNaN(exitSeconds) || !isFinite(entrySeconds) || !isFinite(exitSeconds)) {
+        console.warn('[totalHoldingTime] Invalid time for trade:', trade);
+        return acc;
+      }
+
+      const holdingTimeMs = (exitSeconds - entrySeconds) * 1000;
+
+      // 음수 또는 비정상적으로 큰 값 필터링
+      if (holdingTimeMs < 0 || holdingTimeMs > 365 * 24 * 60 * 60 * 1000) {
+        console.warn('[totalHoldingTime] Abnormal holding time:', holdingTimeMs, trade);
+        return acc;
+      }
+
+      return acc + holdingTimeMs;
+    } catch (error) {
+      console.error('[totalHoldingTime] Error calculating holding time:', error, trade);
+      return acc;
+    }
   }, 0);
 
+  // 디버그: DISABLED to prevent console flooding during excessive re-rendering
+  // Bug confirmed: statsTradesCount: 39, backtestTradesLength: 0
+  // Root cause: API returns stats with totalTrades but trades array is empty
+  // if (backtestTrades.length === 0 && backtestStats && backtestStats.totalTrades > 0) {
+  //   console.error('🚨 [BUG] Stats shows trades but trades array is empty!', {
+  //     statsTradesCount: backtestStats.totalTrades,
+  //     backtestTradesLength: backtestTrades.length,
+  //   });
+  // }
+
   // 측정기간 계산 (백테스트 시작~끝)
-  const measurementPeriod = backtestStats
-    ? new Date(backtestStats.endDate).getTime() - new Date(backtestStats.startDate).getTime()
-    : 0;
+  const measurementPeriod = (() => {
+    if (!backtestStats) {
+      return 0;
+    }
+
+    // 1순위: startDate/endDate 사용
+    if (backtestStats.startDate && backtestStats.endDate) {
+      const startTime = new Date(backtestStats.startDate).getTime();
+      const endTime = new Date(backtestStats.endDate).getTime();
+      if (!isNaN(startTime) && !isNaN(endTime)) {
+        return endTime - startTime;
+      }
+    }
+
+    // 2순위: equityCurve 첫/마지막 타임스탬프 사용
+    if (equityCurve && equityCurve.length >= 2) {
+      const firstTime = (typeof equityCurve[0].timestamp === 'number'
+        ? equityCurve[0].timestamp
+        : new Date(equityCurve[0].timestamp).getTime()) as number;
+      const lastTime = (typeof equityCurve[equityCurve.length - 1].timestamp === 'number'
+        ? equityCurve[equityCurve.length - 1].timestamp
+        : new Date(equityCurve[equityCurve.length - 1].timestamp).getTime()) as number;
+
+      if (!isNaN(firstTime) && !isNaN(lastTime)) {
+        return lastTime - firstTime;
+      }
+    }
+
+    // 3순위: backtestTrades 첫/마지막 거래 시간 사용
+    if (backtestTrades && backtestTrades.length >= 1) {
+      const entryTimes = backtestTrades.map(t => toSeconds(t.entryTime) * 1000);
+      const exitTimes = backtestTrades.map(t => toSeconds(t.exitTime) * 1000);
+      const allTimes = [...entryTimes, ...exitTimes];
+      const minTime = Math.min(...allTimes);
+      const maxTime = Math.max(...allTimes);
+
+      if (isFinite(minTime) && isFinite(maxTime)) {
+        return maxTime - minTime;
+      }
+    }
+
+    console.warn('[measurementPeriod] No valid data source found', {
+      hasBacktestStats: !!backtestStats,
+      hasEquityCurve: !!equityCurve && equityCurve.length > 0,
+      hasBacktestTrades: !!backtestTrades && backtestTrades.length > 0,
+    });
+    return 0;
+  })();
+
+  // 로그 제거: 과도한 재렌더링으로 콘솔 flood 방지
 
   const formatDuration = (ms: number, short = false) => {
     const hours = Math.floor(ms / (1000 * 60 * 60));
@@ -2823,7 +2179,7 @@ export default function RealtimeChart() {
                         if (!confirm('이 전략을 삭제하시겠습니까?')) return;
                         try {
                           await deleteSavedResult(strategy.id);
-                          setStrategies(prev => prev.filter(s => s.id !== strategy.id));
+                          refetchStrategies(); // Refetch strategies from hook
                           if (selectedStrategy?.id === strategy.id) {
                             setSelectedStrategy(null);
                           }

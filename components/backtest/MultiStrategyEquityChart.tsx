@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, memo } from 'react';
-import { createChart, IChartApi, LineData, Time, LineSeries } from 'lightweight-charts';
+import { createChart, IChartApi, LineData, Time, LineSeries, ISeriesApi } from 'lightweight-charts';
 import { EquityPoint } from '@/lib/backtest-api';
 
 interface StrategyEquityCurve {
@@ -27,6 +27,7 @@ const MultiStrategyEquityChart = memo(function MultiStrategyEquityChart({
 }: MultiStrategyEquityChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<'Line'>[]>([]);
 
   // 차트 초기화
   useEffect(() => {
@@ -91,14 +92,14 @@ const MultiStrategyEquityChart = memo(function MultiStrategyEquityChart({
 
     // 기존 시리즈 모두 제거
     const chart = chartRef.current;
-    // @ts-ignore - removeSeries API
-    while (chart.series && chart.series.length > 0) {
+    seriesRef.current.forEach((series) => {
       try {
-        chart.removeSeries(chart.series[0]);
+        chart.removeSeries(series);
       } catch (e) {
-        break;
+        // Series already removed
       }
-    }
+    });
+    seriesRef.current = [];
 
     // 최근 12주 필터링
     const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -152,6 +153,7 @@ const MultiStrategyEquityChart = memo(function MultiStrategyEquityChart({
       });
 
       series.setData(lineData);
+      seriesRef.current.push(series);
     });
 
     // 차트 시간축 맞춤

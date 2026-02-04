@@ -133,8 +133,8 @@ export default function PerformancePanel() {
           <div className="text-xs font-semibold mb-2">Component Stats</div>
           <div className="space-y-1 text-xs">
             {Object.entries(componentStats)
-              .sort((a, b) => b[1].totalTime - a[1].totalTime)
-              .map(([name, stats]) => (
+              .sort((a, b) => (b[1] as any).totalTime - (a[1] as any).totalTime)
+              .map(([name, stats]: [string, any]) => (
                 <div key={name} className="border-b border-gray-700 last:border-0 pb-1 mb-1">
                   <div className="font-mono text-blue-400">{name}</div>
                   <div className="grid grid-cols-2 gap-1 text-gray-400">

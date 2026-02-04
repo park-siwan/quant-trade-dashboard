@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, memo } from 'react';
-import { createChart, IChartApi, LineData, Time, LineSeries } from 'lightweight-charts';
+import { createChart, IChartApi, LineData, Time, LineSeries, ISeriesApi } from 'lightweight-charts';
 
 interface WeeklySharpeTimelineProps {
   strategies: {
@@ -24,6 +24,7 @@ const WeeklySharpeTimeline = memo(function WeeklySharpeTimeline({
 }: WeeklySharpeTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<'Line'>[]>([]);
 
   // 차트 초기화
   useEffect(() => {
@@ -88,14 +89,17 @@ const WeeklySharpeTimeline = memo(function WeeklySharpeTimeline({
 
     // 기존 시리즈 모두 제거
     const chart = chartRef.current;
-    // @ts-ignore
-    while (chart.series && chart.series.length > 0) {
+    seriesRef.current.forEach((series) => {
       try {
-        chart.removeSeries(chart.series[0]);
+        chart.removeSeries(series);
       } catch (e) {
-        break;
+        // Series already removed
       }
-    }
+    });
+    seriesRef.current = [];
+
+    let minTime: number | null = null;
+    let maxTime: number | null = null;
 
     strategies.forEach((strategy) => {
       if (!strategy.rollingSharpe || strategy.rollingSharpe.length === 0) return;
@@ -104,6 +108,14 @@ const WeeklySharpeTimeline = memo(function WeeklySharpeTimeline({
         time: Math.floor(data.timestamp / 1000) as Time,
         value: data.sharpe,
       }));
+
+      // 전체 시간 범위 계산
+      if (lineData.length > 0) {
+        const firstTime = lineData[0].time as number;
+        const lastTime = lineData[lineData.length - 1].time as number;
+        if (minTime === null || firstTime < minTime) minTime = firstTime;
+        if (maxTime === null || lastTime > maxTime) maxTime = lastTime;
+      }
 
       const series = chart.addSeries(LineSeries, {
         color: strategy.color,
@@ -114,8 +126,16 @@ const WeeklySharpeTimeline = memo(function WeeklySharpeTimeline({
       });
 
       series.setData(lineData);
+      seriesRef.current.push(series);
     });
 
+    // 전체 데이터가 보이도록 시간 범위 설정
+    if (minTime !== null && maxTime !== null) {
+      chart.timeScale().setVisibleRange({
+        from: minTime as Time,
+        to: maxTime as Time,
+      });
+    }
     chart.timeScale().fitContent();
   }, [strategies, highlightedStrategyId]);
 
@@ -172,7 +192,7 @@ const WeeklySharpeTimeline = memo(function WeeklySharpeTimeline({
         <div className="flex items-center justify-center h-[400px] text-zinc-500">
           <div className="text-center">
             <div className="text-2xl mb-2">📈</div>
-            <div>Sharpe Ratio 데이터를 계산하는 중...</div>
+            <div>일별 Rolling Sharpe 데이터를 불러오는 중...</div>
           </div>
         </div>
       ) : (
