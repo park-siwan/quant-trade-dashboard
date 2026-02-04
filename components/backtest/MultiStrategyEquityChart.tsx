@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import { createChart, IChartApi, LineData, Time, LineSeries } from 'lightweight-charts';
 import { EquityPoint } from '@/lib/backtest-api';
 
@@ -19,7 +19,7 @@ interface MultiStrategyEquityChartProps {
   onStrategyClick?: (strategyId: number) => void;
 }
 
-export default function MultiStrategyEquityChart({
+const MultiStrategyEquityChart = memo(function MultiStrategyEquityChart({
   strategies,
   highlightedStrategyId,
   leverage,
@@ -27,40 +27,11 @@ export default function MultiStrategyEquityChart({
 }: MultiStrategyEquityChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const seriesMapRef = useRef<Map<number, any>>(new Map());
 
-  // 최근 12주 필터링된 데이터 캐싱 (성능 최적화)
-  const filteredDataCache = useMemo(() => {
-    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-    const WEEKS_TO_SHOW = 12;
-    const cache = new Map<number, EquityPoint[]>();
-
-    strategies.forEach((strategy) => {
-      if (strategy.equityCurve.length === 0) return;
-
-      const lastPoint = strategy.equityCurve[strategy.equityCurve.length - 1];
-      const endTime = typeof lastPoint.timestamp === 'number'
-        ? lastPoint.timestamp
-        : new Date(lastPoint.timestamp).getTime();
-      const startTime = endTime - WEEKS_TO_SHOW * WEEK_MS;
-
-      const filteredCurve = strategy.equityCurve.filter((point) => {
-        const timestamp = typeof point.timestamp === 'number'
-          ? point.timestamp
-          : new Date(point.timestamp).getTime();
-        return timestamp >= startTime;
-      });
-
-      cache.set(strategy.strategyId, filteredCurve);
-    });
-
-    return cache;
-  }, [strategies]);
-
+  // 차트 초기화
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // 차트 생성
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
       height: 500,
@@ -81,16 +52,15 @@ export default function MultiStrategyEquityChart({
         secondsVisible: false,
       },
       crosshair: {
-        mode: 1, // Normal crosshair
+        mode: 1,
       },
     });
 
     chartRef.current = chart;
 
-    // Resize observer
     const resizeObserver = new ResizeObserver((entries) => {
       if (entries.length === 0 || !chartRef.current) return;
-      const { width, height } = entries[0].contentRect;
+      const { width } = entries[0].contentRect;
       chartRef.current.applyOptions({ width, height: 500 });
     });
 
@@ -105,59 +75,63 @@ export default function MultiStrategyEquityChart({
     };
   }, []);
 
-  // 전략 equity curve 업데이트
+  // 전략 데이터 업데이트
   useEffect(() => {
-    if (!chartRef.current || strategies.length === 0) return;
+    if (!chartRef.current) {
+      console.log('[MultiStrategyEquityChart] No chart ref');
+      return;
+    }
 
-    const initialCapital = 1000;
+    if (strategies.length === 0) {
+      console.log('[MultiStrategyEquityChart] No strategies');
+      return;
+    }
 
-    // 기존 시리즈 제거
-    seriesMapRef.current.forEach((series) => {
+    console.log('[MultiStrategyEquityChart] Drawing', strategies.length, 'strategies');
+
+    // 기존 시리즈 모두 제거
+    const chart = chartRef.current;
+    // @ts-ignore - removeSeries API
+    while (chart.series && chart.series.length > 0) {
       try {
-        chartRef.current?.removeSeries(series);
+        chart.removeSeries(chart.series[0]);
       } catch (e) {
-        // ignore
+        break;
       }
-    });
-    seriesMapRef.current.clear();
+    }
 
-    // 최근 12주 범위 계산
+    // 최근 12주 필터링
     const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
     const WEEKS_TO_SHOW = 12;
 
-    // 각 전략의 라인 시리즈 생성
     strategies.forEach((strategy) => {
       if (strategy.equityCurve.length === 0) return;
 
-      // 캐시에서 필터링된 데이터 가져오기 (성능 최적화)
-      const filteredEquityCurve = filteredDataCache.get(strategy.strategyId);
+      // 최근 12주 데이터만 필터링
+      const lastPoint = strategy.equityCurve[strategy.equityCurve.length - 1];
+      const endTime = typeof lastPoint.timestamp === 'number'
+        ? lastPoint.timestamp
+        : new Date(lastPoint.timestamp).getTime();
+      const startTime = endTime - WEEKS_TO_SHOW * WEEK_MS;
 
-      if (!filteredEquityCurve || filteredEquityCurve.length === 0) return;
-
-      const lineSeries = chartRef.current!.addSeries(LineSeries, {
-        color: strategy.color,
-        lineWidth: highlightedStrategyId === strategy.strategyId ? 3 : 2,
-        priceLineVisible: false,
-        lastValueVisible: true,
-        title: strategy.strategyName,
+      const filteredCurve = strategy.equityCurve.filter((point) => {
+        const timestamp = typeof point.timestamp === 'number'
+          ? point.timestamp
+          : new Date(point.timestamp).getTime();
+        return timestamp >= startTime && timestamp <= endTime;
       });
 
-      // 12주 시작점을 기준으로 정규화 (1000 = 100%)
-      const weekStartEquity = filteredEquityCurve[0].equity;
+      if (filteredCurve.length === 0) return;
 
-      // Equity curve를 레버리지 적용하여 LineData로 변환 (퍼센트 단위)
-      const lineData: LineData[] = filteredEquityCurve.map((point) => {
-        // 12주 시작점 대비 수익률 계산
+      const weekStartEquity = filteredCurve[0].equity;
+
+      // LineData 계산 (레버리지 적용)
+      const lineData: LineData[] = filteredCurve.map((point) => {
         const returnPct = ((point.equity - weekStartEquity) / weekStartEquity);
         const leveragedReturn = returnPct * leverage;
-
-        // 퍼센트로 표시 (0% 기준)
         const returnPercent = leveragedReturn * 100;
-
-        // 파산 방지: -100% 이하로 떨어지지 않도록 (파산 시 -100%)
         const clampedReturn = Math.max(-100, returnPercent);
 
-        // timestamp를 number로 변환 (string일 수도 있음)
         const timestamp = typeof point.timestamp === 'number'
           ? point.timestamp
           : new Date(point.timestamp).getTime();
@@ -168,22 +142,21 @@ export default function MultiStrategyEquityChart({
         };
       });
 
-      lineSeries.setData(lineData);
-      seriesMapRef.current.set(strategy.strategyId, lineSeries);
+      // 시리즈 추가
+      const series = chart.addSeries(LineSeries, {
+        color: strategy.color,
+        lineWidth: highlightedStrategyId === strategy.strategyId ? 3 : 2,
+        priceLineVisible: false,
+        lastValueVisible: true,
+        title: strategy.strategyName,
+      });
+
+      series.setData(lineData);
     });
 
     // 차트 시간축 맞춤
-    chartRef.current.timeScale().fitContent();
-  }, [filteredDataCache, strategies, leverage, highlightedStrategyId]);
-
-  // 하이라이트 변경 시 라인 두께 업데이트
-  useEffect(() => {
-    seriesMapRef.current.forEach((series, strategyId) => {
-      series.applyOptions({
-        lineWidth: highlightedStrategyId === strategyId ? 3 : 2,
-      });
-    });
-  }, [highlightedStrategyId]);
+    chart.timeScale().fitContent();
+  }, [strategies, leverage, highlightedStrategyId]);
 
   return (
     <div className="bg-zinc-900 p-4 rounded-lg">
@@ -201,20 +174,30 @@ export default function MultiStrategyEquityChart({
         {strategies.map((strategy) => {
           if (strategy.equityCurve.length === 0) return null;
 
-          // 캐시에서 필터링된 데이터 가져오기 (성능 최적화)
-          const filteredCurve = filteredDataCache.get(strategy.strategyId);
+          const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+          const lastPoint = strategy.equityCurve[strategy.equityCurve.length - 1];
+          const endTime = typeof lastPoint.timestamp === 'number'
+            ? lastPoint.timestamp
+            : new Date(lastPoint.timestamp).getTime();
+          const startTime = endTime - 12 * WEEK_MS;
 
-          if (!filteredCurve || filteredCurve.length === 0) return null;
+          const filteredCurve = strategy.equityCurve.filter((point) => {
+            const timestamp = typeof point.timestamp === 'number'
+              ? point.timestamp
+              : new Date(point.timestamp).getTime();
+            return timestamp >= startTime && timestamp <= endTime;
+          });
+
+          if (filteredCurve.length === 0) return null;
 
           const initialEquity = filteredCurve[0].equity;
           const finalEquity = filteredCurve[filteredCurve.length - 1].equity;
           const returnPct = (finalEquity - initialEquity) / initialEquity;
           const leveragedReturn = returnPct * leverage;
-          const baseCapital = 1000; // 초기 자본
+          const baseCapital = 1000;
           const leveragedEquity = baseCapital * (1 + leveragedReturn);
           const pnlPercent = leveragedReturn * 100;
 
-          // 파산 여부 확인 (equity가 0 이하)
           const isBankrupt = leveragedEquity <= 0;
 
           return (
@@ -232,16 +215,31 @@ export default function MultiStrategyEquityChart({
                 style={{ backgroundColor: strategy.color }}
               />
               <span className="text-zinc-300">{strategy.strategyName}</span>
-              <span className={isBankrupt ? 'text-red-500 font-bold' : pnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}>
-                {isBankrupt ? '파산 💀' : `${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(1)}%`}
-              </span>
+              {isBankrupt ? (
+                <span className="text-red-400 font-bold text-xs">💀 파산</span>
+              ) : (
+                <span className={pnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}>
+                  {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
       {/* 차트 컨테이너 */}
-      <div ref={containerRef} className="w-full h-[500px]" />
+      {strategies.length === 0 ? (
+        <div className="flex items-center justify-center h-[500px] text-zinc-500">
+          <div className="text-center">
+            <div className="text-2xl mb-2">📊</div>
+            <div>전략 데이터를 불러오는 중...</div>
+          </div>
+        </div>
+      ) : (
+        <div ref={containerRef} className="w-full h-[500px]" />
+      )}
     </div>
   );
-}
+});
+
+export default MultiStrategyEquityChart;

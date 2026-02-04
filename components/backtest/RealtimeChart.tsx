@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   createChart,
   IChartApi,
@@ -25,6 +25,7 @@ import {
   BacktestResult,
   EquityPoint,
   deleteSavedResult,
+  getDailyRollingSharpeTimeline,
 } from '@/lib/backtest-api';
 import { X } from 'lucide-react';
 import {
@@ -44,6 +45,7 @@ import { useAtomValue } from 'jotai';
 import { symbolAtom, symbolIdAtom } from '@/stores/symbolAtom';
 import { toSeconds, formatKST, getTimeframeSeconds } from '@/lib/utils/timestamp';
 import { useAutoOptimize } from '@/hooks/useAutoOptimize';
+import { usePerformanceMonitor, performanceMonitor } from '@/lib/performance-monitor';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -89,6 +91,9 @@ const changeStrategy = async (strategyId: number) => {
 };
 
 export default function RealtimeChart() {
+  // Performance monitoring
+  usePerformanceMonitor('RealtimeChart');
+
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<any>(null);
@@ -130,6 +135,7 @@ export default function RealtimeChart() {
   // 멀티 전략 비교용 상태
   const [allStrategiesEquityCurves, setAllStrategiesEquityCurves] = useState<Map<number, EquityPoint[]>>(new Map());
   const [highlightedStrategy, setHighlightedStrategy] = useState<number | null>(null);
+  const [rollingSharpeData, setRollingSharpeData] = useState<Map<string, Array<{ timestamp: number; sharpe: number }>>>(new Map());
   const [useWalkForward, setUseWalkForward] = useState(false); // Walk-Forward 모드
 
   // 툴팁 관련 상태
@@ -787,6 +793,8 @@ export default function RealtimeChart() {
   // 상위 전략 목록 로드 - 백엔드에서 모든 전략 프리뷰 가져오기 (race condition 없음)
   useEffect(() => {
     const loadStrategies = async () => {
+      const perfEnd = performanceMonitor.start('loadStrategies');
+
       // 로딩 시작
       setIsLoadingAllStrategies(true);
       setSelectedStrategy(null);
@@ -794,10 +802,13 @@ export default function RealtimeChart() {
       try {
         // 백엔드에서 모든 전략 프리뷰 가져오기 (JSON 기본값으로 백테스트)
         console.log('[Strategy] Fetching strategy previews from backend...');
-        const previews = await fetchStrategyPreviews(
-          currentSymbol.slashFormat,
-          timeframe,
-          5000
+        const previews = await performanceMonitor.measureAsync(
+          'fetchStrategyPreviews',
+          () => fetchStrategyPreviews(
+            currentSymbol.slashFormat,
+            timeframe,
+            5000
+          )
         );
 
         if (previews.length === 0) {
@@ -840,7 +851,26 @@ export default function RealtimeChart() {
           rank: idx + 1,
         }));
 
-        setStrategies(convertedResults);
+        // 참조 안정화: API 응답 내용이 동일하면 기존 배열 참조 유지
+        setStrategies(prev => {
+          if (prev.length === convertedResults.length) {
+            const allMatch = convertedResults.every((newS, idx) => {
+              const prevS = prev[idx];
+              return prevS &&
+                     prevS.strategy === newS.strategy &&
+                     prevS.sharpeRatio === newS.sharpeRatio &&
+                     prevS.totalTrades === newS.totalTrades &&
+                     prevS.winRate === newS.winRate &&
+                     prevS.totalPnlPercent === newS.totalPnlPercent;
+            });
+            if (allMatch) {
+              console.log('[loadStrategies] Previews unchanged, reusing array');
+              return prev;
+            }
+          }
+          console.log('[loadStrategies] Previews changed, creating new array');
+          return convertedResults;
+        });
         console.log('[Strategy] Loaded', convertedResults.length, 'strategies from backend');
 
         // 미리보기 맵 업데이트
@@ -907,9 +937,11 @@ export default function RealtimeChart() {
         }
 
         setIsLoadingAllStrategies(false);
+        perfEnd();
       } catch (err) {
         console.error('Failed to load strategies:', err);
         setIsLoadingAllStrategies(false);
+        perfEnd();
       }
     };
     loadStrategies();
@@ -920,11 +952,13 @@ export default function RealtimeChart() {
     if (strategies.length === 0 || isLoadingAllStrategies) return;
 
     const loadAllEquityCurves = async () => {
+      console.log('[loadAllEquityCurves] START - strategies:', strategies.length);
       setIsLoadingEquityCurves(true);
       const newEquityCurves = new Map<number, EquityPoint[]>();
 
       // 상위 10개 전략만 차트에 표시 (너무 많으면 복잡함)
       const topStrategies = strategies.slice(0, 10);
+      console.log('[loadAllEquityCurves] Top strategies count:', topStrategies.length);
 
       // 병렬로 모든 전략 백테스트 실행
       await Promise.all(
@@ -994,13 +1028,23 @@ export default function RealtimeChart() {
 
               if (wfResult.combinedEquityCurve && wfResult.combinedEquityCurve.length > 0) {
                 newEquityCurves.set(strategy.id, wfResult.combinedEquityCurve);
+                console.log(`[loadAllEquityCurves] Strategy ${strategy.id} WF result:`, {
+                  equityCurveLength: wfResult.combinedEquityCurve.length,
+                });
                 // Walk-Forward 결과는 캐시하지 않음 (매번 최신 주차 사용)
+              } else {
+                console.warn(`[loadAllEquityCurves] Strategy ${strategy.id} WF - no equity curve`);
               }
             } else {
               const result = await runBacktest(backtestParams);
 
               if (result.equityCurve && result.equityCurve.length > 0) {
                 newEquityCurves.set(strategy.id, result.equityCurve);
+                console.log(`[loadAllEquityCurves] Strategy ${strategy.id} result:`, {
+                  equityCurveLength: result.equityCurve.length,
+                });
+              } else {
+                console.warn(`[loadAllEquityCurves] Strategy ${strategy.id} - no equity curve`);
               }
             }
           } catch (error) {
@@ -1009,12 +1053,63 @@ export default function RealtimeChart() {
         })
       );
 
-      setAllStrategiesEquityCurves(newEquityCurves);
+      console.log('[loadAllEquityCurves] COMPLETE - Map size:', newEquityCurves.size);
+
+      // 참조 안정화: 내용이 동일하면 기존 Map 참조 유지
+      setAllStrategiesEquityCurves(prev => {
+        if (prev.size === newEquityCurves.size) {
+          let isEqual = true;
+          for (const [id, curve] of newEquityCurves.entries()) {
+            const prevCurve = prev.get(id);
+            if (!prevCurve || prevCurve.length !== curve.length) {
+              isEqual = false;
+              break;
+            }
+            // 첫/마지막 포인트 비교 (성능 최적화)
+            if (prevCurve[0]?.timestamp !== curve[0]?.timestamp ||
+                prevCurve[prevCurve.length - 1]?.timestamp !== curve[curve.length - 1]?.timestamp) {
+              isEqual = false;
+              break;
+            }
+          }
+          if (isEqual) {
+            console.log('[loadAllEquityCurves] Data unchanged, reusing Map');
+            return prev; // 동일한 참조 반환 → 리렌더링 방지
+          }
+        }
+        console.log('[loadAllEquityCurves] Data changed, updating Map');
+        return newEquityCurves;
+      });
       setIsLoadingEquityCurves(false);
     };
 
     loadAllEquityCurves();
   }, [strategies, timeframe, currentSymbol.id, useWalkForward]);
+
+  // Rolling Sharpe 데이터 로딩 (백엔드에서 계산)
+  useEffect(() => {
+    if (strategies.length === 0) return;
+
+    const loadRollingSharpe = async () => {
+      try {
+        console.log('[loadRollingSharpe] Fetching from backend...');
+        const data = await getDailyRollingSharpeTimeline(currentSymbol.id, timeframe, 12, 14);
+
+        // Map으로 변환 (strategy type -> rollingSharpe 데이터)
+        const newRollingSharpeMap = new Map<string, Array<{ timestamp: number; sharpe: number }>>();
+        data.forEach(item => {
+          newRollingSharpeMap.set(item.strategy, item.rollingSharpe);
+        });
+
+        setRollingSharpeData(newRollingSharpeMap);
+        console.log('[loadRollingSharpe] Loaded rolling sharpe for', data.length, 'strategies');
+      } catch (error) {
+        console.error('[loadRollingSharpe] Failed to load rolling sharpe:', error);
+      }
+    };
+
+    loadRollingSharpe();
+  }, [strategies, timeframe, currentSymbol.id]);
 
   // 전략 변경 핸들러
   const handleStrategyChange = async (strategy: SavedOptimizeResult) => {
@@ -1073,6 +1168,35 @@ export default function RealtimeChart() {
     await changeStrategy(strategy.id);
     console.log('[Strategy] Manually selected:', strategy.id, 'TF:', strategy.timeframe);
   };
+
+  // 차트 컴포넌트용 전략 데이터 메모이제이션 (성능 최적화)
+  const chartStrategies = useMemo(() => {
+    return Array.from(allStrategiesEquityCurves.entries()).map(([strategyId, equityCurve], index) => {
+      const strategy = strategies.find(s => s.id === strategyId);
+      if (!strategy) return null;
+
+      const strategyType = strategy.strategy || 'rsi_div';
+      const rollingSharpe = rollingSharpeData.get(strategyType) || [];
+
+      return {
+        strategyId,
+        strategyName: getStrategyDisplayName(strategy),
+        strategyType,
+        color: getStrategyColor(index),
+        equityCurve,
+        rollingSharpe,
+      };
+    }).filter(Boolean) as any[];
+  }, [allStrategiesEquityCurves, strategies, rollingSharpeData]);
+
+  // 전략 클릭 핸들러 메모이제이션 (성능 최적화)
+  const handleStrategyClickMemo = useCallback((strategyId: number) => {
+    setHighlightedStrategy(strategyId === highlightedStrategy ? null : strategyId);
+    const strategy = strategies.find(s => s.id === strategyId);
+    if (strategy) {
+      handleStrategyChange(strategy);
+    }
+  }, [highlightedStrategy, strategies, handleStrategyChange]);
 
   // 선택된 전략으로 백테스트 실행 (재시도 포함 + throttling + 캐싱)
   const loadBacktestTrades = async (
@@ -2907,29 +3031,10 @@ export default function RealtimeChart() {
         </div>
       ) : allStrategiesEquityCurves.size > 0 ? (
         <MultiStrategyEquityChart
-          strategies={Array.from(allStrategiesEquityCurves.entries()).map(([strategyId, equityCurve], index) => {
-            const strategy = strategies.find(s => s.id === strategyId);
-            if (!strategy) return null;
-
-            const strategyType = strategy.strategy || 'rsi_div';
-            return {
-              strategyId,
-              strategyName: getStrategyDisplayName(strategy),
-              strategyType,
-              color: getStrategyColor(index),
-              equityCurve,
-            };
-          }).filter(Boolean) as any[]}
+          strategies={chartStrategies}
           highlightedStrategyId={highlightedStrategy}
           leverage={leverage}
-          onStrategyClick={(strategyId) => {
-            setHighlightedStrategy(strategyId === highlightedStrategy ? null : strategyId);
-            // 해당 전략 선택
-            const strategy = strategies.find(s => s.id === strategyId);
-            if (strategy) {
-              handleStrategyChange(strategy);
-            }
-          }}
+          onStrategyClick={handleStrategyClickMemo}
         />
       ) : null}
 
@@ -2955,28 +3060,10 @@ export default function RealtimeChart() {
         </div>
       ) : allStrategiesEquityCurves.size > 0 ? (
         <WeeklySharpeTimeline
-          strategies={Array.from(allStrategiesEquityCurves.entries()).map(([strategyId, equityCurve], index) => {
-            const strategy = strategies.find(s => s.id === strategyId);
-            if (!strategy) return null;
-
-            const strategyType = strategy.strategy || 'rsi_div';
-            return {
-              strategyId,
-              strategyName: getStrategyDisplayName(strategy),
-              strategyType,
-              color: getStrategyColor(index),
-              equityCurve,
-            };
-          }).filter(Boolean) as any[]}
+          strategies={chartStrategies}
           highlightedStrategyId={highlightedStrategy}
           leverage={leverage}
-          onStrategyClick={(strategyId) => {
-            setHighlightedStrategy(strategyId === highlightedStrategy ? null : strategyId);
-            const strategy = strategies.find(s => s.id === strategyId);
-            if (strategy) {
-              handleStrategyChange(strategy);
-            }
-          }}
+          onStrategyClick={handleStrategyClickMemo}
         />
       ) : null}
 

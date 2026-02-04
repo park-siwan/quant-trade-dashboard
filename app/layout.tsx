@@ -4,6 +4,7 @@ import localFont from 'next/font/local';
 import './globals.css';
 import { Providers } from '@/components/Providers';
 import { GNB } from '@/components/layout';
+import PerformancePanel from '@/components/debug/PerformancePanel';
 
 const pretendard = localFont({
   src: '../public/fonts/PretendardVariable.woff2',
@@ -43,6 +44,9 @@ export default function RootLayout({
             <main className='relative z-10'>
               {children}
             </main>
+
+            {/* Performance Monitor */}
+            <PerformancePanel />
           </div>
         </Providers>
       </body>

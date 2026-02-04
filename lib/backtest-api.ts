@@ -1600,3 +1600,28 @@ export async function runWalkForwardBacktest(
     combinedEquityCurve,
   };
 }
+
+/**
+ * 일별 Rolling Sharpe 타임라인 가져오기 (백엔드에서 계산)
+ * WeeklySharpeTimeline 차트용 API
+ */
+export async function getDailyRollingSharpeTimeline(
+  symbol: string = 'BTCUSDT',
+  timeframe: string = '5m',
+  weeks: number = 12,
+  windowDays: number = 14,
+): Promise<Array<{
+  strategy: string;
+  displayName: string;
+  rollingSharpe: Array<{ timestamp: number; sharpe: number }>;
+}>> {
+  const res = await fetch(
+    `${API_BASE}/backtest/strategy/daily-rolling-sharpe?symbol=${symbol}&timeframe=${timeframe}&weeks=${weeks}&windowDays=${windowDays}`,
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch daily rolling sharpe: ${res.statusText}`);
+  }
+
+  return res.json();
+}
