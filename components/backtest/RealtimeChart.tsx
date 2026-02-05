@@ -46,7 +46,7 @@ import { StrategyMiniChart } from './ui/StrategyMiniChart';
 const getTrendReversalComboDefaults = () => getDefaultParams('trend_reversal_combo');
 const getBbReversionDefaults = () => getDefaultParams('z_score');
 const getHmmOrchestratorDefaults = () => getDefaultParams('hmm_orchestrator');
-import { preloadStrategyDefaults, getCachedStrategyDisplayName, fetchStrategyPreviews, StrategyPreview, fetchRollingSharpe, RollingSharpeResult } from '@/lib/backtest-api';
+import { preloadStrategyDefaults, getCachedStrategyDisplayName, fetchStrategyPreviews, StrategyPreview } from '@/lib/backtest-api';
 import { calculateTotalHoldingTime, calculateMeasurementPeriod, formatDuration } from '@/lib/backtest-calculations';
 import { CHART } from '@/lib/constants';
 import { useAtomValue } from 'jotai';
@@ -200,7 +200,6 @@ function RealtimeChart() {
   const {
     strategies,
     isLoading: isLoadingAllStrategies,
-    rollingSharpeMap,
     strategyPreviews,
     refetch: refetchStrategies,
   } = useStrategyList(currentSymbol.slashFormat, symbolId, timeframe);
@@ -1244,7 +1243,11 @@ function RealtimeChart() {
               const isSelected = selectedStrategy?.id === strategy.id;
 
               const strategyType = strategy.strategy || 'rsi_div';
-              const rollingSharpe = rollingSharpeMap.get(strategyType);
+              // 일별 롤링 샤프 데이터에서 최근 값 가져오기
+              const dailySharpeArray = rollingSharpeData.get(strategyType);
+              const latestSharpe = dailySharpeArray && dailySharpeArray.length > 0
+                ? dailySharpeArray[dailySharpeArray.length - 1].sharpe
+                : null;
 
               return (
                 <div
@@ -1311,12 +1314,12 @@ function RealtimeChart() {
                               );
                             })()}
                           </div>
-                          {rollingSharpe && rollingSharpe.periods && rollingSharpe.periods.length > 0 && (
+                          {latestSharpe !== null && (
                             <div className={`text-[10px] font-bold shrink-0 ${
-                              (rollingSharpe.periods[0].sharpe ?? 0) >= 1 ? 'text-green-400' :
-                              (rollingSharpe.periods[0].sharpe ?? 0) >= 0 ? 'text-yellow-400' : 'text-red-400'
+                              latestSharpe >= 1 ? 'text-green-400' :
+                              latestSharpe >= 0 ? 'text-yellow-400' : 'text-red-400'
                             }`}>
-                              SR {rollingSharpe.periods[0].sharpe?.toFixed(1) ?? '—'}
+                              SR {latestSharpe.toFixed(1)}
                             </div>
                           )}
                         </div>

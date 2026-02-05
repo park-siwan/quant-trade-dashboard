@@ -2,15 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   SavedOptimizeResult,
   fetchStrategyPreviews,
-  fetchRollingSharpe,
-  RollingSharpeResult,
 } from '@/lib/backtest-api';
 import { performanceMonitor } from '@/lib/performance-monitor';
 
 interface UseStrategyListResult {
   strategies: SavedOptimizeResult[];
   isLoading: boolean;
-  rollingSharpeMap: Map<string, RollingSharpeResult>;
   strategyPreviews: Map<number, {
     totalTrades: number;
     winRate: number;
@@ -25,7 +22,6 @@ interface UseStrategyListResult {
  * 전략 목록 관리 Hook
  * - 백엔드에서 전략 프리뷰 가져오기
  * - 참조 안정화로 불필요한 리렌더링 방지
- * - 롤링 Sharpe 데이터 자동 로드
  */
 export function useStrategyList(
   symbol: string,
@@ -34,7 +30,6 @@ export function useStrategyList(
 ): UseStrategyListResult {
   const [strategies, setStrategies] = useState<SavedOptimizeResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [rollingSharpeMap, setRollingSharpeMap] = useState<Map<string, RollingSharpeResult>>(new Map());
   const [strategyPreviews, setStrategyPreviews] = useState<Map<number, {
     totalTrades: number;
     winRate: number;
@@ -140,46 +135,6 @@ export function useStrategyList(
         });
         setStrategyPreviews(previewMap);
 
-        // 롤링 기간별 Sharpe 데이터 로드 (백엔드에서 5분마다 자동 계산)
-        fetchRollingSharpe(symbolId, timeframe).then((rollingData) => {
-          console.log('[Strategy] Rolling Sharpe response:', rollingData);
-          if (rollingData && rollingData.length > 0) {
-            const rollingMap = new Map<string, RollingSharpeResult>();
-            rollingData.forEach((d) => {
-              rollingMap.set(d.strategy, d);
-            });
-
-            // 참조 안정화: 내용이 같으면 기존 Map 재사용
-            setRollingSharpeMap(prev => {
-              if (prev.size === rollingMap.size) {
-                let isEqual = true;
-                for (const [key, value] of rollingMap.entries()) {
-                  const prevValue = prev.get(key);
-                  // periods 배열의 첫 번째 (최신) 샤프 값 비교
-                  const prevSharpe = prevValue?.periods?.[0]?.sharpe;
-                  const newSharpe = value?.periods?.[0]?.sharpe;
-                  if (prevSharpe !== newSharpe) {
-                    isEqual = false;
-                    break;
-                  }
-                }
-                if (isEqual) {
-                  console.log('[Strategy] Rolling Sharpe unchanged, reusing Map');
-                  return prev;
-                }
-              }
-              console.log('[Strategy] Rolling Sharpe changed, creating new Map');
-              return rollingMap;
-            });
-
-            console.log('[Strategy] Loaded rolling Sharpe for', rollingData.length, 'strategies');
-          } else {
-            console.log('[Strategy] No rolling Sharpe data received');
-          }
-        }).catch((err) => {
-          console.error('[Strategy] Failed to load rolling Sharpe:', err);
-        });
-
         setIsLoading(false);
         perfEnd();
       } catch (err) {
@@ -195,7 +150,6 @@ export function useStrategyList(
   return {
     strategies,
     isLoading,
-    rollingSharpeMap,
     strategyPreviews,
     refetch,
   };
