@@ -1614,6 +1614,7 @@ export async function getDailyRollingSharpeTimeline(
   strategy: string;
   displayName: string;
   rollingSharpe: Array<{ timestamp: number; sharpe: number }>;
+  equityCurve: Array<{ timestamp: number | string; equity: number }>;
 }>> {
   // 120초 타임아웃 설정 (6개 전략 × 12주 백테스트는 시간이 오래 걸림)
   const controller = new AbortController();
