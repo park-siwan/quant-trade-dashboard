@@ -60,12 +60,18 @@ export function calculateMeasurementPeriod(
 
   // 2순위: equityCurve 첫/마지막 타임스탬프 사용
   if (equityCurve && equityCurve.length >= 2) {
-    const firstTime = (typeof equityCurve[0].timestamp === 'number'
-      ? equityCurve[0].timestamp
-      : new Date(equityCurve[0].timestamp).getTime()) as number;
-    const lastTime = (typeof equityCurve[equityCurve.length - 1].timestamp === 'number'
-      ? equityCurve[equityCurve.length - 1].timestamp
-      : new Date(equityCurve[equityCurve.length - 1].timestamp).getTime()) as number;
+    // 타임스탬프를 밀리초로 변환 (초 단위 Unix timestamp도 처리)
+    const parseTimestamp = (ts: string | number): number => {
+      if (typeof ts === 'number') {
+        // 초 단위 Unix timestamp인지 확인 (2000년 이후 = 946684800 이상)
+        // 밀리초면 946684800000 이상이어야 함
+        return ts < 1e12 ? ts * 1000 : ts;
+      }
+      return new Date(ts).getTime();
+    };
+
+    const firstTime = parseTimestamp(equityCurve[0].timestamp);
+    const lastTime = parseTimestamp(equityCurve[equityCurve.length - 1].timestamp);
 
     if (!isNaN(firstTime) && !isNaN(lastTime)) {
       return lastTime - firstTime;
