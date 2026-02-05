@@ -65,8 +65,6 @@ import { usePositionAlerts } from './hooks/usePositionAlerts';
 import { useMarkerGeneration } from './hooks/useMarkerGeneration';
 // import { useWhyDidYouUpdate } from './hooks/useWhyDidYouUpdate'; // 비활성화
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
 // 무지개 색상 배열 (빨주노초파보)
 const RAINBOW_COLORS = [
   '#ef4444',  // 빨강 (Red)
@@ -95,18 +93,6 @@ const getStrategyDisplayName = (strategy: SavedOptimizeResult): string => {
   return getCachedStrategyDisplayName(strategyType);
 };
 
-// 전략 변경 요청
-const changeStrategy = async (strategyId: number) => {
-  try {
-    await fetch(`${API_BASE}/realtime/strategy`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ strategyId }),
-    });
-  } catch (err) {
-    console.error('Failed to change strategy:', err);
-  }
-};
 
 function RealtimeChart() {
   // Performance monitoring
@@ -599,7 +585,6 @@ function RealtimeChart() {
     }
 
     setSelectedStrategy(strategy);
-    await changeStrategy(strategy.id);
     console.log('[Strategy] Manually selected:', strategy.id, 'TF:', strategy.timeframe);
   }, [updateSeriesMarkers, candles, timeframe, setTimeframe, setSelectedStrategy]);
 
