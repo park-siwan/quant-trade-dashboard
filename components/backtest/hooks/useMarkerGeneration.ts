@@ -31,6 +31,7 @@ interface UseMarkerGenerationProps {
   divergenceHistory: RealtimeDivergenceData[];
   selectedStrategy: SavedOptimizeResult | null;
   isBacktestRunning: boolean;
+  lastBacktestTime: Date | null;  // 캐시 사용 시에도 effect 재실행 트리거
   candleSeriesRef: MutableRefObject<any>;
   chartRef: MutableRefObject<IChartApi | null>;
   isChangingStrategyRef: MutableRefObject<boolean>;
@@ -53,6 +54,7 @@ export function useMarkerGeneration({
   divergenceHistory,
   selectedStrategy,
   isBacktestRunning,
+  lastBacktestTime,
   candleSeriesRef,
   chartRef,
   isChangingStrategyRef,
@@ -71,18 +73,26 @@ export function useMarkerGeneration({
   useEffect(() => {
     if (!candleSeriesRef.current || candles.length === 0) return;
 
-    // 전략 변경 중이거나 백테스트 진행 중이면 마커 클리어 (깔끔한 상태 유지)
-    if (isChangingStrategyRef.current || isBacktestRunning) {
-      // 백테스트 상태가 실제로 변경되었을 때만 차트 초기화
-      if (isBacktestRunning !== prevIsBacktestRunningRef.current) {
-        updateSeriesMarkers([]);
-        candleSeriesRef.current.setData(candles);
-        prevIsBacktestRunningRef.current = isBacktestRunning;
-      }
+    // 백테스트 시작 시에만 마커 클리어 (isBacktestRunning이 false → true로 변경될 때)
+    if (isBacktestRunning && !prevIsBacktestRunningRef.current) {
+      console.log('[Markers] Backtest started, clearing markers');
+      updateSeriesMarkers([]);
+      candleSeriesRef.current.setData(candles);
+      prevIsBacktestRunningRef.current = true;
       return;
     }
 
-    prevIsBacktestRunningRef.current = isBacktestRunning;
+    // 백테스트 진행 중이면 대기 (마커 업데이트 안함)
+    if (isBacktestRunning) {
+      return;
+    }
+
+    // Note: isChangingStrategyRef 체크 제거 - ref 변경은 effect 재실행을 트리거하지 않음
+    // isBacktestRunning 체크만으로 충분함 (전략 변경 시 백테스트가 실행되므로)
+
+    prevIsBacktestRunningRef.current = false;
+
+    console.log('[Markers] Processing markers for', backtestTrades.length, 'trades');
 
     const candleTimes = candles.map((c) => c.time as number);
     const minCandleTime = Math.min(...candleTimes);
@@ -116,10 +126,7 @@ export function useMarkerGeneration({
       // console.log('[Markers] Chart data updated - candles:', candles.length);
     }
 
-    // 거래/포지션 변경 시 ref만 업데이트 (setData 호출 안 함)
-    if (tradesChanged) {
-      prevTradesCountRef.current = backtestTrades.length;
-    }
+    // 포지션 변경 시 ref 업데이트 (거래 count는 마커 업데이트 후에 갱신)
     if (positionChanged) {
       prevOpenPositionRef.current = openPosition;
     }
@@ -169,13 +176,37 @@ export function useMarkerGeneration({
       skippedSignals.length !== prevSkippedCountRef.current ||
       (!selectedStrategy && divergenceHistory.length !== prevDivergenceCountRef.current);
 
-    if (markersChanged) {
-      if (allMarkers.length > 0) {
-        updateSeriesMarkers(allMarkers);
-      } else {
-        updateSeriesMarkers([]);
-      }
+    // 항상 마커 업데이트 시도 (변경 여부와 관계없이)
+    // 거래 시간 범위 분석
+    if (backtestTrades.length > 0) {
+      const firstTrade = backtestTrades[0];
+      const lastTrade = backtestTrades[backtestTrades.length - 1];
+      const firstEntrySeconds = toSeconds(firstTrade.entryTime);
+      const lastExitSeconds = toSeconds(lastTrade.exitTime);
 
+      console.log('[Markers] Time range analysis:', {
+        candleRange: { min: minCandleTime, max: maxCandleTime, minDate: new Date(minCandleTime * 1000).toISOString(), maxDate: new Date(maxCandleTime * 1000).toISOString() },
+        tradeRange: { firstEntry: firstEntrySeconds, lastExit: lastExitSeconds, firstDate: new Date(firstEntrySeconds * 1000).toISOString(), lastDate: new Date(lastExitSeconds * 1000).toISOString() },
+        overlap: firstEntrySeconds <= maxCandleTime && lastExitSeconds >= minCandleTime,
+      });
+    }
+
+    console.log('[Markers] Debug:', {
+      tradesChanged,
+      markersChanged,
+      tradesLength: backtestTrades.length,
+      prevTradesCount: prevTradesCountRef.current,
+      tradeMarkersCount: tradeMarkers.length,
+      skippedMarkersCount: skippedMarkers.length,
+      divergenceMarkersCount: divergenceMarkers.length,
+      allMarkersCount: allMarkers.length,
+    });
+
+    if (allMarkers.length > 0 || tradesChanged || markersChanged) {
+      updateSeriesMarkers(allMarkers);
+      console.log('[Markers] Applied', allMarkers.length, 'markers for', backtestTrades.length, 'trades');
+
+      prevTradesCountRef.current = backtestTrades.length;
       prevSkippedCountRef.current = skippedSignals.length;
       prevDivergenceCountRef.current = divergenceHistory.length;
     }
@@ -190,6 +221,7 @@ export function useMarkerGeneration({
     candles.length,
     selectedStrategy?.id,
     isBacktestRunning,
+    lastBacktestTime?.getTime(),  // 캐시 사용 시에도 effect 재실행 (매번 다른 timestamp)
     // 함수/ref는 안정적이므로 재실행 유발하지 않음
     candleSeriesRef,
     chartRef,

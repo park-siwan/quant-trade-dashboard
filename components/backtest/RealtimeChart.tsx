@@ -26,8 +26,9 @@ import {
   EquityPoint,
   deleteSavedResult,
   getDailyRollingSharpeTimeline,
+  refreshSingleStrategy,
 } from '@/lib/backtest-api';
-import { X } from 'lucide-react';
+import { X, RefreshCw } from 'lucide-react';
 import {
   convertApiParams,
   getDefaultParams,
@@ -162,6 +163,9 @@ function RealtimeChart() {
   // 전략 비교 차트 탭 (null = 숨김, 'equity' = 자산곡선, 'sharpe' = 샤프 타임라인)
   const [strategyChartTab, setStrategyChartTab] = useState<'equity' | 'sharpe' | null>(null);
 
+  // 단일 전략 갱신 중 상태
+  const [refreshingStrategy, setRefreshingStrategy] = useState<string | null>(null);
+
   // Refs for tracking
   const savedStrategyIdRef = useRef<number | null>(null);
   const lastCandleTimeRef = useRef<number>(0);
@@ -186,19 +190,22 @@ function RealtimeChart() {
   const {
     strategies,
     isLoading: isLoadingAllStrategies,
-    strategyPreviews,
     refetch: refetchStrategies,
   } = useStrategyList(currentSymbol.slashFormat, symbolId, timeframe);
 
-  // 3. Backtest Runner (equity curves + rolling sharpe timeline)
+  // 3. Backtest Runner (equity curves + rolling sharpe timeline + all positions + stats + trades)
   const {
     equityCurves: allStrategiesEquityCurves,
     isLoading: isLoadingEquityCurves,
     rollingSharpeData,
-    backtestCacheRef,
+    allOpenPositions,
+    allStrategyStats,
+    allTradesMap,
+    refetch: refetchBacktestData,
   } = useBacktestRunner(strategies, symbolId, timeframe, useWalkForward);
 
   // 4. Real-time Updates (selected strategy backtest)
+  // 미리 로드된 trades/openPositions를 우선 사용 → runBacktest 호출 최소화
   const {
     backtestTrades,
     skippedSignals,
@@ -214,7 +221,9 @@ function RealtimeChart() {
     currentSymbol.slashFormat,
     timeframe,
     candles.length,
-    isLoading
+    isLoading,
+    allTradesMap,      // 미리 로드된 trades (마커 표시용)
+    allOpenPositions,  // 미리 로드된 open positions
   );
 
   // 5. Sound Alerts
@@ -307,14 +316,27 @@ function RealtimeChart() {
 
   // 마커 인스턴스 재사용 유틸 함수 (누적 방지)
   const updateSeriesMarkers = useCallback((markers: SeriesMarker<Time>[]) => {
-    if (!candleSeriesRef.current) return;
+    console.log('[updateSeriesMarkers] Called with', markers.length, 'markers, candleSeries:', !!candleSeriesRef.current, 'existingMarkers:', !!seriesMarkersRef.current);
+
+    if (!candleSeriesRef.current) {
+      console.warn('[updateSeriesMarkers] candleSeriesRef.current is null, skipping');
+      return;
+    }
 
     if (!seriesMarkersRef.current) {
       // 첫 호출: 인스턴스 생성
+      console.log('[updateSeriesMarkers] Creating new marker series with', markers.length, 'markers');
       seriesMarkersRef.current = createSeriesMarkers(candleSeriesRef.current, markers);
+      console.log('[updateSeriesMarkers] Created marker series:', !!seriesMarkersRef.current);
     } else {
       // 이후 호출: 기존 인스턴스에서 마커만 교체
+      console.log('[updateSeriesMarkers] Updating existing marker series with', markers.length, 'markers');
       seriesMarkersRef.current.setMarkers(markers);
+    }
+
+    // 첫 3개 마커 샘플 로그
+    if (markers.length > 0) {
+      console.log('[updateSeriesMarkers] Sample markers:', markers.slice(0, 3).map(m => ({ time: m.time, shape: m.shape, color: m.color })));
     }
   }, []); // refs만 사용하므로 의존성 없음
 
@@ -331,6 +353,7 @@ function RealtimeChart() {
     divergenceHistory,
     selectedStrategy,
     isBacktestRunning,
+    lastBacktestTime,  // 캐시 사용 시에도 마커 갱신 트리거
     candleSeriesRef,
     chartRef,
     isChangingStrategyRef,
@@ -1221,12 +1244,23 @@ function RealtimeChart() {
                 ))}
               </>
             )}
-            {strategies.slice(0, 30).map((strategy, idx) => {
-              const preview = strategyPreviews.get(strategy.id);
+            {/* 샤프 비율 순으로 정렬 (로딩 완료 후) */}
+            {[...strategies].sort((a, b) => {
+              // rollingSharpeData가 있으면 최신 샤프 기준 정렬
+              if (rollingSharpeData.size > 0) {
+                const aType = a.strategy || 'rsi_div';
+                const bType = b.strategy || 'rsi_div';
+                const aData = rollingSharpeData.get(aType);
+                const bData = rollingSharpeData.get(bType);
+                const aSharpe = aData && aData.length > 0 ? aData[aData.length - 1].sharpe : -Infinity;
+                const bSharpe = bData && bData.length > 0 ? bData[bData.length - 1].sharpe : -Infinity;
+                return bSharpe - aSharpe; // 내림차순
+              }
+              return 0;
+            }).slice(0, 30).map((strategy) => {
               const isRollingResult = strategy.id < 0;
               const displayName = getStrategyDisplayName(strategy);
               const isSelected = selectedStrategy?.id === strategy.id;
-
               const strategyType = strategy.strategy || 'rsi_div';
               // 일별 롤링 샤프 데이터에서 최근 값 가져오기
               const dailySharpeArray = rollingSharpeData.get(strategyType);
@@ -1243,28 +1277,32 @@ function RealtimeChart() {
                       : 'bg-zinc-800 hover:bg-zinc-700'
                   }`}
                 >
-                  {/* 삭제 버튼 (우측 상단) */}
-                  {!isRollingResult && (
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (!confirm('이 전략을 삭제하시겠습니까?')) return;
-                        try {
-                          await deleteSavedResult(strategy.id);
-                          refetchStrategies(); // Refetch strategies from hook
-                          if (selectedStrategy?.id === strategy.id) {
-                            setSelectedStrategy(null);
-                          }
-                        } catch (err) {
-                          console.error('삭제 실패:', err);
-                        }
-                      }}
-                      className='absolute top-1 right-1 p-0.5 text-zinc-500 hover:text-red-400 transition-colors z-10'
-                      title='전략 삭제'
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
+                  {/* 새로고침 버튼 (우측 상단) */}
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (refreshingStrategy === strategyType) return;
+                      setRefreshingStrategy(strategyType);
+                      try {
+                        await refreshSingleStrategy(symbolId, timeframe, strategyType);
+                        // 캐시 갱신 후 데이터 다시 로드 (silent 모드: 로딩 표시 없이)
+                        refetchBacktestData(true);
+                      } catch (err) {
+                        console.error('갱신 실패:', err);
+                      } finally {
+                        setRefreshingStrategy(null);
+                      }
+                    }}
+                    disabled={refreshingStrategy === strategyType}
+                    className={`absolute top-1 right-1 p-0.5 z-10 transition-colors ${
+                      refreshingStrategy === strategyType
+                        ? 'text-blue-400 animate-spin'
+                        : 'text-zinc-500 hover:text-blue-400'
+                    }`}
+                    title='전략 캐시 갱신 (파라미터 변경 후 클릭)'
+                  >
+                    <RefreshCw size={11} />
+                  </button>
 
                   <button
                     onClick={() => handleStrategyChange(strategy)}
@@ -1279,12 +1317,12 @@ function RealtimeChart() {
                             <span className='text-zinc-300 text-[11px] font-medium truncate'>
                               {displayName}
                             </span>
-                            {/* 현재 포지션 칩 (모든 전략의 캐시된 포지션 표시) */}
+                            {/* 현재 포지션 칩 (모든 전략의 포지션 표시) */}
                             {(() => {
-                              // 선택된 전략이면 현재 state 사용, 아니면 캐시 확인
+                              // 선택된 전략이면 현재 state 사용, 아니면 allOpenPositions에서 가져오기
                               const position = isSelected
                                 ? openPosition
-                                : backtestCacheRef.current.get(`${strategy.id}_${currentSymbol.id}_${timeframe}`)?.openPosition;
+                                : allOpenPositions.get(strategyType);
 
                               if (!position) return null;
 
@@ -1309,27 +1347,30 @@ function RealtimeChart() {
                           )}
                         </div>
 
-                        {/* 중간: 승률 | 수익률 | 거래수 */}
+                        {/* 중간: 승률 | 수익률 | 거래수 (12주 기준) */}
                         <div className='flex items-center gap-1'>
-                          {preview?.loading ? (
-                            <span className='text-zinc-500 text-[8px]'>분석중...</span>
-                          ) : preview && preview.totalTrades > 0 ? (
-                            <>
-                              <span className={`text-[9px] ${preview.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                                {preview.winRate.toFixed(0)}%
-                              </span>
-                              <span className='text-zinc-600 text-[9px]'>|</span>
-                              <span className={`text-[9px] ${preview.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {preview.totalPnlPercent >= 0 ? '+' : ''}{preview.totalPnlPercent.toFixed(1)}%
-                              </span>
-                              <span className='text-zinc-600 text-[9px]'>|</span>
-                              <span className='text-zinc-400 text-[9px]'>
-                                {preview.totalTrades}회
-                              </span>
-                            </>
-                          ) : (
-                            <span className='text-zinc-600 text-[8px]'>—</span>
-                          )}
+                          {(() => {
+                            // 12주 기준 통계 사용 (allStrategyStats)
+                            const stats = allStrategyStats.get(strategyType);
+                            if (!stats || stats.totalTrades === 0) {
+                              return <span className='text-zinc-600 text-[8px]'>—</span>;
+                            }
+                            return (
+                              <>
+                                <span className={`text-[9px] ${stats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {stats.winRate.toFixed(0)}%
+                                </span>
+                                <span className='text-zinc-600 text-[9px]'>|</span>
+                                <span className={`text-[9px] ${stats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {stats.totalPnlPercent >= 0 ? '+' : ''}{stats.totalPnlPercent.toFixed(1)}%
+                                </span>
+                                <span className='text-zinc-600 text-[9px]'>|</span>
+                                <span className='text-zinc-400 text-[9px]'>
+                                  {stats.totalTrades}회
+                                </span>
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
 

@@ -1615,6 +1615,11 @@ export async function getDailyRollingSharpeTimeline(
   displayName: string;
   rollingSharpe: Array<{ timestamp: number; sharpe: number }>;
   equityCurve: Array<{ timestamp: number | string; equity: number }>;
+  openPosition: OpenPosition | null;
+  totalTrades: number;
+  winRate: number;
+  totalPnlPercent: number;
+  trades: TradeResult[];  // 마커 표시용 거래 내역
 }>> {
   // 120초 타임아웃 설정 (6개 전략 × 12주 백테스트는 시간이 오래 걸림)
   const controller = new AbortController();
@@ -1638,5 +1643,26 @@ export async function getDailyRollingSharpeTimeline(
     throw err;
   } finally {
     clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * 단일 전략 캐시 갱신 (파라미터 변경 후 사용)
+ * 전체 갱신 대비 CPU 부하 1/6
+ */
+export async function refreshSingleStrategy(
+  symbol: string,
+  timeframe: string,
+  strategy: string,
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/backtest/rolling-sharpe/refresh-strategy?symbol=${symbol}&timeframe=${timeframe}&strategy=${strategy}`,
+      { method: 'POST' },
+    );
+    return res.json();
+  } catch (err) {
+    console.error('Failed to refresh strategy:', err);
+    return { success: false, message: 'Failed to refresh strategy' };
   }
 }

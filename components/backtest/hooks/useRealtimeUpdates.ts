@@ -35,9 +35,9 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5분
 
 /**
  * 실시간 백테스트 업데이트 Hook
- * - 전략 선택 시 백테스트 실행
+ * - 전략 선택 시 미리 로드된 trades/openPosition 우선 사용 (API 호출 없음)
+ * - fallback으로만 runBacktest 호출
  * - 캐싱 및 throttling으로 성능 최적화
- * - **BUG FIX**: trades 배열이 비어있을 때 방어 로직 추가
  */
 export function useRealtimeUpdates(
   selectedStrategy: SavedOptimizeResult | null,
@@ -45,7 +45,10 @@ export function useRealtimeUpdates(
   symbolSlashFormat: string,
   timeframe: string,
   candlesLength: number,
-  isLoadingCandles: boolean
+  isLoadingCandles: boolean,
+  // 미리 로드된 데이터 (useBacktestRunner에서 제공)
+  preloadedTradesMap?: Map<string, TradeResult[]>,
+  preloadedOpenPositions?: Map<string, OpenPosition>,
 ): UseRealtimeUpdatesResult {
   const [backtestTrades, setBacktestTrades] = useState<TradeResult[]>([]);
   const [skippedSignals, setSkippedSignals] = useState<SkippedSignal[]>([]);
@@ -193,20 +196,32 @@ export function useRealtimeUpdates(
     }
   }, [symbol, symbolSlashFormat, timeframe]);
 
-  // 전략/타임프레임 변경 시 자동 백테스트 실행
+  // 전략/타임프레임 변경 시: 미리 로드된 데이터 우선 사용, 없으면 runBacktest 호출
   useEffect(() => {
-    console.log('[Backtest Trigger] Check:', {
-      hasStrategy: !!selectedStrategy,
-      strategyId: selectedStrategy?.id,
-      candlesLength,
-      isLoadingCandles,
-    });
-
     if (!selectedStrategy || isLoadingCandles || candlesLength === 0) return;
 
-    console.log('[Backtest Trigger] Running for strategy:', selectedStrategy.id);
+    const strategyType = selectedStrategy.strategy || 'rsi_div';
+
+    // 1순위: 미리 로드된 데이터 사용 (API 호출 없음)
+    if (preloadedTradesMap && preloadedTradesMap.has(strategyType)) {
+      const trades = preloadedTradesMap.get(strategyType) || [];
+      const openPos = preloadedOpenPositions?.get(strategyType) || null;
+
+      console.log('[Backtest] Using pre-loaded data for strategy:', strategyType, 'trades:', trades.length);
+
+      setBacktestTrades(trades);
+      setOpenPosition(openPos);
+      setSkippedSignals([]); // pre-loaded에서는 skippedSignals 없음
+      setLastBacktestTime(new Date());
+      setIsBacktestRunning(false);
+      isChangingStrategyRef.current = false;
+      return;
+    }
+
+    // 2순위: 캐시 또는 API 호출 (fallback)
+    console.log('[Backtest] No pre-loaded data, calling runBacktest for:', strategyType);
     loadBacktestTrades(selectedStrategy);
-  }, [selectedStrategy, timeframe, symbol, candlesLength, isLoadingCandles, loadBacktestTrades]);
+  }, [selectedStrategy, timeframe, symbol, candlesLength, isLoadingCandles, loadBacktestTrades, preloadedTradesMap, preloadedOpenPositions]);
 
   return {
     backtestTrades,
