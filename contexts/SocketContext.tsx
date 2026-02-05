@@ -1,11 +1,11 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { API_CONFIG } from '@/lib/config';
 import { SIGNAL } from '@/lib/constants';
 
-// Types
+// ==================== Types ====================
 export interface TickerData {
   price: number;
   change24h: number;
@@ -14,7 +14,7 @@ export interface TickerData {
   low24h: number;
   volume24h: number;
   timestamp: number;
-  symbol?: string; // 심볼 정보 (BTCUSDT 형식)
+  symbol?: string;
 }
 
 export interface OrderBookLevel {
@@ -39,17 +39,15 @@ export interface KlineData {
   volume: number;
   isFinal: boolean;
   timeframe: string;
-  symbol?: string; // 심볼 정보 (BTCUSDT 형식)
+  symbol?: string;
 }
 
-// MTF 백엔드 데이터 타입
 export interface BackendMTFData {
   timestamp: number;
   symbol: string;
   timeframes: any[];
 }
 
-// 청산 데이터 타입
 export interface LiquidationData {
   symbol: string;
   recentLiquidations: any[];
@@ -60,7 +58,6 @@ export interface LiquidationData {
   };
 }
 
-// 고래 데이터 타입
 export interface WhaleData {
   symbol: string;
   recentTrades: any[];
@@ -71,7 +68,6 @@ export interface WhaleData {
   };
 }
 
-// 펀딩 레이트 데이터 타입
 export interface FundingRateData {
   symbol: string;
   fundingRate: number;
@@ -79,54 +75,57 @@ export interface FundingRateData {
   nextFundingRate: number | null;
   markPrice: number;
   indexPrice: number;
-  signal: 'LONG' | 'SHORT' | 'NEUTRAL';
-  signalStrength: 'STRONG' | 'MEDIUM' | 'WEAK';
-  description: string;
-}
-
-// 코인글래스 데이터 타입
-export interface FearGreedData {
-  value: number;
-  classification: string;
-  timestamp: number;
 }
 
 export interface CoinglassData {
-  symbol: string;
-  fearGreed: FearGreedData | null;
-  liquidationBias: 'long_heavy' | 'short_heavy' | 'neutral';
-  bullMarketRisk: number;
-  etfTrend: 'inflow' | 'outflow' | 'neutral';
+  fearGreedIndex: any;
+  liquidationCoinList: any;
+  bullMarketPeak: any;
+  btcEtfFlow: any;
 }
 
-// 롱숏 비율 데이터 타입
 export interface LongShortRatioData {
-  longRatio: number;
-  shortRatio: number;
-  dominant: 'long' | 'short' | 'neutral';
-  dominance: number;
+  symbol: string;
+  longShortRatio: number;
+  longAccount: number;
+  shortAccount: number;
   timestamp: number;
 }
 
-// 실시간 다이버전스 신호 타입
 export interface RealtimeDivergenceData {
-  type: 'rsi';
-  direction: 'bullish' | 'bearish';
-  timestamp: number;
-  price: number;
-  rsiValue: number;
-  strength: number;
+  id: string;
+  symbol: string;
+  divergenceType: string;
+  direction: string;
+  currentPrice: number;
+  entryPrice: number;
+  tp: number;
+  sl: number;
+  timestamp: string;
   timeframe: string;
+  rsiValue?: number;
+  strategy?: string;
 }
 
+// ==================== Context Types ====================
+
+// 1. Ticker Context (가장 빈번하게 업데이트)
+interface TickerContextValue {
+  ticker: TickerData | null;
+}
+
+// 2. Kline Context (실시간 캔들)
+interface KlineContextValue {
+  kline: KlineData | null;
+  klineMap: Map<string, KlineData>;
+  getKline: (timeframe: string) => KlineData | null;
+}
+
+// 3. Socket Context (나머지 + functions)
 interface SocketContextValue {
   socket: Socket | null;
   isConnected: boolean;
-  ticker: TickerData | null;
   orderbook: OrderBookData | null;
-  kline: KlineData | null; // deprecated, use getKline(timeframe)
-  klineMap: Map<string, KlineData>; // 타임프레임별 kline
-  getKline: (timeframe: string) => KlineData | null;
   mtfData: BackendMTFData | null;
   lastMtfUpdate: number;
   liquidationData: LiquidationData | null;
@@ -142,14 +141,17 @@ interface SocketContextValue {
   subscribeSymbol: (symbol: string) => void;
 }
 
-const SocketContext = createContext<SocketContextValue>({
-  socket: null,
-  isConnected: false,
-  ticker: null,
-  orderbook: null,
+// ==================== Contexts ====================
+const TickerContext = createContext<TickerContextValue>({ ticker: null });
+const KlineContext = createContext<KlineContextValue>({
   kline: null,
   klineMap: new Map(),
   getKline: () => null,
+});
+const SocketContext = createContext<SocketContextValue>({
+  socket: null,
+  isConnected: false,
+  orderbook: null,
   mtfData: null,
   lastMtfUpdate: 0,
   liquidationData: null,
@@ -165,18 +167,26 @@ const SocketContext = createContext<SocketContextValue>({
   subscribeSymbol: () => {},
 });
 
-// 페이지가 마지막으로 숨겨진 시간
+// ==================== Constants ====================
 let lastHiddenTime = 0;
+const TICKER_THROTTLE_MS = 500;
+const KLINE_THROTTLE_MS = 500;
 
+// ==================== Provider ====================
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+
+  // Ticker state (별도 context)
   const [ticker, setTicker] = useState<TickerData | null>(null);
-  const [orderbook, setOrderbook] = useState<OrderBookData | null>(null);
+
+  // Kline state (별도 context)
   const [kline, setKline] = useState<KlineData | null>(null);
-  // 타임프레임별 kline 저장 (5분봉, 15분봉 등 동시 지원)
   const klineMapRef = useRef<Map<string, KlineData>>(new Map());
-  const [klineMapVersion, setKlineMapVersion] = useState(0); // Map 변경 감지용
+  const [klineMapVersion, setKlineMapVersion] = useState(0);
+
+  // Socket state (나머지)
+  const [orderbook, setOrderbook] = useState<OrderBookData | null>(null);
   const [mtfData, setMtfData] = useState<BackendMTFData | null>(null);
   const [lastMtfUpdate, setLastMtfUpdate] = useState(0);
   const [liquidationData, setLiquidationData] = useState<LiquidationData | null>(null);
@@ -187,25 +197,28 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [divergenceData, setDivergenceData] = useState<RealtimeDivergenceData | null>(null);
   const [divergenceHistory, setDivergenceHistory] = useState<RealtimeDivergenceData[]>([]);
   const [currentSymbol, setCurrentSymbol] = useState<string>('');
-  const currentSymbolRef = useRef<string>(''); // 이벤트 핸들러에서 최신 심볼 확인용
+  const currentSymbolRef = useRef<string>('');
 
-  // 페이지 visibility 변경 감지 - 잠자기 복귀 시 히스토리 클리어
+  // Throttle refs
+  const latestTickerRef = useRef<TickerData | null>(null);
+  const tickerThrottleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const klineThrottleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const orderbookThrottleTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Visibility change handler
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        // 숨겨질 때 시간 기록
         lastHiddenTime = Date.now();
       } else {
-        // 다시 보일 때 - 오래 숨겨졌으면 히스토리 클리어
         const hiddenDuration = Date.now() - lastHiddenTime;
         if (lastHiddenTime > 0 && hiddenDuration > SIGNAL.SLEEP_THRESHOLD) {
           console.log(`[Socket] 잠자기 복귀 (${Math.round(hiddenDuration / 1000)}초), 다이버전스 히스토리 클리어`);
           setDivergenceHistory([]);
           setDivergenceData(null);
         }
-        lastHiddenTime = 0;
       }
     };
 
@@ -215,155 +228,142 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Socket connection
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const socket = io(`${API_CONFIG.BASE_URL}/mtf`, {
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: Infinity,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 10000,
     });
 
     socketRef.current = socket;
 
     socket.on('connect', () => {
+      console.log('[Socket] Connected');
       setIsConnected(true);
-      // 초기 구독은 useSymbolSubscription 훅에서 처리
-      // (URL 기반 심볼로 올바르게 구독하기 위해)
     });
 
     socket.on('disconnect', () => {
       setIsConnected(false);
     });
 
-    // Binance realtime data
+    // Ticker (throttled)
     socket.on('binance:ticker', (data: TickerData) => {
-      // symbol 필드가 없거나 다른 심볼이면 무시 (필수 체크)
-      if (!data.symbol || data.symbol !== currentSymbolRef.current) {
-        return;
-      }
+      if (!data.symbol || data.symbol !== currentSymbolRef.current) return;
+
+      latestTickerRef.current = data;
+      if (tickerThrottleTimerRef.current) return;
+
       setTicker(data);
+      tickerThrottleTimerRef.current = setTimeout(() => {
+        tickerThrottleTimerRef.current = null;
+        if (latestTickerRef.current && latestTickerRef.current !== data) {
+          setTicker(latestTickerRef.current);
+        }
+      }, TICKER_THROTTLE_MS);
     });
 
+    // Orderbook (throttled)
     socket.on('binance:orderbook', (data: OrderBookData) => {
+      if (orderbookThrottleTimerRef.current) return;
       setOrderbook(data);
+      orderbookThrottleTimerRef.current = setTimeout(() => {
+        orderbookThrottleTimerRef.current = null;
+      }, TICKER_THROTTLE_MS);
     });
 
+    // Kline (throttled)
     socket.on('binance:kline', (data: KlineData) => {
-      // symbol 필드가 없거나 다른 심볼이면 무시 (필수 체크)
-      if (!data.symbol || data.symbol !== currentSymbolRef.current) {
-        return;
-      }
-      // 타임프레임별로 kline 저장
+      if (!data.symbol || data.symbol !== currentSymbolRef.current) return;
+
       klineMapRef.current.set(data.timeframe, data);
-      setKlineMapVersion(v => v + 1); // 변경 알림
-      setKline(data); // 하위 호환성 유지
+      if (klineThrottleTimerRef.current) return;
+
+      setKlineMapVersion(v => v + 1);
+      setKline(data);
+      klineThrottleTimerRef.current = setTimeout(() => {
+        klineThrottleTimerRef.current = null;
+      }, KLINE_THROTTLE_MS);
     });
 
-    // MTF data from backend
+    // MTF data
     socket.on('mtf:data', (data: BackendMTFData) => {
-      // symbol 필드가 없거나 다른 심볼이면 무시 (다이버전스 잔재 방지)
-      // MTF 심볼은 "BTC/USDT" 형식, currentSymbolRef는 "BTCUSDT" 형식
-      const normalizedSymbol = data.symbol?.replace('/', '').toUpperCase();
-      if (!normalizedSymbol || normalizedSymbol !== currentSymbolRef.current) {
-        return;
-      }
+      const normalizedSymbol = data.symbol?.replace('/', '');
+      if (!normalizedSymbol || normalizedSymbol !== currentSymbolRef.current) return;
       setMtfData(data);
       setLastMtfUpdate(Date.now());
     });
 
-    // Liquidation data from backend
+    // Market data
     socket.on('data:liquidation', (data: LiquidationData) => {
-      // 심볼 체크 (BTCUSDT 형식)
-      if (data.symbol && data.symbol !== currentSymbolRef.current) {
-        return;
-      }
+      if (data.symbol !== currentSymbolRef.current) return;
       setLiquidationData(data);
     });
 
-    // Whale data from backend
     socket.on('data:whale', (data: WhaleData) => {
-      // 심볼 체크 (BTCUSDT 형식)
-      if (data.symbol && data.symbol !== currentSymbolRef.current) {
-        return;
-      }
+      if (data.symbol !== currentSymbolRef.current) return;
       setWhaleData(data);
     });
 
-    // Funding rate from backend
     socket.on('data:fundingRate', (data: FundingRateData) => {
-      // 심볼 체크 (BTCUSDT 형식)
-      if (data.symbol && data.symbol !== currentSymbolRef.current) {
-        return;
-      }
+      if (data.symbol !== currentSymbolRef.current) return;
       setFundingRateData(data);
     });
 
-    // Coinglass data from backend
     socket.on('data:coinglass', (data: CoinglassData) => {
-      // Coinglass는 baseSymbol 사용 (BTC, ETH 등)
-      const expectedBase = currentSymbolRef.current?.replace('USDT', '');
-      if (data.symbol && data.symbol !== expectedBase) {
-        return;
-      }
       setCoinglassData(data);
     });
 
-    // Long-short ratio from backend
     socket.on('data:longShortRatio', (data: LongShortRatioData) => {
+      if (data.symbol !== currentSymbolRef.current) return;
       setLongShortRatioData(data);
     });
 
-    // 실시간 다이버전스 신호
+    // Divergence signals
     socket.on('data:divergence', (data: RealtimeDivergenceData) => {
-      // 오래된 신호 무시 (절전 복귀 후 쌓인 신호 방지)
-      const signalAge = Date.now() - data.timestamp;
-      if (signalAge > SIGNAL.MAX_AGE_MS) {
-        console.log(`[Socket] 오래된 다이버전스 신호 무시 (${Math.round(signalAge / 1000)}초 전)`);
-        return;
-      }
+      const normalizedSymbol = data.symbol?.replace('/', '');
+      if (!normalizedSymbol || normalizedSymbol !== currentSymbolRef.current) return;
 
       setDivergenceData(data);
-      // 히스토리에 추가 (최대 50개 유지)
       setDivergenceHistory(prev => {
-        const newHistory = [...prev, data];
-        if (newHistory.length > 50) {
-          return newHistory.slice(-50);
-        }
-        return newHistory;
+        const exists = prev.some(d => d.id === data.id);
+        if (exists) return prev;
+        const newHistory = [data, ...prev];
+        return newHistory.slice(0, SIGNAL.MAX_HISTORY);
       });
     });
 
     socket.on('connect_error', () => {
-      // Connection error - socket.io will automatically retry
+      console.warn('[Socket] Connection error');
     });
 
     return () => {
+      if (tickerThrottleTimerRef.current) clearTimeout(tickerThrottleTimerRef.current);
+      if (klineThrottleTimerRef.current) clearTimeout(klineThrottleTimerRef.current);
+      if (orderbookThrottleTimerRef.current) clearTimeout(orderbookThrottleTimerRef.current);
       socket.disconnect();
       socketRef.current = null;
     };
   }, []);
 
-  // 대기 중인 kline 구독 요청 저장
+  // Pending subscriptions
   const pendingKlineTimeframeRef = useRef<string | null>(null);
 
   const subscribeKline = useCallback((timeframe: string) => {
     pendingKlineTimeframeRef.current = timeframe;
     if (socketRef.current?.connected) {
-      console.log(`[Socket] Subscribing to kline: ${timeframe}`);
+      console.log('[Socket] Subscribing to kline:', timeframe);
       socketRef.current.emit('subscribe:kline', { timeframe });
-    } else {
-      console.log(`[Socket] Socket not connected, queued kline subscription: ${timeframe}`);
     }
   }, []);
 
-  // 소켓 연결 시 대기 중인 kline 구독 처리
+  // Auto-subscribe when connected
   useEffect(() => {
     if (isConnected && pendingKlineTimeframeRef.current) {
-      console.log(`[Socket] Connected, subscribing to pending kline: ${pendingKlineTimeframeRef.current}`);
+      console.log('[Socket] Connected, subscribing to pending kline:', pendingKlineTimeframeRef.current);
       socketRef.current?.emit('subscribe:kline', { timeframe: pendingKlineTimeframeRef.current });
     }
   }, [isConnected]);
@@ -374,25 +374,19 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // 타임프레임별 kline 가져오기
   const getKline = useCallback((timeframe: string): KlineData | null => {
     return klineMapRef.current.get(timeframe) || null;
-  }, [klineMapVersion]); // klineMapVersion 변경 시 함수 갱신
+  }, [klineMapVersion]);
 
-  // 심볼 변경 시 데이터 초기화 및 재구독
   const subscribeSymbol = useCallback((symbol: string) => {
-    // 같은 심볼이면 무시 (중복 구독 방지)
-    if (symbol === currentSymbolRef.current) {
-      return;
-    }
+    if (symbol === currentSymbolRef.current) return;
 
     const isFirstSubscription = currentSymbolRef.current === '';
     console.log(`[Socket] ${isFirstSubscription ? 'First subscription' : 'Changing symbol'} to: ${symbol}`);
 
     setCurrentSymbol(symbol);
-    currentSymbolRef.current = symbol; // ref도 업데이트 (이벤트 핸들러용)
+    currentSymbolRef.current = symbol;
 
-    // 첫 구독이 아닐 때만 기존 데이터 초기화 (깜빡임 방지)
     if (!isFirstSubscription) {
       setTicker(null);
       setOrderbook(null);
@@ -409,42 +403,91 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setDivergenceHistory([]);
     }
 
-    // 백엔드에 심볼 변경 요청
     if (socketRef.current?.connected) {
       socketRef.current.emit('subscribe', { symbol });
     }
   }, []);
 
+  // Memoized context values (각각 별도로 메모이제이션)
+  const tickerValue = useMemo(() => ({ ticker }), [ticker]);
+
+  const klineValue = useMemo(() => ({
+    kline,
+    klineMap: klineMapRef.current,
+    getKline,
+  }), [kline, getKline]);
+
+  const socketValue = useMemo(() => ({
+    socket: socketRef.current,
+    isConnected,
+    orderbook,
+    mtfData,
+    lastMtfUpdate,
+    liquidationData,
+    whaleData,
+    fundingRateData,
+    coinglassData,
+    longShortRatioData,
+    divergenceData,
+    divergenceHistory,
+    currentSymbol,
+    subscribeKline,
+    subscribeMtf,
+    subscribeSymbol,
+  }), [
+    isConnected,
+    orderbook,
+    mtfData,
+    lastMtfUpdate,
+    liquidationData,
+    whaleData,
+    fundingRateData,
+    coinglassData,
+    longShortRatioData,
+    divergenceData,
+    divergenceHistory,
+    currentSymbol,
+    subscribeKline,
+    subscribeMtf,
+    subscribeSymbol,
+  ]);
+
   return (
-    <SocketContext.Provider
-      value={{
-        socket: socketRef.current,
-        isConnected,
-        ticker,
-        orderbook,
-        kline,
-        klineMap: klineMapRef.current,
-        getKline,
-        mtfData,
-        lastMtfUpdate,
-        liquidationData,
-        whaleData,
-        fundingRateData,
-        coinglassData,
-        longShortRatioData,
-        divergenceData,
-        divergenceHistory,
-        currentSymbol,
-        subscribeKline,
-        subscribeMtf,
-        subscribeSymbol,
-      }}
-    >
-      {children}
+    <SocketContext.Provider value={socketValue}>
+      <TickerContext.Provider value={tickerValue}>
+        <KlineContext.Provider value={klineValue}>
+          {children}
+        </KlineContext.Provider>
+      </TickerContext.Provider>
     </SocketContext.Provider>
   );
 }
 
+// ==================== Hooks ====================
+// 메인 소켓 hook (orderbook, divergence 등)
 export function useSocket() {
   return useContext(SocketContext);
+}
+
+// Ticker 전용 hook (가장 빈번하게 업데이트)
+export function useSocketTicker() {
+  return useContext(TickerContext);
+}
+
+// Kline 전용 hook
+export function useSocketKline() {
+  return useContext(KlineContext);
+}
+
+// 하위 호환성: ticker + kline + socket 전부 필요한 경우
+export function useSocketAll() {
+  const socket = useSocket();
+  const { ticker } = useSocketTicker();
+  const klineData = useSocketKline();
+
+  return {
+    ...socket,
+    ticker,
+    ...klineData,
+  };
 }

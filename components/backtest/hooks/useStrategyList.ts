@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   SavedOptimizeResult,
   fetchStrategyPreviews,
@@ -43,11 +43,13 @@ export function useStrategyList(
     loading: boolean;
   }>>(new Map());
 
-  // 강제 refetch 함수
+  // 강제 refetch 함수 (useCallback으로 메모이제이션)
   const refetchTrigger = useRef(0);
-  const refetch = () => {
+  const refetch = useCallback(() => {
     refetchTrigger.current += 1;
-  };
+    // useEffect가 refetchTrigger.current를 직접 읽으므로 리렌더 트리거
+    setIsLoading(true);
+  }, []);
 
   useEffect(() => {
     const loadStrategies = async () => {
@@ -146,7 +148,30 @@ export function useStrategyList(
             rollingData.forEach((d) => {
               rollingMap.set(d.strategy, d);
             });
-            setRollingSharpeMap(rollingMap);
+
+            // 참조 안정화: 내용이 같으면 기존 Map 재사용
+            setRollingSharpeMap(prev => {
+              if (prev.size === rollingMap.size) {
+                let isEqual = true;
+                for (const [key, value] of rollingMap.entries()) {
+                  const prevValue = prev.get(key);
+                  // periods 배열의 첫 번째 (최신) 샤프 값 비교
+                  const prevSharpe = prevValue?.periods?.[0]?.sharpe;
+                  const newSharpe = value?.periods?.[0]?.sharpe;
+                  if (prevSharpe !== newSharpe) {
+                    isEqual = false;
+                    break;
+                  }
+                }
+                if (isEqual) {
+                  console.log('[Strategy] Rolling Sharpe unchanged, reusing Map');
+                  return prev;
+                }
+              }
+              console.log('[Strategy] Rolling Sharpe changed, creating new Map');
+              return rollingMap;
+            });
+
             console.log('[Strategy] Loaded rolling Sharpe for', rollingData.length, 'strategies');
           } else {
             console.log('[Strategy] No rolling Sharpe data received');

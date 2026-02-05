@@ -1,6 +1,6 @@
 'use client';
 
-import { useSocket } from '@/contexts/SocketContext';
+import { useSocketTicker } from '@/contexts/SocketContext';
 
 interface PriceData {
   price: number;
@@ -13,7 +13,7 @@ interface PriceData {
  * 백엔드 socket.io를 통해 Binance 데이터 수신
  */
 export function useBTCPrice(): PriceData | null {
-  const { ticker } = useSocket();
+  const { ticker } = useSocketTicker();
 
   if (!ticker) return null;
 

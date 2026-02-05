@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useSocket } from '@/contexts/SocketContext';
+import { useSocketKline } from '@/contexts/SocketContext';
 import { triggerAutoOptimization, AutoOptimizeResult } from '@/lib/backtest-api';
 
 interface UseAutoOptimizeParams {
@@ -41,7 +41,7 @@ export function useAutoOptimize({
   strategies = ['orchestrator', 'trend_reversal_combo', 'vol_breakout'],
   candleCount = 3000,
 }: UseAutoOptimizeParams): UseAutoOptimizeReturn {
-  const { getKline } = useSocket();
+  const { getKline } = useSocketKline();
   const kline = getKline(timeframe);
 
   const [isOptimizing, setIsOptimizing] = useState(false);

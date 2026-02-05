@@ -5,7 +5,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { fetchCandles } from '@/lib/api/exchange';
 import { getRefreshInterval } from '@/lib/timeframe';
 import { WEBSOCKET, API } from '@/lib/constants';
-import { useSocket, KlineData } from '@/contexts/SocketContext';
+import { useSocket, useSocketKline, KlineData } from '@/contexts/SocketContext';
 
 interface UseCandlesParams {
   symbol: string;
@@ -38,7 +38,8 @@ export function useCandles({
   enableWebSocket = true,
 }: UseCandlesParams) {
   const queryClient = useQueryClient();
-  const { getKline, subscribeKline } = useSocket();
+  const { subscribeKline } = useSocket();
+  const { getKline } = useSocketKline();
   const kline = getKline(timeframe); // 현재 타임프레임의 kline만 사용
   const lastCandleTimeRef = useRef<number>(0);
   const prevCandleCloseRef = useRef<number>(0);

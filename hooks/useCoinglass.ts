@@ -1,6 +1,6 @@
 'use client';
 
-import { useSocket, CoinglassData, FearGreedData } from '@/contexts/SocketContext';
+import { useSocket, CoinglassData } from '@/contexts/SocketContext';
 
 interface UseCoinglassParams {
   symbol?: string;
@@ -24,4 +24,3 @@ export function useCoinglass({ symbol = 'BTC' }: UseCoinglassParams = {}) {
 
 // Re-export types for backwards compatibility
 export type CoinglassTradingSignals = CoinglassData;
-export type { FearGreedData };

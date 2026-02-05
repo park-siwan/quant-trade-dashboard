@@ -546,7 +546,7 @@ export default function MTFOverview({
     symbol: symbol.replace('/USDT', '').replace('/', ''),
     refreshInterval: 60000,
   });
-  const fearGreedIndex = coinglassData?.fearGreed?.value ?? undefined;
+  const fearGreedIndex = coinglassData?.fearGreedIndex?.value ?? undefined;
 
   // props 우선, 없으면 useMTF에서 계산/추출된 값 사용
   const poc = propPoc ?? volumeProfile?.poc;
