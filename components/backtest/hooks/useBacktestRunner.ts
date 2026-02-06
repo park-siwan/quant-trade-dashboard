@@ -5,6 +5,7 @@ import {
   OpenPosition,
   TradeResult,
   getDailyRollingSharpeTimeline,
+  refreshAllStrategies,
 } from '@/lib/backtest-api';
 
 interface BacktestCache {
@@ -30,7 +31,7 @@ interface UseBacktestRunnerResult {
   allStrategyStats: Map<string, StrategyStats>;  // 모든 전략의 통계 (12주 기준)
   allTradesMap: Map<string, TradeResult[]>;  // 모든 전략의 거래 내역 (마커 표시용)
   backtestCacheRef: React.MutableRefObject<Map<string, BacktestCache>>;
-  refetch: (silent?: boolean) => void;  // 데이터 강제 새로고침 (silent: 로딩 표시 없이)
+  refetch: (silent?: boolean, forceRefreshCache?: boolean) => void;  // 데이터 강제 새로고침 (silent: 로딩 표시 없이, forceRefreshCache: 백엔드 캐시도 갱신)
 }
 
 /**
@@ -62,11 +63,18 @@ export function useBacktestRunner(
 
   // 강제 refetch를 위한 키
   const [refetchKey, setRefetchKey] = useState(0);
-  const refetch = useCallback((silent: boolean = false) => {
+  const refetch = useCallback(async (silent: boolean = false, forceRefreshCache: boolean = false) => {
     silentRefetchRef.current = silent;
     loadingRef.current = false; // guard 해제
+
+    // 캐시 강제 갱신 옵션 (JSON 파라미터 변경 후 사용)
+    if (forceRefreshCache) {
+      console.log('[useBacktestRunner] Force refreshing backend cache...');
+      await refreshAllStrategies(symbolId, timeframe);
+    }
+
     setRefetchKey((k) => k + 1);
-  }, []);
+  }, [symbolId, timeframe]);
 
   // daily-rolling-sharpe API에서 rollingSharpe + equityCurve 모두 로드
   useEffect(() => {

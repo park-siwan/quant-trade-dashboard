@@ -1666,3 +1666,23 @@ export async function refreshSingleStrategy(
     return { success: false, message: 'Failed to refresh strategy' };
   }
 }
+
+/**
+ * 전체 전략 캐시 강제 갱신
+ * JSON 파라미터 변경 후 즉시 반영 필요 시 사용
+ */
+export async function refreshAllStrategies(
+  symbol: string,
+  timeframe: string,
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/backtest/rolling-sharpe/refresh?symbol=${symbol}&timeframe=${timeframe}`,
+      { method: 'POST' },
+    );
+    return res.json();
+  } catch (err) {
+    console.error('Failed to refresh all strategies:', err);
+    return { success: false, message: 'Failed to refresh all strategies' };
+  }
+}

@@ -215,6 +215,7 @@ function RealtimeChart() {
     lastBacktestTime,
     isBacktestRunning,
     loadBacktestTrades,
+    clearOpenPosition,
   } = useRealtimeUpdates(
     selectedStrategy,
     symbolId,
@@ -224,6 +225,7 @@ function RealtimeChart() {
     isLoading,
     allTradesMap,      // 미리 로드된 trades (마커 표시용)
     allOpenPositions,  // 미리 로드된 open positions
+    allStrategyStats,  // 미리 로드된 통계 (헤더 표시용)
   );
 
   // 5. Sound Alerts
@@ -250,6 +252,10 @@ function RealtimeChart() {
     playAlertSound,
     playExitSound,
     loadBacktestTrades,
+    onPositionExit: (exitType, exitPrice) => {
+      console.log(`[Position Exit] ${exitType.toUpperCase()} @ $${exitPrice}`);
+      clearOpenPosition();
+    },
   });
 
   // 🔍 리렌더 원인 추적 (개발 모드에서만 활성화) - 비활성화

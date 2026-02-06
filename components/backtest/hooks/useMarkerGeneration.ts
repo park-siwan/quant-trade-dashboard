@@ -108,13 +108,13 @@ export function useMarkerGeneration({
     // 2. 캔들 데이터에 색상 적용 (연한 색상)
     const coloredCandles = colorizeCandles(candles, tradeColorMap);
 
-    // 3. 색상이 적용된 캔들 데이터로 업데이트 (캔들 개수 변경 시에만)
+    // 3. 색상이 적용된 캔들 데이터로 업데이트
     const candlesChanged = candles.length !== prevCandlesLengthRef.current;
     const tradesChanged = backtestTrades.length !== prevTradesCountRef.current;
     const positionChanged = openPosition?.entryTime !== prevOpenPositionRef.current?.entryTime;
 
-    // 중요: setData()는 캔들 개수가 변경될 때만 호출 (실시간 업데이트와 충돌 방지)
-    if (candlesChanged) {
+    // 캔들 개수, 거래 수, 포지션 변경 시 setData 호출 (캔들 색상 적용)
+    if (candlesChanged || tradesChanged || positionChanged) {
       candleSeriesRef.current.setData(coloredCandles);
       prevCandlesLengthRef.current = candles.length;
 
