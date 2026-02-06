@@ -5,3 +5,6 @@ node_modules/
 coverage/
 .env
 .env.*
+
+# 성능 디버그 (오래된 파일)
+PERFORMANCE_DEBUG_GUIDE.md
