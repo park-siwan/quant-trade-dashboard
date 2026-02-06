@@ -1873,7 +1873,8 @@ function RealtimeChart() {
                   }
 
                   // 전체 값 합쳐서 통합 스케일 계산 (부드러운 J커브)
-                  const allValues = [...currentValues, ...futureValues];
+                  const allValues = [...currentValues, ...futureValues].filter(v => Number.isFinite(v));
+                  if (allValues.length === 0) return null;
                   const globalMin = Math.min(...allValues);
                   const globalMax = Math.max(...allValues);
                   const padding = (globalMax - globalMin) * 0.1 || 1;
