@@ -46,7 +46,7 @@ import { StatisticsHeader } from './ui/StatisticsHeader';
 import { StrategyMiniChart } from './ui/StrategyMiniChart';
 
 // JSON Single Source of Truth: API 캐시에서 로드된 기본값 사용
-const getBbReversionDefaults = () => getDefaultParams('z_score');
+// z_score removed - orchestrator handles mean reversion internally
 const getOrchestratorDefaults = () => getDefaultParams('orchestrator');
 import { preloadStrategyDefaults, getCachedStrategyDisplayName, fetchStrategyPreviews, StrategyPreview, StrategyType } from '@/lib/backtest-api';
 import { calculateTotalHoldingTime, calculateMeasurementPeriod, formatDuration } from '@/lib/backtest-calculations';
@@ -476,37 +476,6 @@ function RealtimeChart() {
       base.trendFilter = convertedParams.regimeFilter ? 'regime' : 'OFF';
       base.volatilityFilter = convertedParams.volFilter ? 'atr' : 'OFF';
       base.rsiExtremeFilter = convertedParams.volumeConfirm ? 'extreme' : 'OFF';
-    } else if (strategyType === 'z_score') {
-      // 적응형 평균회귀 (학술 기반)
-      base.lookback = convertedParams.lookback ?? defaults.lookback ?? 20;
-      base.entryZ = convertedParams.entryZ ?? defaults.entryZ ?? 1.5;
-      base.exitZ = convertedParams.exitZ ?? defaults.exitZ ?? 0.25;
-      base.stopZ = convertedParams.stopZ ?? defaults.stopZ ?? 2.5;
-      base.volFilter = convertedParams.volFilter ?? defaults.volFilter ?? 0;
-      base.volThreshold = convertedParams.volThreshold ?? defaults.volThreshold ?? 1.5;
-      base.rsiConfirm = convertedParams.rsiConfirm ?? defaults.rsiConfirm ?? 0;
-      // v6: 추세 필터 파라미터
-      base.blockInTrend = convertedParams.blockInTrend ?? defaults.blockInTrend ?? 1;
-      base.adxTrendThreshold = convertedParams.adxTrendThreshold ?? defaults.adxTrendThreshold ?? 20;
-      base.useEmaTrendFilter = convertedParams.useEmaTrendFilter ?? defaults.useEmaTrendFilter ?? 0;
-      base.emaPeriod = convertedParams.emaPeriod ?? defaults.emaPeriod ?? 20;
-      base.emaDistancePct = convertedParams.emaDistancePct ?? defaults.emaDistancePct ?? 1.0;
-      base.useVolumeConfirm = convertedParams.useVolumeConfirm ?? defaults.useVolumeConfirm ?? 1;
-      base.volumeMult = convertedParams.volumeMult ?? defaults.volumeMult ?? 0.8;
-      base.cooldownBars = convertedParams.cooldownBars ?? defaults.cooldownBars ?? 10;
-      base.lowVolEntryZ = convertedParams.lowVolEntryZ ?? defaults.lowVolEntryZ ?? 1.5;
-      base.highVolEntryZ = convertedParams.highVolEntryZ ?? defaults.highVolEntryZ ?? 2.5;
-      base.useStochConfirm = convertedParams.useStochConfirm ?? defaults.useStochConfirm ?? 0;
-      base.stochThreshold = convertedParams.stochThreshold ?? defaults.stochThreshold ?? 25;
-      base.useRsiConfirm = convertedParams.useRsiConfirm ?? defaults.useRsiConfirm ?? 0;
-      base.rsiThreshold = convertedParams.rsiThreshold ?? defaults.rsiThreshold ?? 35;
-      base.useMiniSideways = convertedParams.useMiniSideways ?? defaults.useMiniSideways ?? 0;
-      base.bbBandwidthThreshold = convertedParams.bbBandwidthThreshold ?? defaults.bbBandwidthThreshold ?? 0.03;
-      base.useChannelDetection = convertedParams.useChannelDetection ?? defaults.useChannelDetection ?? 0;
-      base.channelR2Threshold = convertedParams.channelR2Threshold ?? defaults.channelR2Threshold ?? 0.6;
-      base.channelOnlyMode = convertedParams.channelOnlyMode ?? defaults.channelOnlyMode ?? 0;
-      base.volatilityFilter = base.volFilter ? 'atr' : 'OFF';
-      base.rsiExtremeFilter = base.rsiConfirm ? 'extreme' : 'OFF';
     } else if (strategyType === 'vol_breakout') {
       // 돌파매매 (학술 기반)
       base.smaPeriod = convertedParams.smaPeriod ?? defaults.smaPeriod ?? 50;

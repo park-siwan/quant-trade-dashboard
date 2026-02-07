@@ -1,11 +1,10 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // ============== 전략 타입 ==============
-export type StrategyType = 'z_score' | 'vol_breakout' | 'rsi_div' | 'orchestrator';
+export type StrategyType = 'vol_breakout' | 'rsi_div' | 'orchestrator';
 
 export const STRATEGIES = [
   { id: 'rsi_div' as const, label: '반전매매(RSI DIV)', desc: '가격-RSI 다이버전스 감지' },
-  { id: 'z_score' as const, label: '평균회귀(Z-Score)', desc: 'Z-Score 평균회귀 + 앙상블 레짐 필터' },
   { id: 'vol_breakout' as const, label: '돌파매매(거래량+ADX)', desc: '거래량 확인 + ADX 강도 기반 브레이크아웃' },
   { id: 'orchestrator' as const, label: '오케스트레이터', desc: '앙상블 레짐 + 3전략 조합 (브레이크아웃+다이버전스+평균회귀)' },
 ];
@@ -343,7 +342,8 @@ export function getCachedStrategyDefaults(strategy: string): Record<string, any>
  * 전략 ID → displayName 매핑 (old ID 호환)
  */
 const STRATEGY_ID_MIGRATION: Record<string, string> = {
-  'bb_reversion': 'z_score',
+  'bb_reversion': 'orchestrator',
+  'z_score': 'orchestrator',
   'ema_adx': 'vol_breakout',
   'hybrid_regime': 'orchestrator',
   'ml_hmm': 'orchestrator',
