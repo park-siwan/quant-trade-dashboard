@@ -35,7 +35,7 @@ const MultiStrategyEquityChart = memo(function MultiStrategyEquityChart({
 
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
-      height: 500,
+      height: 480,
       layout: {
         background: { color: '#18181b' },
         textColor: '#71717a',
@@ -49,8 +49,10 @@ const MultiStrategyEquityChart = memo(function MultiStrategyEquityChart({
       },
       timeScale: {
         borderColor: '#3f3f46',
-        timeVisible: true,
-        secondsVisible: false,
+        fixLeftEdge: true,
+        fixRightEdge: true,
+        uniformDistribution: true,
+        visible: false,
       },
       crosshair: {
         mode: 1,
@@ -62,7 +64,7 @@ const MultiStrategyEquityChart = memo(function MultiStrategyEquityChart({
     const resizeObserver = new ResizeObserver((entries) => {
       if (entries.length === 0 || !chartRef.current) return;
       const { width } = entries[0].contentRect;
-      chartRef.current.applyOptions({ width, height: 500 });
+      chartRef.current.applyOptions({ width, height: 480 });
     });
 
     resizeObserver.observe(containerRef.current);
@@ -124,10 +126,21 @@ const MultiStrategyEquityChart = memo(function MultiStrategyEquityChart({
 
       if (filteredCurve.length === 0) return;
 
-      const weekStartEquity = filteredCurve[0].equity;
+      // 4시간 간격으로 다운샘플링 (시간축 가독성 향상)
+      const DOWNSAMPLE_MS = 4 * 60 * 60 * 1000;
+      const downsampled = filteredCurve.filter((point, idx) => {
+        if (idx === 0 || idx === filteredCurve.length - 1) return true;
+        const ts = typeof point.timestamp === 'number' ? point.timestamp : new Date(point.timestamp).getTime();
+        const prevTs = typeof filteredCurve[idx - 1].timestamp === 'number'
+          ? filteredCurve[idx - 1].timestamp as number
+          : new Date(filteredCurve[idx - 1].timestamp).getTime();
+        return ts - prevTs >= DOWNSAMPLE_MS;
+      });
+
+      const weekStartEquity = downsampled[0].equity;
 
       // LineData 계산 (레버리지 적용)
-      const lineData: LineData[] = filteredCurve.map((point) => {
+      const lineData: LineData[] = downsampled.map((point) => {
         const returnPct = ((point.equity - weekStartEquity) / weekStartEquity);
         const leveragedReturn = returnPct * leverage;
         const returnPercent = leveragedReturn * 100;
@@ -231,14 +244,34 @@ const MultiStrategyEquityChart = memo(function MultiStrategyEquityChart({
 
       {/* 차트 컨테이너 */}
       {strategies.length === 0 ? (
-        <div className="flex items-center justify-center h-[500px] text-zinc-500">
+        <div className="flex items-center justify-center h-[480px] text-zinc-500">
           <div className="text-center">
             <div className="text-2xl mb-2">📊</div>
             <div>전략 데이터를 불러오는 중...</div>
           </div>
         </div>
       ) : (
-        <div ref={containerRef} className="w-full h-[500px]" />
+        <>
+          <div ref={containerRef} className="w-full h-[480px] border-b border-zinc-700/50" />
+          {/* Custom weekly date labels (lightweight-charts generates too few ticks for 84-day range) */}
+          <div className="flex justify-between text-xs text-zinc-400 -mt-7 relative z-10 pb-2" style={{ paddingLeft: 4, paddingRight: 58 }}>
+            {(() => {
+              const s = strategies[0];
+              if (!s || s.equityCurve.length === 0) return null;
+              const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+              const lastPoint = s.equityCurve[s.equityCurve.length - 1];
+              const endMs = typeof lastPoint.timestamp === 'number'
+                ? lastPoint.timestamp
+                : new Date(lastPoint.timestamp).getTime();
+              const startMs = endMs - 12 * WEEK_MS;
+              return Array.from({ length: 7 }, (_, i) => {
+                const t = startMs + i * 2 * WEEK_MS;
+                const d = new Date(t);
+                return <span key={i}>{d.getUTCMonth() + 1}/{d.getUTCDate()}</span>;
+              });
+            })()}
+          </div>
+        </>
       )}
     </div>
   );
