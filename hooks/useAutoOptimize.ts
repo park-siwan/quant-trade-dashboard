@@ -38,7 +38,7 @@ export function useAutoOptimize({
   symbol = 'BTCUSDT',
   timeframe = '5m',
   enabled = false,
-  strategies = ['orchestrator', 'trend_reversal_combo', 'vol_breakout'],
+  strategies = ['orchestrator', 'vol_breakout'],
   candleCount = 3000,
 }: UseAutoOptimizeParams): UseAutoOptimizeReturn {
   const { getKline } = useSocketKline();

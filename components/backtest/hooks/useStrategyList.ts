@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   SavedOptimizeResult,
   fetchStrategyPreviews,
+  StrategyType,
 } from '@/lib/backtest-api';
 import { performanceMonitor } from '@/lib/performance-monitor';
 
@@ -71,7 +72,7 @@ export function useStrategyList(
         // StrategyPreview → SavedOptimizeResult 변환 (UI 호환성)
         const convertedResults: SavedOptimizeResult[] = previews.map((p, idx) => ({
           id: idx + 1,
-          strategy: p.strategy as 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator',
+          strategy: p.strategy as StrategyType,
           symbol,
           timeframe,
           sharpeRatio: p.sharpeRatio,

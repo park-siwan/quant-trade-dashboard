@@ -1,15 +1,13 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // ============== 전략 타입 ==============
-export type StrategyType = 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator';
+export type StrategyType = 'z_score' | 'vol_breakout' | 'rsi_div' | 'orchestrator';
 
 export const STRATEGIES = [
   { id: 'rsi_div' as const, label: '반전매매(RSI DIV)', desc: '가격-RSI 다이버전스 감지' },
-  { id: 'z_score' as const, label: '평균회귀(Z-Score)', desc: 'Z-Score 평균회귀 + ADX 레짐 필터' },
+  { id: 'z_score' as const, label: '평균회귀(Z-Score)', desc: 'Z-Score 평균회귀 + 앙상블 레짐 필터' },
   { id: 'vol_breakout' as const, label: '돌파매매(거래량+ADX)', desc: '거래량 확인 + ADX 강도 기반 브레이크아웃' },
-  { id: 'ml_hmm' as const, label: '머신러닝 추세추론(HMM)', desc: 'HMM 기반 시장 방향 추론 후 전략 전환' },
-  { id: 'trend_reversal_combo' as const, label: '추세+역추세 콤보', desc: 'HMM 레짐 기반 브레이크아웃 + RSI 다이버전스' },
-  { id: 'hmm_orchestrator' as const, label: 'HMM 오케스트레이터', desc: 'HMM 횡보 감지 + 평균회귀' },
+  { id: 'orchestrator' as const, label: '오케스트레이터', desc: '앙상블 레짐 + 3전략 조합 (브레이크아웃+다이버전스+평균회귀)' },
 ];
 
 export interface BacktestParams {
@@ -347,7 +345,9 @@ export function getCachedStrategyDefaults(strategy: string): Record<string, any>
 const STRATEGY_ID_MIGRATION: Record<string, string> = {
   'bb_reversion': 'z_score',
   'ema_adx': 'vol_breakout',
-  'hybrid_regime': 'ml_hmm',
+  'hybrid_regime': 'orchestrator',
+  'ml_hmm': 'orchestrator',
+  'hmm_orchestrator': 'orchestrator',
   'classic_rsi_div': 'rsi_div',
 };
 
