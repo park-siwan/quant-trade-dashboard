@@ -453,6 +453,11 @@ export function addDivergenceLines(
       return;
     }
 
+    // 시작/끝 시간이 같으면 라인을 그릴 수 없음 (lightweight-charts 요구사항)
+    if (pair.start.timestamp === pair.end.timestamp) {
+      return;
+    }
+
     // 필터링된 신호는 회색, 정상 신호는 지표별+방향별 색상
     const indicatorType = pair.start.type as 'rsi' | 'obv' | 'cvd' | 'oi';
     const colorSet = DIVERGENCE_COLORS[indicatorType];
@@ -567,7 +572,8 @@ export function addDivergenceLines(
       });
     }
 
-    if (startPrice !== undefined && endPrice !== undefined) {
+    const endTimestamp = pair.end.timestamp / 1000;
+    if (startPrice !== undefined && endPrice !== undefined && actualStartTimeSec !== endTimestamp) {
       // 가격 라인 시리즈로 선 그리기
       const priceLineSeries = chart.addSeries(
         LineSeries,
@@ -617,7 +623,7 @@ export function addDivergenceLines(
       const startRsi = findClosestRsi(startTimeSec);
       const endRsi = findClosestRsi(endTimeSec);
 
-      if (startRsi && endRsi) {
+      if (startRsi && endRsi && startRsi.time !== endRsi.time) {
         const rsiLineSeries = chart.addSeries(
           LineSeries,
           {
@@ -666,7 +672,7 @@ export function addDivergenceLines(
       const startObv = findClosestObv(startTimeSec);
       const endObv = findClosestObv(endTimeSec);
 
-      if (startObv && endObv) {
+      if (startObv && endObv && startObv.time !== endObv.time) {
         const obvLineSeries = chart.addSeries(
           LineSeries,
           {
@@ -715,7 +721,7 @@ export function addDivergenceLines(
       const startCvd = findClosestCvd(startTimeSec);
       const endCvd = findClosestCvd(endTimeSec);
 
-      if (startCvd && endCvd) {
+      if (startCvd && endCvd && startCvd.time !== endCvd.time) {
         const cvdLineSeries = chart.addSeries(
           LineSeries,
           {
@@ -764,7 +770,7 @@ export function addDivergenceLines(
       const startOi = findClosestOi(startTimeSec);
       const endOi = findClosestOi(endTimeSec);
 
-      if (startOi && endOi) {
+      if (startOi && endOi && startOi.time !== endOi.time) {
         const oiLineSeries = chart.addSeries(
           LineSeries,
           {
