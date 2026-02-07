@@ -126,15 +126,16 @@ const MultiStrategyEquityChart = memo(function MultiStrategyEquityChart({
 
       if (filteredCurve.length === 0) return;
 
-      // 4시간 간격으로 다운샘플링 (시간축 가독성 향상)
+      // 4시간 간격으로 다운샘플링 (성능 개선)
       const DOWNSAMPLE_MS = 4 * 60 * 60 * 1000;
-      const downsampled = filteredCurve.filter((point, idx) => {
-        if (idx === 0 || idx === filteredCurve.length - 1) return true;
+      const downsampled: typeof filteredCurve = [];
+      let lastKeptTs = -Infinity;
+      filteredCurve.forEach((point, idx) => {
         const ts = typeof point.timestamp === 'number' ? point.timestamp : new Date(point.timestamp).getTime();
-        const prevTs = typeof filteredCurve[idx - 1].timestamp === 'number'
-          ? filteredCurve[idx - 1].timestamp as number
-          : new Date(filteredCurve[idx - 1].timestamp).getTime();
-        return ts - prevTs >= DOWNSAMPLE_MS;
+        if (idx === 0 || idx === filteredCurve.length - 1 || ts - lastKeptTs >= DOWNSAMPLE_MS) {
+          downsampled.push(point);
+          lastKeptTs = ts;
+        }
       });
 
       const weekStartEquity = downsampled[0].equity;
