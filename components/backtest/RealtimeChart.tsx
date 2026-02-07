@@ -315,7 +315,7 @@ function RealtimeChart() {
     symbol: symbolId,
     timeframe,
     enabled: autoOptimizeEnabled,
-    strategies: ['orchestrator', 'vol_breakout'],
+    // 전략 목록은 서버에서 동적 로드 (useAutoOptimize 기본값 사용)
     candleCount: 3000,
   });
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useSocketKline } from '@/contexts/SocketContext';
-import { triggerAutoOptimization, AutoOptimizeResult } from '@/lib/backtest-api';
+import { triggerAutoOptimization, AutoOptimizeResult, getActiveStrategyIds } from '@/lib/backtest-api';
 
 interface UseAutoOptimizeParams {
   symbol?: string;
@@ -38,7 +38,7 @@ export function useAutoOptimize({
   symbol = 'BTCUSDT',
   timeframe = '5m',
   enabled = false,
-  strategies = ['orchestrator', 'vol_breakout'],
+  strategies = getActiveStrategyIds(),
   candleCount = 3000,
 }: UseAutoOptimizeParams): UseAutoOptimizeReturn {
   const { getKline } = useSocketKline();

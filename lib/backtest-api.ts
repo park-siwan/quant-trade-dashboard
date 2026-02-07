@@ -1,13 +1,17 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // ============== 전략 타입 ==============
-export type StrategyType = 'vol_breakout' | 'rsi_div' | 'orchestrator';
+// 전략 목록은 서버(StrategyConfigService)가 Single Source of Truth
+// fetchAllStrategyDefaults() 또는 fetchStrategyPreviews()로 동적 로드
+export type StrategyType = string;
 
-export const STRATEGIES = [
-  { id: 'rsi_div' as const, label: '반전매매(RSI DIV)', desc: '가격-RSI 다이버전스 감지' },
-  { id: 'vol_breakout' as const, label: '돌파매매(거래량+ADX)', desc: '거래량 확인 + ADX 강도 기반 브레이크아웃' },
-  { id: 'orchestrator' as const, label: '오케스트레이터', desc: '앙상블 레짐 + 3전략 조합 (브레이크아웃+다이버전스+평균회귀)' },
-];
+// 서버에서 로드된 전략 목록 (preloadStrategyDefaults 호출 후 사용 가능)
+export function getActiveStrategyIds(): string[] {
+  if (_strategyDefaultsCache) {
+    return Array.from(_strategyDefaultsCache.keys());
+  }
+  return [];
+}
 
 export interface BacktestParams {
   strategy?: StrategyType;
@@ -339,29 +343,14 @@ export function getCachedStrategyDefaults(strategy: string): Record<string, any>
 }
 
 /**
- * 전략 ID → displayName 매핑 (old ID 호환)
- */
-const STRATEGY_ID_MIGRATION: Record<string, string> = {
-  'bb_reversion': 'orchestrator',
-  'z_score': 'orchestrator',
-  'ema_adx': 'vol_breakout',
-  'hybrid_regime': 'orchestrator',
-  'ml_hmm': 'orchestrator',
-  'hmm_orchestrator': 'orchestrator',
-  'classic_rsi_div': 'rsi_div',
-};
-
-/**
  * 캐시된 전략 표시 이름 가져오기 (JSON Single Source of Truth)
+ * 마이그레이션은 서버(StrategyConfigService.migrateId)가 처리
  */
 export function getCachedStrategyDisplayName(strategy: string): string {
-  // old ID → new ID 마이그레이션
-  const migratedId = STRATEGY_ID_MIGRATION[strategy] || strategy;
-
-  if (_strategyDefaultsCache && _strategyDefaultsCache.has(migratedId)) {
-    return _strategyDefaultsCache.get(migratedId)!.displayName || migratedId;
+  if (_strategyDefaultsCache && _strategyDefaultsCache.has(strategy)) {
+    return _strategyDefaultsCache.get(strategy)!.displayName || strategy;
   }
-  return migratedId;
+  return strategy;
 }
 
 // 최적화 관련 타입
