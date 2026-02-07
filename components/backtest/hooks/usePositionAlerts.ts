@@ -13,7 +13,8 @@ interface UsePositionAlertsProps {
   soundEnabled: boolean;
   playAlertSound: (direction: 'bullish' | 'bearish', forcePlay?: boolean) => void;
   playExitSound: (isProfit: boolean, forcePlay?: boolean) => void;
-  loadBacktestTrades: (strategy: SavedOptimizeResult) => Promise<void>;
+  loadBacktestTrades: (strategy: SavedOptimizeResult, retryCount?: number, forceRun?: boolean) => Promise<void>;
+  onPositionExit?: (exitType: 'tp' | 'sl', exitPrice: number) => void;  // TP/SL 도달 시 포지션 청산 콜백
 }
 
 /**
@@ -31,6 +32,7 @@ export function usePositionAlerts({
   playAlertSound,
   playExitSound,
   loadBacktestTrades,
+  onPositionExit,
 }: UsePositionAlertsProps) {
   const lastSignalIdRef = useRef<string | null>(null);
   const lastExitAlertRef = useRef<string | null>(null);
@@ -150,12 +152,17 @@ export function usePositionAlerts({
         `[Exit Alert] ${direction.toUpperCase()} ${exitType.toUpperCase()} @ $${currentPrice}`,
       );
 
-      // TP/SL 도달 후 백테스트 재실행하여 포지션 상태 갱신
+      // TP/SL 도달 시 즉시 포지션 청산 콜백 호출
+      if (onPositionExit) {
+        onPositionExit(exitType, currentPrice);
+      }
+
+      // TP/SL 도달 후 백테스트 재실행하여 최신 상태 반영 (forceRun=true로 캐시 무시)
       if (selectedStrategy) {
-        setTimeout(() => loadBacktestTrades(selectedStrategy), 1000);
+        setTimeout(() => loadBacktestTrades(selectedStrategy, 0, true), 1000);
       }
     }
-  }, [ticker?.price, openPosition, soundEnabled, playExitSound, selectedStrategy, loadBacktestTrades]);
+  }, [ticker?.price, openPosition, soundEnabled, playExitSound, selectedStrategy, loadBacktestTrades, onPositionExit]);
 
   // 3. 새 포지션 진입 알림
   useEffect(() => {

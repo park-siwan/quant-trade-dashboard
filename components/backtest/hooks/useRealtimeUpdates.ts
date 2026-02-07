@@ -28,6 +28,7 @@ interface UseRealtimeUpdatesResult {
   isBacktestRunning: boolean;
   backtestCacheRef: React.MutableRefObject<Map<string, BacktestCache>>;
   loadBacktestTrades: (strategy: SavedOptimizeResult, retryCount?: number, forceRun?: boolean) => Promise<void>;
+  clearOpenPosition: () => void;  // TP/SL 도달 시 포지션 즉시 청산
 }
 
 const BACKTEST_THROTTLE_MS = 2000;
@@ -49,6 +50,7 @@ export function useRealtimeUpdates(
   // 미리 로드된 데이터 (useBacktestRunner에서 제공)
   preloadedTradesMap?: Map<string, TradeResult[]>,
   preloadedOpenPositions?: Map<string, OpenPosition>,
+  preloadedStats?: Map<string, BacktestResult>,  // 전략별 통계 (헤더 표시용)
 ): UseRealtimeUpdatesResult {
   const [backtestTrades, setBacktestTrades] = useState<TradeResult[]>([]);
   const [skippedSignals, setSkippedSignals] = useState<SkippedSignal[]>([]);
@@ -206,11 +208,13 @@ export function useRealtimeUpdates(
     if (preloadedTradesMap && preloadedTradesMap.has(strategyType)) {
       const trades = preloadedTradesMap.get(strategyType) || [];
       const openPos = preloadedOpenPositions?.get(strategyType) || null;
+      const stats = preloadedStats?.get(strategyType) || null;
 
-      console.log('[Backtest] Using pre-loaded data for strategy:', strategyType, 'trades:', trades.length);
+      console.log('[Backtest] Using pre-loaded data for strategy:', strategyType, 'trades:', trades.length, 'stats:', !!stats);
 
       setBacktestTrades(trades);
       setOpenPosition(openPos);
+      setBacktestStats(stats);  // 통계도 설정 (헤더 표시용)
       setSkippedSignals([]); // pre-loaded에서는 skippedSignals 없음
       setLastBacktestTime(new Date());
       setIsBacktestRunning(false);
@@ -221,7 +225,13 @@ export function useRealtimeUpdates(
     // 2순위: 캐시 또는 API 호출 (fallback)
     console.log('[Backtest] No pre-loaded data, calling runBacktest for:', strategyType);
     loadBacktestTrades(selectedStrategy);
-  }, [selectedStrategy, timeframe, symbol, candlesLength, isLoadingCandles, loadBacktestTrades, preloadedTradesMap, preloadedOpenPositions]);
+  }, [selectedStrategy, timeframe, symbol, candlesLength, isLoadingCandles, loadBacktestTrades, preloadedTradesMap, preloadedOpenPositions, preloadedStats]);
+
+  // TP/SL 도달 시 포지션 즉시 청산 함수
+  const clearOpenPosition = useCallback(() => {
+    console.log('[Backtest] Clearing open position (TP/SL hit)');
+    setOpenPosition(null);
+  }, []);
 
   return {
     backtestTrades,
@@ -233,5 +243,6 @@ export function useRealtimeUpdates(
     isBacktestRunning,
     backtestCacheRef,
     loadBacktestTrades,
+    clearOpenPosition,
   };
 }

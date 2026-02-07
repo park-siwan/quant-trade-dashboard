@@ -332,40 +332,6 @@ export async function fetchYearlySharpe(
 }
 
 /**
- * 롤링 기간별 Sharpe Ratio 결과
- */
-export interface RollingSharpeResult {
-  strategy: string;
-  displayName: string;
-  periods: Array<{
-    label: string;   // "1주", "2주", "1개월", "3개월"
-    days: number;
-    sharpe: number | null;
-    trades: number;
-  }>;
-}
-
-/**
- * 롤링 기간별 Sharpe Ratio 가져오기
- * 1주, 2주, 1개월, 3개월 기간별 Sharpe 반환
- */
-export async function fetchRollingSharpe(
-  symbol: string = 'BTCUSDT',
-  timeframe: string = '5m',
-): Promise<RollingSharpeResult[]> {
-  try {
-    const response = await fetch(
-      `${API_BASE}/backtest/strategy/rolling-sharpe?symbol=${symbol}&timeframe=${timeframe}`
-    );
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to fetch rolling Sharpe:', err);
-    return [];
-  }
-}
-
-/**
  * 캐시된 전략 기본값 가져오기 (동기, 캐시가 없으면 빈 객체)
  */
 export function getCachedStrategyDefaults(strategy: string): Record<string, any> {
@@ -1664,5 +1630,25 @@ export async function refreshSingleStrategy(
   } catch (err) {
     console.error('Failed to refresh strategy:', err);
     return { success: false, message: 'Failed to refresh strategy' };
+  }
+}
+
+/**
+ * 전체 전략 캐시 강제 갱신
+ * JSON 파라미터 변경 후 즉시 반영 필요 시 사용
+ */
+export async function refreshAllStrategies(
+  symbol: string,
+  timeframe: string,
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/backtest/rolling-sharpe/refresh?symbol=${symbol}&timeframe=${timeframe}`,
+      { method: 'POST' },
+    );
+    return res.json();
+  } catch (err) {
+    console.error('Failed to refresh all strategies:', err);
+    return { success: false, message: 'Failed to refresh all strategies' };
   }
 }

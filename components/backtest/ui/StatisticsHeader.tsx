@@ -46,15 +46,15 @@ export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
           <div className='flex items-center gap-2'>
             <span className='text-zinc-500 text-xs'>수익</span>
             <span
-              className={`text-sm font-bold ${backtestStats.totalPnlPercent * leverage >= 0 ? 'text-green-400' : 'text-red-400'}`}
+              className={`text-sm font-bold ${(backtestStats.totalPnlPercent ?? 0) * leverage >= 0 ? 'text-green-400' : 'text-red-400'}`}
             >
-              {backtestStats.totalPnlPercent * leverage >= 0 ? '+' : ''}
-              {(backtestStats.totalPnlPercent * leverage).toFixed(1)}%
+              {(backtestStats.totalPnlPercent ?? 0) * leverage >= 0 ? '+' : ''}
+              {((backtestStats.totalPnlPercent ?? 0) * leverage).toFixed(1)}%
             </span>
             {leverage > 1 && (
               <span className='text-zinc-600 text-[10px]'>
-                ({backtestStats.totalPnlPercent >= 0 ? '+' : ''}
-                {backtestStats.totalPnlPercent.toFixed(1)}% × {leverage})
+                ({(backtestStats.totalPnlPercent ?? 0) >= 0 ? '+' : ''}
+                {(backtestStats.totalPnlPercent ?? 0).toFixed(1)}% × {leverage})
               </span>
             )}
           </div>
@@ -63,9 +63,9 @@ export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
           <div className='flex items-center gap-2'>
             <span className='text-zinc-500 text-xs'>승률</span>
             <span
-              className={`text-sm font-bold ${backtestStats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}
+              className={`text-sm font-bold ${(backtestStats.winRate ?? 0) >= 50 ? 'text-green-400' : 'text-red-400'}`}
             >
-              {backtestStats.winRate.toFixed(0)}%
+              {(backtestStats.winRate ?? 0).toFixed(0)}%
             </span>
           </div>
           <div className='w-px h-4 bg-zinc-700' />
@@ -89,11 +89,11 @@ export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
           <div className='flex items-center gap-2'>
             <span className='text-zinc-500 text-xs'>거래</span>
             <span
-              className={`text-sm font-bold ${backtestStats.totalTrades === 0 ? 'text-yellow-500' : 'text-zinc-300'}`}
+              className={`text-sm font-bold ${(backtestStats.totalTrades ?? 0) === 0 ? 'text-yellow-500' : 'text-zinc-300'}`}
             >
-              {backtestStats.totalTrades}회
+              {backtestStats.totalTrades ?? 0}회
             </span>
-            {backtestStats.totalTrades === 0 && selectedStrategy && (
+            {(backtestStats.totalTrades ?? 0) === 0 && selectedStrategy && (
               <span
                 className='text-yellow-500 text-[10px]'
                 title={`필터: ${(selectedStrategy as any).rsiExtremeFilter || 'OFF'} / 지표: ${selectedStrategy.indicators}`}
@@ -108,7 +108,7 @@ export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
             <span className='text-zinc-500 text-xs'>샤프</span>
             <span className='text-zinc-600 text-[10px]'>(위험대비)</span>
             <span className='text-zinc-300 text-sm font-bold'>
-              {backtestStats.sharpeRatio.toFixed(2)}
+              {(backtestStats.sharpeRatio ?? 0).toFixed(2)}
             </span>
           </div>
           <div className='w-px h-4 bg-zinc-700' />

@@ -27,6 +27,7 @@ import {
   deleteSavedResult,
   getDailyRollingSharpeTimeline,
   refreshSingleStrategy,
+  refreshAllStrategies,
 } from '@/lib/backtest-api';
 import { X, RefreshCw } from 'lucide-react';
 import {
@@ -215,6 +216,7 @@ function RealtimeChart() {
     lastBacktestTime,
     isBacktestRunning,
     loadBacktestTrades,
+    clearOpenPosition,
   } = useRealtimeUpdates(
     selectedStrategy,
     symbolId,
@@ -224,6 +226,7 @@ function RealtimeChart() {
     isLoading,
     allTradesMap,      // 미리 로드된 trades (마커 표시용)
     allOpenPositions,  // 미리 로드된 open positions
+    allStrategyStats,  // 미리 로드된 통계 (헤더 표시용)
   );
 
   // 5. Sound Alerts
@@ -250,6 +253,10 @@ function RealtimeChart() {
     playAlertSound,
     playExitSound,
     loadBacktestTrades,
+    onPositionExit: (exitType, exitPrice) => {
+      console.log(`[Position Exit] ${exitType.toUpperCase()} @ $${exitPrice}`);
+      clearOpenPosition();
+    },
   });
 
   // 🔍 리렌더 원인 추적 (개발 모드에서만 활성화) - 비활성화
@@ -1224,6 +1231,30 @@ function RealtimeChart() {
                 분석중
               </span>
             )}
+            <button
+              onClick={async () => {
+                if (refreshingStrategy === '__all__') return;
+                setRefreshingStrategy('__all__');
+                try {
+                  await refreshAllStrategies(symbolId, timeframe);
+                  refetchBacktestData(true, true);
+                  refetchStrategies();
+                } catch (err) {
+                  console.error('전체 갱신 실패:', err);
+                } finally {
+                  setRefreshingStrategy(null);
+                }
+              }}
+              disabled={refreshingStrategy === '__all__'}
+              className={`ml-auto p-1 rounded transition-colors ${
+                refreshingStrategy === '__all__'
+                  ? 'text-blue-400'
+                  : 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-700'
+              }`}
+              title='전체 전략 캐시 재계산'
+            >
+              <RefreshCw size={13} className={refreshingStrategy === '__all__' ? 'animate-spin' : ''} />
+            </button>
           </h3>
           <div className='flex-1 overflow-y-auto space-y-1 min-h-0 custom-scrollbar'>
             {/* 스켈레톤 로딩 표시 */}
@@ -1842,7 +1873,8 @@ function RealtimeChart() {
                   }
 
                   // 전체 값 합쳐서 통합 스케일 계산 (부드러운 J커브)
-                  const allValues = [...currentValues, ...futureValues];
+                  const allValues = [...currentValues, ...futureValues].filter(v => Number.isFinite(v));
+                  if (allValues.length === 0) return null;
                   const globalMin = Math.min(...allValues);
                   const globalMax = Math.max(...allValues);
                   const padding = (globalMax - globalMin) * 0.1 || 1;
