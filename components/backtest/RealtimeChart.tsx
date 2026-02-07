@@ -36,6 +36,7 @@ import {
 } from '@/lib/strategy-params';
 import MultiStrategyEquityChart from './MultiStrategyEquityChart';
 import WeeklySharpeTimeline from './WeeklySharpeTimeline';
+import AvgSharpeChart from './AvgSharpeChart';
 import { ChartLegend } from './ui/ChartLegend';
 import { OpenPositionCard } from './ui/OpenPositionCard';
 import { RecentSignalsPanel } from './ui/RecentSignalsPanel';
@@ -161,7 +162,7 @@ function RealtimeChart() {
   const [nextCandleCountdown, setNextCandleCountdown] = useState<number>(0);
 
   // 전략 비교 차트 탭 (null = 숨김, 'equity' = 자산곡선, 'sharpe' = 샤프 타임라인)
-  const [strategyChartTab, setStrategyChartTab] = useState<'equity' | 'sharpe' | null>(null);
+  const [strategyChartTab, setStrategyChartTab] = useState<'equity' | 'sharpe' | 'avg-sharpe' | null>(null);
 
   // 단일 전략 갱신 중 상태
   const [refreshingStrategy, setRefreshingStrategy] = useState<string | null>(null);
@@ -1429,6 +1430,16 @@ function RealtimeChart() {
           >
             📊 샤프 타임라인
           </button>
+          <button
+            onClick={() => setStrategyChartTab(strategyChartTab === 'avg-sharpe' ? null : 'avg-sharpe')}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              strategyChartTab === 'avg-sharpe'
+                ? 'text-cyan-400 border-b-2 border-cyan-400 bg-zinc-800/50'
+                : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/30'
+            }`}
+          >
+            📉 평균 샤프
+          </button>
           {strategyChartTab && (
             <button
               onClick={() => setStrategyChartTab(null)}
@@ -1479,6 +1490,29 @@ function RealtimeChart() {
               strategies={chartStrategies}
               highlightedStrategyId={highlightedStrategy}
               leverage={leverage}
+              onStrategyClick={handleStrategyClickMemo}
+            />
+          ) : (
+            <div className="p-8 text-center text-zinc-500 text-sm">
+              전략 데이터가 없습니다
+            </div>
+          )
+        )}
+
+        {strategyChartTab === 'avg-sharpe' && (
+          (isLoadingAllStrategies || isLoadingEquityCurves) ? (
+            <div className="p-4 animate-pulse">
+              <div className="w-full h-[300px] bg-zinc-800 rounded flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <div className="text-sm text-zinc-400">평균 샤프 계산 중...</div>
+                </div>
+              </div>
+            </div>
+          ) : allStrategiesEquityCurves.size > 0 ? (
+            <AvgSharpeChart
+              strategies={chartStrategies}
+              highlightedStrategyId={highlightedStrategy}
               onStrategyClick={handleStrategyClickMemo}
             />
           ) : (
