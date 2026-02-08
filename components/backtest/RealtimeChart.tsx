@@ -269,7 +269,9 @@ function RealtimeChart() {
     isApplying,
     applyResult,
     error: optimizeError,
+    optimizeAllProgress,
     startOptimize,
+    startOptimizeAll,
     approve: approveOptimize,
     reject: rejectOptimize,
   } = useStrategyOptimize();
@@ -980,7 +982,7 @@ function RealtimeChart() {
         formatDuration={formatDuration}
       />
 
-      <div className='grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px] lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px] gap-4 min-h-[calc(100vh-180px)]'>
+      <div className='grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_280px] lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px] gap-4 min-h-[calc(100vh-180px)]'>
       {/* 좌측: 메인 차트 영역 */}
       <div className='bg-zinc-900 p-4 rounded-lg min-w-0 flex flex-col overflow-hidden'>
         {/* 1. 헤더: 연결 상태 + 설정 */}
@@ -1191,30 +1193,52 @@ function RealtimeChart() {
                 분석중
               </span>
             )}
-            <button
-              onClick={async () => {
-                if (refreshingStrategy === '__all__') return;
-                setRefreshingStrategy('__all__');
-                try {
-                  await refreshAllStrategies(symbolId, timeframe);
-                  refetchBacktestData(true, true);
-                  refetchStrategies();
-                } catch (err) {
-                  console.error('전체 갱신 실패:', err);
-                } finally {
-                  setRefreshingStrategy(null);
-                }
-              }}
-              disabled={refreshingStrategy === '__all__'}
-              className={`ml-auto p-1 rounded transition-colors ${
-                refreshingStrategy === '__all__'
-                  ? 'text-blue-400'
-                  : 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-700'
-              }`}
-              title='전체 전략 캐시 재계산'
-            >
-              <RefreshCw size={13} className={refreshingStrategy === '__all__' ? 'animate-spin' : ''} />
-            </button>
+            {optimizeAllProgress && (
+              <span className='text-[10px] text-yellow-400'>
+                {optimizeAllProgress.current}/{optimizeAllProgress.total}
+              </span>
+            )}
+            <div className='ml-auto flex items-center gap-0.5'>
+              <button
+                onClick={() => {
+                  const activeStrategies = optimizeStatuses.map(s => s.strategy);
+                  if (activeStrategies.length > 0) startOptimizeAll(activeStrategies);
+                }}
+                disabled={!!optimizingStrategy}
+                className={`p-1 rounded transition-colors ${
+                  optimizingStrategy
+                    ? 'text-yellow-400 animate-pulse'
+                    : 'text-zinc-500 hover:text-yellow-400 hover:bg-zinc-700'
+                }`}
+                title='전체 전략 최적화'
+              >
+                <Zap size={13} />
+              </button>
+              <button
+                onClick={async () => {
+                  if (refreshingStrategy === '__all__') return;
+                  setRefreshingStrategy('__all__');
+                  try {
+                    await refreshAllStrategies(symbolId, timeframe);
+                    refetchBacktestData(true, true);
+                    refetchStrategies();
+                  } catch (err) {
+                    console.error('전체 갱신 실패:', err);
+                  } finally {
+                    setRefreshingStrategy(null);
+                  }
+                }}
+                disabled={refreshingStrategy === '__all__'}
+                className={`p-1 rounded transition-colors ${
+                  refreshingStrategy === '__all__'
+                    ? 'text-blue-400'
+                    : 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-700'
+                }`}
+                title='전체 전략 캐시 재계산'
+              >
+                <RefreshCw size={13} className={refreshingStrategy === '__all__' ? 'animate-spin' : ''} />
+              </button>
+            </div>
           </h3>
 
           {/* 최적화 비교 카드 */}
@@ -1296,94 +1320,95 @@ function RealtimeChart() {
               return (
                 <div
                   key={strategy.id}
-                  className={`w-full px-3 py-2.5 text-left rounded-lg transition-colors relative ${
+                  className={`w-full px-3 py-2.5 text-left rounded-lg transition-colors ${
                     isSelected
                       ? 'bg-blue-600/30 border border-blue-500/50'
                       : 'bg-zinc-800 hover:bg-zinc-700'
                   }`}
                 >
-                  {/* 우측 상단 버튼들 */}
-                  <div className='absolute top-1.5 right-1.5 flex items-center gap-1 z-10'>
-                    {/* 최적화 버튼 */}
+                  {/* 1행: 전략명 + 포지션 | SR + 버튼들 */}
+                  <div className='flex items-center gap-1.5 mb-1.5'>
                     <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        startOptimize(strategyType);
-                      }}
-                      disabled={!!optimizingStrategy}
-                      className={`p-0.5 rounded transition-colors ${
-                        optimizingStrategy === strategyType
-                          ? 'text-yellow-400 animate-pulse'
-                          : optimizingStrategy
-                            ? 'text-zinc-600 cursor-not-allowed'
-                            : 'text-zinc-500 hover:text-yellow-400 hover:bg-zinc-600/50'
-                      }`}
-                      title='TP/SL 최적화'
+                      onClick={() => handleStrategyChange(strategy)}
+                      className='flex items-center gap-1.5 min-w-0 flex-1'
                     >
-                      <Zap size={13} />
+                      <span className='text-zinc-200 text-[13px] font-semibold truncate'>
+                        {displayName}
+                      </span>
+                      {(() => {
+                        const position = isSelected
+                          ? openPosition
+                          : allOpenPositions.get(strategyType);
+                        if (!position) return null;
+                        return (
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
+                            position.direction === 'long'
+                              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                              : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          }`}>
+                            {position.direction === 'long' ? '롱' : '숏'}
+                          </span>
+                        );
+                      })()}
                     </button>
-                    {/* 새로고침 버튼 */}
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (refreshingStrategy === strategyType) return;
-                        setRefreshingStrategy(strategyType);
-                        try {
-                          await refreshSingleStrategy(symbolId, timeframe, strategyType);
-                          refetchBacktestData(true);
-                        } catch (err) {
-                          console.error('갱신 실패:', err);
-                        } finally {
-                          setRefreshingStrategy(null);
-                        }
-                      }}
-                      disabled={refreshingStrategy === strategyType}
-                      className={`p-0.5 rounded transition-colors ${
-                        refreshingStrategy === strategyType
-                          ? 'text-blue-400 animate-spin'
-                          : 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-600/50'
-                      }`}
-                      title='전략 캐시 갱신'
-                    >
-                      <RefreshCw size={13} />
-                    </button>
+                    {avgSharpe !== null && (
+                      <span className={`text-[13px] font-bold shrink-0 ${
+                        avgSharpe >= 2 ? 'text-green-400' :
+                        avgSharpe >= 0 ? 'text-yellow-400' : 'text-red-400'
+                      }`}>
+                        {avgSharpe.toFixed(1)}
+                      </span>
+                    )}
+                    {/* 액션 버튼 그룹 (우측 끝) */}
+                    <div className='ml-auto flex items-center gap-0.5 shrink-0'>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startOptimize(strategyType);
+                        }}
+                        disabled={!!optimizingStrategy}
+                        className={`p-0.5 rounded transition-colors ${
+                          optimizingStrategy === strategyType
+                            ? 'text-yellow-400 animate-pulse'
+                            : optimizingStrategy
+                              ? 'text-zinc-600 cursor-not-allowed'
+                              : 'text-zinc-500 hover:text-yellow-400 hover:bg-zinc-600/50'
+                        }`}
+                        title='TP/SL 최적화'
+                      >
+                        <Zap size={13} />
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (refreshingStrategy === strategyType) return;
+                          setRefreshingStrategy(strategyType);
+                          try {
+                            await refreshSingleStrategy(symbolId, timeframe, strategyType);
+                            refetchBacktestData(true);
+                          } catch (err) {
+                            console.error('갱신 실패:', err);
+                          } finally {
+                            setRefreshingStrategy(null);
+                          }
+                        }}
+                        disabled={refreshingStrategy === strategyType}
+                        className={`p-0.5 rounded transition-colors ${
+                          refreshingStrategy === strategyType
+                            ? 'text-blue-400 animate-spin'
+                            : 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-600/50'
+                        }`}
+                        title='전략 캐시 갱신'
+                      >
+                        <RefreshCw size={13} />
+                      </button>
+                    </div>
                   </div>
 
                   <button
                     onClick={() => handleStrategyChange(strategy)}
                     className='w-full text-left'
                   >
-                    {/* 1행: 전략명 + 포지션 + SR */}
-                    <div className='flex justify-between items-center mb-1.5'>
-                      <div className='flex items-center gap-1.5 min-w-0'>
-                        <span className='text-zinc-200 text-[13px] font-semibold truncate'>
-                          {displayName}
-                        </span>
-                        {(() => {
-                          const position = isSelected
-                            ? openPosition
-                            : allOpenPositions.get(strategyType);
-                          if (!position) return null;
-                          return (
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
-                              position.direction === 'long'
-                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                            }`}>
-                              {position.direction === 'long' ? '롱' : '숏'}
-                            </span>
-                          );
-                        })()}
-                      </div>
-                      {avgSharpe !== null && (
-                        <span className={`text-[13px] font-bold shrink-0 ${
-                          avgSharpe >= 2 ? 'text-green-400' :
-                          avgSharpe >= 0 ? 'text-yellow-400' : 'text-red-400'
-                        }`}>
-                          Avg SR {avgSharpe.toFixed(1)}
-                        </span>
-                      )}
-                    </div>
 
                     {/* 2행: WR | PnL | 거래수 + 미니차트 */}
                     <div className='flex items-center justify-between mb-1'>
