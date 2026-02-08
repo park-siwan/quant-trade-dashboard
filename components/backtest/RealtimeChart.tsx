@@ -1326,8 +1326,8 @@ function RealtimeChart() {
                       : 'bg-zinc-800 hover:bg-zinc-700'
                   }`}
                 >
-                  {/* 1행: 전략명 + 포지션 | SR + 버튼들 */}
-                  <div className='flex items-center gap-1.5 mb-1.5'>
+                  {/* 1행: 전략명 + 포지션 + SR | 액션 버튼 */}
+                  <div className='flex items-center mb-1.5'>
                     <button
                       onClick={() => handleStrategyChange(strategy)}
                       className='flex items-center gap-1.5 min-w-0 flex-1'
@@ -1350,24 +1350,24 @@ function RealtimeChart() {
                           </span>
                         );
                       })()}
+                      {avgSharpe !== null && (
+                        <span className={`text-[13px] font-bold shrink-0 ${
+                          avgSharpe >= 2 ? 'text-green-400' :
+                          avgSharpe >= 0 ? 'text-yellow-400' : 'text-red-400'
+                        }`}>
+                          {avgSharpe.toFixed(1)}
+                        </span>
+                      )}
                     </button>
-                    {avgSharpe !== null && (
-                      <span className={`text-[13px] font-bold shrink-0 ${
-                        avgSharpe >= 2 ? 'text-green-400' :
-                        avgSharpe >= 0 ? 'text-yellow-400' : 'text-red-400'
-                      }`}>
-                        {avgSharpe.toFixed(1)}
-                      </span>
-                    )}
-                    {/* 액션 버튼 그룹 (우측 끝) */}
-                    <div className='ml-auto flex items-center gap-0.5 shrink-0'>
+                    {/* 액션 버튼 영역 (고정 너비, 우측) */}
+                    <div className='flex items-center gap-1 pl-2 ml-2 border-l border-zinc-700 shrink-0'>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           startOptimize(strategyType);
                         }}
                         disabled={!!optimizingStrategy}
-                        className={`p-0.5 rounded transition-colors ${
+                        className={`p-1 rounded transition-colors ${
                           optimizingStrategy === strategyType
                             ? 'text-yellow-400 animate-pulse'
                             : optimizingStrategy
@@ -1376,7 +1376,7 @@ function RealtimeChart() {
                         }`}
                         title='TP/SL 최적화'
                       >
-                        <Zap size={13} />
+                        <Zap size={14} />
                       </button>
                       <button
                         onClick={async (e) => {
@@ -1393,14 +1393,14 @@ function RealtimeChart() {
                           }
                         }}
                         disabled={refreshingStrategy === strategyType}
-                        className={`p-0.5 rounded transition-colors ${
+                        className={`p-1 rounded transition-colors ${
                           refreshingStrategy === strategyType
                             ? 'text-blue-400 animate-spin'
                             : 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-600/50'
                         }`}
                         title='전략 캐시 갱신'
                       >
-                        <RefreshCw size={13} />
+                        <RefreshCw size={14} />
                       </button>
                     </div>
                   </div>
@@ -1410,34 +1410,34 @@ function RealtimeChart() {
                     className='w-full text-left'
                   >
 
-                    {/* 2행: WR | PnL | 거래수 + 미니차트 */}
-                    <div className='flex items-center justify-between mb-1'>
-                      <div className='flex items-center gap-1.5'>
-                        {(() => {
-                          const stats = allStrategyStats.get(strategyType);
-                          if (!stats || stats.totalTrades === 0) {
-                            return <span className='text-zinc-600 text-[10px]'>—</span>;
-                          }
-                          return (
-                            <>
-                              <span className={`text-[11px] font-medium ${stats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                                {stats.winRate.toFixed(0)}%
-                              </span>
-                              <span className='text-zinc-600 text-[10px]'>|</span>
-                              <span className={`text-[11px] font-medium ${stats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {stats.totalPnlPercent >= 0 ? '+' : ''}{stats.totalPnlPercent.toFixed(1)}%
-                              </span>
-                              <span className='text-zinc-600 text-[10px]'>|</span>
-                              <span className='text-zinc-400 text-[11px]'>
-                                {stats.totalTrades}회
-                              </span>
-                            </>
-                          );
-                        })()}
-                      </div>
-                      <div className='w-12 shrink-0'>
-                        <StrategyMiniChart equityCurve={allStrategiesEquityCurves.get(strategy.id) || []} />
-                      </div>
+                    {/* 2행: WR | PnL | 거래수 */}
+                    <div className='flex items-center gap-1.5 mb-1'>
+                      {(() => {
+                        const stats = allStrategyStats.get(strategyType);
+                        if (!stats || stats.totalTrades === 0) {
+                          return <span className='text-zinc-600 text-[10px]'>—</span>;
+                        }
+                        return (
+                          <>
+                            <span className={`text-[11px] font-medium ${stats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                              {stats.winRate.toFixed(0)}%
+                            </span>
+                            <span className='text-zinc-600 text-[10px]'>|</span>
+                            <span className={`text-[11px] font-medium ${stats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {stats.totalPnlPercent >= 0 ? '+' : ''}{stats.totalPnlPercent.toFixed(1)}%
+                            </span>
+                            <span className='text-zinc-600 text-[10px]'>|</span>
+                            <span className='text-zinc-400 text-[11px]'>
+                              {stats.totalTrades}회
+                            </span>
+                          </>
+                        );
+                      })()}
+                    </div>
+
+                    {/* 3행: 미니 에쿼티 차트 (전체 폭) */}
+                    <div className='w-full mb-1'>
+                      <StrategyMiniChart equityCurve={allStrategiesEquityCurves.get(strategy.id) || []} />
                     </div>
 
                     {/* 3행: TP/SL + 마지막 최적화 시각 */}

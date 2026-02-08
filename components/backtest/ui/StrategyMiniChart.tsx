@@ -49,10 +49,10 @@ function StrategyMiniChartComponent({ equityCurve }: StrategyMiniChartProps) {
     const min = Math.min(actualMin, -0.1);
     const range = max - min || 0.2;
 
-    // 점들의 좌표 계산
+    // 점들의 좌표 계산 (viewBox: 0 0 120 44)
     const points = returns.map((val, i) => {
-      const x = 2 + (i / (returns.length - 1)) * 36;
-      const y = 18 - ((val - min) / range) * 14;
+      const x = 2 + (i / (returns.length - 1)) * 116;
+      const y = 40 - ((val - min) / range) * 36;
       return { x, y, val };
     });
 
@@ -61,46 +61,51 @@ function StrategyMiniChartComponent({ equityCurve }: StrategyMiniChartProps) {
       `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
     ).join(' ');
 
-    const zeroY = 18 - ((0 - min) / range) * 14;
+    const zeroY = 40 - ((0 - min) / range) * 36;
 
-    return { pathD, color, finalReturn, points, zeroY };
+    // 영역 채우기용 경로
+    const areaD = pathD + ` L ${points[points.length - 1].x} 44 L ${points[0].x} 44 Z`;
+
+    return { pathD, areaD, color, finalReturn, points, zeroY };
   }, [equityCurve]);
 
   if (!chartData) {
     return (
-      <div className='w-full h-8 flex items-center justify-center text-[7px] text-zinc-600'>
+      <div className='w-full h-10 flex items-center justify-center text-[8px] text-zinc-600'>
         -
       </div>
     );
   }
 
-  const { pathD, color, finalReturn, points, zeroY } = chartData;
+  const { pathD, areaD, color, finalReturn, points, zeroY } = chartData;
 
   return (
     <div className='w-full'>
-      <svg width="100%" height="20" viewBox="0 0 40 20" className="w-full">
+      <svg width="100%" height="48" viewBox="0 0 120 44" className="w-full" preserveAspectRatio="none">
+        {/* 영역 채우기 */}
+        <path d={areaD} fill={color} fillOpacity="0.08" />
         {/* 0선 */}
         <line
           x1="2"
           y1={zeroY}
-          x2="38"
+          x2="118"
           y2={zeroY}
           stroke="#52525b"
-          strokeWidth="0.3"
-          strokeDasharray="1,1"
+          strokeWidth="0.4"
+          strokeDasharray="2,2"
         />
         {/* 데이터 선 */}
-        <path d={pathD} stroke={color} strokeWidth="1" fill="none" />
+        <path d={pathD} stroke={color} strokeWidth="1.2" fill="none" />
         {/* 끝점 표시 */}
         <circle
           cx={points[points.length - 1].x}
           cy={points[points.length - 1].y}
-          r="1"
+          r="1.5"
           fill={color}
         />
       </svg>
       {/* 수익률 표시 */}
-      <div className='text-center text-[8px] -mt-0.5' style={{ color }}>
+      <div className='text-right text-[9px] -mt-1 pr-1' style={{ color }}>
         {finalReturn >= 0 ? '+' : ''}{finalReturn.toFixed(1)}%
       </div>
     </div>
