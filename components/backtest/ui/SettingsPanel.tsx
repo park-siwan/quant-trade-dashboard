@@ -10,14 +10,8 @@ interface SettingsPanelProps {
   onVolumeChange: (vol: number) => void;
   playAlertSound: (direction: 'bullish' | 'bearish', forcePlay?: boolean) => void;
   playExitSound: (isProfit: boolean, forcePlay?: boolean) => void;
-  autoOptimizeEnabled: boolean;
-  onAutoOptimizeToggle: (enabled: boolean) => void;
-  isAutoOptimizing: boolean;
-  lastOptimizeTime: number | null;
-  onManualOptimize: () => void;
   useWalkForward: boolean;
   onWalkForwardToggle: (enabled: boolean) => void;
-  autoOptimizeResult: any | null;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = memo(
@@ -31,14 +25,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = memo(
     onVolumeChange,
     playAlertSound,
     playExitSound,
-    autoOptimizeEnabled,
-    onAutoOptimizeToggle,
-    isAutoOptimizing,
-    lastOptimizeTime,
-    onManualOptimize,
     useWalkForward,
     onWalkForwardToggle,
-    autoOptimizeResult,
   }) => {
     if (!show) return null;
 
@@ -119,53 +107,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = memo(
             >
               💸 손절
             </button>
-          </div>
-        </div>
-
-        {/* 자동 최적화 설정 */}
-        <div>
-          <div className='text-xs text-zinc-400 mb-2'>자동 파라미터 최적화</div>
-          <div className='flex items-center gap-3'>
-            <button
-              onClick={() => onAutoOptimizeToggle(!autoOptimizeEnabled)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${
-                autoOptimizeEnabled
-                  ? 'bg-blue-600/30 text-blue-400'
-                  : 'bg-zinc-700 text-zinc-500'
-              }`}
-            >
-              {autoOptimizeEnabled ? '⚡ 활성화' : '⏸ 비활성화'}
-            </button>
-            <button
-              onClick={onManualOptimize}
-              disabled={isAutoOptimizing}
-              className='flex-1 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-xs rounded transition-colors disabled:opacity-50'
-            >
-              {isAutoOptimizing ? '최적화 중...' : '수동 실행'}
-            </button>
-          </div>
-          {/* 상태 표시 */}
-          <div className='mt-2 text-xs text-zinc-500'>
-            {isAutoOptimizing && (
-              <span className='text-blue-400'>⚡ 최적화 진행 중...</span>
-            )}
-            {lastOptimizeTime && !isAutoOptimizing && (
-              <span>
-                마지막 실행: {new Date(lastOptimizeTime).toLocaleTimeString()}
-              </span>
-            )}
-            {autoOptimizeResult && !isAutoOptimizing && (
-              <div className='mt-1'>
-                {autoOptimizeResult.results.map((r: any) => (
-                  <div
-                    key={r.strategy}
-                    className={r.updated ? 'text-green-400' : 'text-zinc-500'}
-                  >
-                    {r.strategy}: SR {r.bestSharpe} {r.updated && '✓'}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
