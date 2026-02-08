@@ -50,7 +50,7 @@ export function useRealtimeUpdates(
   // 미리 로드된 데이터 (useBacktestRunner에서 제공)
   preloadedTradesMap?: Map<string, TradeResult[]>,
   preloadedOpenPositions?: Map<string, OpenPosition>,
-  preloadedStats?: Map<string, BacktestResult>,  // 전략별 통계 (헤더 표시용)
+  preloadedStats?: Map<string, any>,  // 전략별 통계 (헤더 표시용)
 ): UseRealtimeUpdatesResult {
   const [backtestTrades, setBacktestTrades] = useState<TradeResult[]>([]);
   const [skippedSignals, setSkippedSignals] = useState<SkippedSignal[]>([]);

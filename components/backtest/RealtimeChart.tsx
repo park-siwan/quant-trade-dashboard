@@ -36,6 +36,7 @@ import {
 } from '@/lib/strategy-params';
 import MultiStrategyEquityChart from './MultiStrategyEquityChart';
 import WeeklySharpeTimeline from './WeeklySharpeTimeline';
+import AvgSharpeChart from './AvgSharpeChart';
 import { ChartLegend } from './ui/ChartLegend';
 import { OpenPositionCard } from './ui/OpenPositionCard';
 import { RecentSignalsPanel } from './ui/RecentSignalsPanel';
@@ -45,10 +46,9 @@ import { StatisticsHeader } from './ui/StatisticsHeader';
 import { StrategyMiniChart } from './ui/StrategyMiniChart';
 
 // JSON Single Source of Truth: API 캐시에서 로드된 기본값 사용
-const getTrendReversalComboDefaults = () => getDefaultParams('trend_reversal_combo');
-const getBbReversionDefaults = () => getDefaultParams('z_score');
-const getHmmOrchestratorDefaults = () => getDefaultParams('hmm_orchestrator');
-import { preloadStrategyDefaults, getCachedStrategyDisplayName, fetchStrategyPreviews, StrategyPreview } from '@/lib/backtest-api';
+// z_score removed - orchestrator handles mean reversion internally
+const getOrchestratorDefaults = () => getDefaultParams('orchestrator');
+import { preloadStrategyDefaults, getCachedStrategyDisplayName, fetchStrategyPreviews, StrategyPreview, StrategyType } from '@/lib/backtest-api';
 import { calculateTotalHoldingTime, calculateMeasurementPeriod, formatDuration } from '@/lib/backtest-calculations';
 import { CHART } from '@/lib/constants';
 import { useAtomValue } from 'jotai';
@@ -162,7 +162,7 @@ function RealtimeChart() {
   const [nextCandleCountdown, setNextCandleCountdown] = useState<number>(0);
 
   // 전략 비교 차트 탭 (null = 숨김, 'equity' = 자산곡선, 'sharpe' = 샤프 타임라인)
-  const [strategyChartTab, setStrategyChartTab] = useState<'equity' | 'sharpe' | null>(null);
+  const [strategyChartTab, setStrategyChartTab] = useState<'equity' | 'sharpe' | 'avg-sharpe' | null>(null);
 
   // 단일 전략 갱신 중 상태
   const [refreshingStrategy, setRefreshingStrategy] = useState<string | null>(null);
@@ -315,7 +315,7 @@ function RealtimeChart() {
     symbol: symbolId,
     timeframe,
     enabled: autoOptimizeEnabled,
-    strategies: ['orchestrator', 'trend_reversal_combo', 'vol_breakout'],
+    // 전략 목록은 서버에서 동적 로드 (useAutoOptimize 기본값 사용)
     candleCount: 3000,
   });
 
@@ -401,7 +401,7 @@ function RealtimeChart() {
     sharpeRatio: number;
   } | null> => {
     try {
-      const strategyType = (strategy.strategy || 'rsi_div') as 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo' | 'hmm_orchestrator';
+      const strategyType = (strategy.strategy || 'rsi_div') as StrategyType;
 
       // 최소 파라미터만 전송 - Python이 JSON 기본값 사용
       const result = await runBacktest({
@@ -431,7 +431,7 @@ function RealtimeChart() {
   // param_registry.py 기반 자동 변환 사용
   const convertRollingToSaved = (rolling: RollingParamResult, index: number): SavedOptimizeResult => {
     // 모든 전략 지원
-    const strategyType = rolling.strategy as 'z_score' | 'vol_breakout' | 'ml_hmm' | 'rsi_div' | 'trend_reversal_combo';
+    const strategyType = rolling.strategy as StrategyType;
 
     // 1. API 파라미터 (snake_case) → 프론트엔드 (camelCase) 자동 변환
     const rawParams = rolling.params as Record<string, unknown>;
@@ -476,37 +476,6 @@ function RealtimeChart() {
       base.trendFilter = convertedParams.regimeFilter ? 'regime' : 'OFF';
       base.volatilityFilter = convertedParams.volFilter ? 'atr' : 'OFF';
       base.rsiExtremeFilter = convertedParams.volumeConfirm ? 'extreme' : 'OFF';
-    } else if (strategyType === 'z_score') {
-      // 적응형 평균회귀 (학술 기반)
-      base.lookback = convertedParams.lookback ?? defaults.lookback ?? 20;
-      base.entryZ = convertedParams.entryZ ?? defaults.entryZ ?? 1.5;
-      base.exitZ = convertedParams.exitZ ?? defaults.exitZ ?? 0.25;
-      base.stopZ = convertedParams.stopZ ?? defaults.stopZ ?? 2.5;
-      base.volFilter = convertedParams.volFilter ?? defaults.volFilter ?? 0;
-      base.volThreshold = convertedParams.volThreshold ?? defaults.volThreshold ?? 1.5;
-      base.rsiConfirm = convertedParams.rsiConfirm ?? defaults.rsiConfirm ?? 0;
-      // v6: 추세 필터 파라미터
-      base.blockInTrend = convertedParams.blockInTrend ?? defaults.blockInTrend ?? 1;
-      base.adxTrendThreshold = convertedParams.adxTrendThreshold ?? defaults.adxTrendThreshold ?? 20;
-      base.useEmaTrendFilter = convertedParams.useEmaTrendFilter ?? defaults.useEmaTrendFilter ?? 0;
-      base.emaPeriod = convertedParams.emaPeriod ?? defaults.emaPeriod ?? 20;
-      base.emaDistancePct = convertedParams.emaDistancePct ?? defaults.emaDistancePct ?? 1.0;
-      base.useVolumeConfirm = convertedParams.useVolumeConfirm ?? defaults.useVolumeConfirm ?? 1;
-      base.volumeMult = convertedParams.volumeMult ?? defaults.volumeMult ?? 0.8;
-      base.cooldownBars = convertedParams.cooldownBars ?? defaults.cooldownBars ?? 10;
-      base.lowVolEntryZ = convertedParams.lowVolEntryZ ?? defaults.lowVolEntryZ ?? 1.5;
-      base.highVolEntryZ = convertedParams.highVolEntryZ ?? defaults.highVolEntryZ ?? 2.5;
-      base.useStochConfirm = convertedParams.useStochConfirm ?? defaults.useStochConfirm ?? 0;
-      base.stochThreshold = convertedParams.stochThreshold ?? defaults.stochThreshold ?? 25;
-      base.useRsiConfirm = convertedParams.useRsiConfirm ?? defaults.useRsiConfirm ?? 0;
-      base.rsiThreshold = convertedParams.rsiThreshold ?? defaults.rsiThreshold ?? 35;
-      base.useMiniSideways = convertedParams.useMiniSideways ?? defaults.useMiniSideways ?? 0;
-      base.bbBandwidthThreshold = convertedParams.bbBandwidthThreshold ?? defaults.bbBandwidthThreshold ?? 0.03;
-      base.useChannelDetection = convertedParams.useChannelDetection ?? defaults.useChannelDetection ?? 0;
-      base.channelR2Threshold = convertedParams.channelR2Threshold ?? defaults.channelR2Threshold ?? 0.6;
-      base.channelOnlyMode = convertedParams.channelOnlyMode ?? defaults.channelOnlyMode ?? 0;
-      base.volatilityFilter = base.volFilter ? 'atr' : 'OFF';
-      base.rsiExtremeFilter = base.rsiConfirm ? 'extreme' : 'OFF';
     } else if (strategyType === 'vol_breakout') {
       // 돌파매매 (학술 기반)
       base.smaPeriod = convertedParams.smaPeriod ?? defaults.smaPeriod ?? 50;
@@ -517,46 +486,33 @@ function RealtimeChart() {
       base.rocThreshold = convertedParams.rocThreshold ?? defaults.rocThreshold ?? 1.0;
       base.volumeConfirm = convertedParams.volumeConfirm ?? defaults.volumeConfirm ?? 0;
       base.volatilityFilter = base.volumeConfirm ? 'volume' : 'OFF';
-    } else if (strategyType === 'ml_hmm') {
-      // 레짐 적응형 (학술 기반)
-      base.tpAtr = convertedParams.tpAtr ?? 2.0;
-      base.slAtr = convertedParams.slAtr ?? 1.5;
-    } else if (strategyType === 'trend_reversal_combo') {
-      // 추세+역추세 콤보 (HMM 레짐 기반)
-      base.breakoutPeriod = convertedParams.breakoutPeriod ?? defaults.breakoutPeriod ?? 20;
-      base.volumeConfirm = 1;  // 볼륨 확인 활성화 (int)
-      base.volumeMult = convertedParams.volumeMult ?? defaults.volumeMult ?? 1.5;
-      base.adxThreshold = convertedParams.adxThreshold ?? defaults.adxThreshold ?? 25;
-      base.cooldownBars = convertedParams.cooldownBars ?? defaults.cooldownBars ?? 5;
-      base.tpAtr = convertedParams.tpAtr ?? 1.7;
-      base.slAtr = convertedParams.slAtr ?? 3.5;
-    } else if (strategyType === 'hmm_orchestrator') {
-      // HMM 오케스트레이터 v2 (횡보=RSI Divergence+평균회귀, 추세=브레이크아웃)
-      const hmmDefaults = getHmmOrchestratorDefaults();
+    } else if (strategyType === 'orchestrator') {
+      // 오케스트레이터 v3 (횡보=RSI Divergence+평균회귀, 추세=브레이크아웃)
+      const orchDefaults = getOrchestratorDefaults();
       // RSI Divergence 파라미터 (콤보 동일)
-      base.pivotLeft = convertedParams.pivotLeft ?? hmmDefaults.pivotLeft ?? 5;
-      base.pivotRight = convertedParams.pivotRight ?? hmmDefaults.pivotRight ?? 1;
-      base.rsiPeriod = convertedParams.rsiPeriod ?? hmmDefaults.rsiPeriod ?? 14;
-      base.minRsiDiff = convertedParams.minRsiDiff ?? hmmDefaults.minRsiDiff ?? 3;
-      base.minDistance = convertedParams.minDistance ?? hmmDefaults.minDistance ?? 5;
-      base.maxDistance = convertedParams.maxDistance ?? hmmDefaults.maxDistance ?? 100;
-      base.rsiOversold = convertedParams.rsiOversold ?? hmmDefaults.rsiOversold ?? 35;
-      base.rsiOverbought = convertedParams.rsiOverbought ?? hmmDefaults.rsiOverbought ?? 65;
+      base.pivotLeft = convertedParams.pivotLeft ?? orchDefaults.pivotLeft ?? 5;
+      base.pivotRight = convertedParams.pivotRight ?? orchDefaults.pivotRight ?? 1;
+      base.rsiPeriod = convertedParams.rsiPeriod ?? orchDefaults.rsiPeriod ?? 14;
+      base.minRsiDiff = convertedParams.minRsiDiff ?? orchDefaults.minRsiDiff ?? 3;
+      base.minDistance = convertedParams.minDistance ?? orchDefaults.minDistance ?? 5;
+      base.maxDistance = convertedParams.maxDistance ?? orchDefaults.maxDistance ?? 100;
+      base.rsiOversold = convertedParams.rsiOversold ?? orchDefaults.rsiOversold ?? 35;
+      base.rsiOverbought = convertedParams.rsiOverbought ?? orchDefaults.rsiOverbought ?? 65;
       // 평균회귀 파라미터
-      base.bbLookback = convertedParams.bbLookback ?? hmmDefaults.bbLookback ?? 20;
-      base.lowVolEntryZ = convertedParams.lowVolEntryZ ?? hmmDefaults.lowVolEntryZ ?? 1.5;
-      base.highVolEntryZ = convertedParams.highVolEntryZ ?? hmmDefaults.highVolEntryZ ?? 2.5;
-      base.exitZ = convertedParams.exitZ ?? hmmDefaults.exitZ ?? 0.25;
-      base.bbVolumeMult = convertedParams.bbVolumeMult ?? hmmDefaults.bbVolumeMult ?? 0.8;
+      base.bbLookback = convertedParams.bbLookback ?? orchDefaults.bbLookback ?? 20;
+      base.lowVolEntryZ = convertedParams.lowVolEntryZ ?? orchDefaults.lowVolEntryZ ?? 1.5;
+      base.highVolEntryZ = convertedParams.highVolEntryZ ?? orchDefaults.highVolEntryZ ?? 2.5;
+      base.exitZ = convertedParams.exitZ ?? orchDefaults.exitZ ?? 0.25;
+      base.bbVolumeMult = convertedParams.bbVolumeMult ?? orchDefaults.bbVolumeMult ?? 0.8;
       // 브레이크아웃 파라미터
-      base.breakoutPeriod = convertedParams.breakoutPeriod ?? hmmDefaults.breakoutPeriod ?? 20;
-      base.breakoutVolumeMult = convertedParams.breakoutVolumeMult ?? hmmDefaults.breakoutVolumeMult ?? 1.5;
-      base.adxThreshold = convertedParams.adxThreshold ?? hmmDefaults.adxThreshold ?? 25;
-      base.volumeMult = convertedParams.volumeMult ?? hmmDefaults.volumeMult ?? 1.5;
+      base.breakoutPeriod = convertedParams.breakoutPeriod ?? orchDefaults.breakoutPeriod ?? 20;
+      base.breakoutVolumeMult = convertedParams.breakoutVolumeMult ?? orchDefaults.breakoutVolumeMult ?? 1.5;
+      base.adxThreshold = convertedParams.adxThreshold ?? orchDefaults.adxThreshold ?? 25;
+      base.volumeMult = convertedParams.volumeMult ?? orchDefaults.volumeMult ?? 1.5;
       // 공통
-      base.cooldownBars = convertedParams.cooldownBars ?? hmmDefaults.cooldownBars ?? 5;
-      base.tpAtr = convertedParams.tpAtr ?? hmmDefaults.tpAtr ?? 1.7;
-      base.slAtr = convertedParams.slAtr ?? hmmDefaults.slAtr ?? 3.5;
+      base.cooldownBars = convertedParams.cooldownBars ?? orchDefaults.cooldownBars ?? 5;
+      base.tpAtr = convertedParams.tpAtr ?? orchDefaults.tpAtr ?? 1.7;
+      base.slAtr = convertedParams.slAtr ?? orchDefaults.slAtr ?? 3.5;
     }
 
     return base;
@@ -1443,6 +1399,16 @@ function RealtimeChart() {
           >
             📊 샤프 타임라인
           </button>
+          <button
+            onClick={() => setStrategyChartTab(strategyChartTab === 'avg-sharpe' ? null : 'avg-sharpe')}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              strategyChartTab === 'avg-sharpe'
+                ? 'text-cyan-400 border-b-2 border-cyan-400 bg-zinc-800/50'
+                : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/30'
+            }`}
+          >
+            📉 평균 샤프
+          </button>
           {strategyChartTab && (
             <button
               onClick={() => setStrategyChartTab(null)}
@@ -1493,6 +1459,29 @@ function RealtimeChart() {
               strategies={chartStrategies}
               highlightedStrategyId={highlightedStrategy}
               leverage={leverage}
+              onStrategyClick={handleStrategyClickMemo}
+            />
+          ) : (
+            <div className="p-8 text-center text-zinc-500 text-sm">
+              전략 데이터가 없습니다
+            </div>
+          )
+        )}
+
+        {strategyChartTab === 'avg-sharpe' && (
+          (isLoadingAllStrategies || isLoadingEquityCurves) ? (
+            <div className="p-4 animate-pulse">
+              <div className="w-full h-[300px] bg-zinc-800 rounded flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <div className="text-sm text-zinc-400">평균 샤프 계산 중...</div>
+                </div>
+              </div>
+            </div>
+          ) : allStrategiesEquityCurves.size > 0 ? (
+            <AvgSharpeChart
+              strategies={chartStrategies}
+              highlightedStrategyId={highlightedStrategy}
               onStrategyClick={handleStrategyClickMemo}
             />
           ) : (
@@ -1902,8 +1891,9 @@ function RealtimeChart() {
                     .join(' ');
 
                   const isProfit = finalEquity >= initialCapital;
-                  const junctionY = getY(finalEquity);
-                  const futureLastY = getY(futureValues[futureValues.length - 1]);
+                  const junctionY = Number.isFinite(getY(finalEquity)) ? getY(finalEquity) : 20;
+                  const futureLastVal = futureValues[futureValues.length - 1];
+                  const futureLastY = Number.isFinite(futureLastVal) ? getY(futureLastVal) : 20;
 
                   return (
                     <>
