@@ -36,9 +36,26 @@ function StrategyMiniChartComponent({ equityCurve, leverage = 1 }: StrategyMiniC
       return null;
     }
 
-    // 12주 시작점 기준 수익률 계산 (레버리지 적용)
+    // 레버리지 복리 적용: 각 거래의 PnL에 레버리지를 곱해서 누적
     const startEquity = filteredCurve[0].equity;
-    const returns = filteredCurve.map(p => ((p.equity - startEquity) / startEquity) * 100 * leverage);
+    let returns: number[];
+
+    if (leverage <= 1) {
+      // 1x: 단순 누적 수익률
+      returns = filteredCurve.map(p => ((p.equity - startEquity) / startEquity) * 100);
+    } else {
+      // Nx: 거래별 수익률에 레버리지 곱한 뒤 복리 누적
+      let leveragedEquity = startEquity;
+      returns = filteredCurve.map((p, i) => {
+        if (i === 0) return 0;
+        const prevEquity = filteredCurve[i - 1].equity;
+        const tradeReturn = (p.equity - prevEquity) / prevEquity;
+        leveragedEquity *= (1 + tradeReturn * leverage);
+        // 최소 0.01 (청산 방지)
+        leveragedEquity = Math.max(leveragedEquity, startEquity * 0.01);
+        return ((leveragedEquity - startEquity) / startEquity) * 100;
+      });
+    }
 
     const finalReturn = returns[returns.length - 1];
     const color = finalReturn >= 0 ? '#22c55e' : '#ef4444';
