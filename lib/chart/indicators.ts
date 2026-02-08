@@ -587,10 +587,12 @@ export function addDivergenceLines(
         0,
       ); // 메인 패널
 
-      priceLineSeries.setData([
+      // 시간순 정렬하여 setData (lightweight-charts 요구사항)
+      const lineData = [
         { time: actualStartTimeSec as Time, value: startPrice },
-        { time: (pair.end.timestamp / 1000) as Time, value: endPrice },
-      ]);
+        { time: endTimestamp as Time, value: endPrice },
+      ].sort((a, b) => (a.time as number) - (b.time as number));
+      priceLineSeries.setData(lineData);
 
       // 다이버전스 끝점에 라벨 마커 추가 (나중에 그룹화)
       const label = typeLabels[pair.start.type] || pair.start.type.toUpperCase();
@@ -637,10 +639,11 @@ export function addDivergenceLines(
           paneIndices?.rsi ?? 1,
         ); // RSI 패널
 
-        rsiLineSeries.setData([
+        const rsiLineData = [
           { time: startRsi.time, value: startRsi.value },
           { time: endRsi.time, value: endRsi.value },
-        ]);
+        ].sort((a, b) => (a.time as number) - (b.time as number));
+        rsiLineSeries.setData(rsiLineData);
       } else {
         debug.divergence('⚠️ RSI 데이터를 찾을 수 없음:', {
           startTimeSec,
@@ -686,10 +689,11 @@ export function addDivergenceLines(
           paneIndices?.obv ?? 2,
         ); // OBV 패널
 
-        obvLineSeries.setData([
+        const obvLineData = [
           { time: startObv.time, value: startObv.value },
           { time: endObv.time, value: endObv.value },
-        ]);
+        ].sort((a, b) => (a.time as number) - (b.time as number));
+        obvLineSeries.setData(obvLineData);
       } else {
         debug.divergence('⚠️ OBV 데이터를 찾을 수 없음:', {
           startTimeSec,
@@ -735,10 +739,11 @@ export function addDivergenceLines(
           paneIndices?.cvd ?? 3,
         ); // CVD 패널
 
-        cvdLineSeries.setData([
+        const cvdLineData = [
           { time: startCvd.time, value: startCvd.value },
           { time: endCvd.time, value: endCvd.value },
-        ]);
+        ].sort((a, b) => (a.time as number) - (b.time as number));
+        cvdLineSeries.setData(cvdLineData);
       } else {
         debug.divergence('⚠️ CVD 데이터를 찾을 수 없음:', {
           startTimeSec,
@@ -784,10 +789,11 @@ export function addDivergenceLines(
           paneIndices?.oi ?? 4,
         ); // OI 패널
 
-        oiLineSeries.setData([
+        const oiLineData = [
           { time: startOi.time, value: startOi.value },
           { time: endOi.time, value: endOi.value },
-        ]);
+        ].sort((a, b) => (a.time as number) - (b.time as number));
+        oiLineSeries.setData(oiLineData);
       } else {
         debug.divergence('⚠️ OI 데이터를 찾을 수 없음:', {
           startTimeSec,
