@@ -13,23 +13,15 @@ import {
 } from 'lightweight-charts';
 import { useSocket, useSocketTicker, useSocketKline } from '@/contexts/SocketContext';
 import {
-  getTopSavedResults,
-  getRollingParams,
   SavedOptimizeResult,
   RollingParamResult,
   runBacktest,
-  runWalkForwardBacktest,
   TradeResult,
   SkippedSignal,
-  OpenPosition,
-  BacktestResult,
-  EquityPoint,
-  deleteSavedResult,
-  getDailyRollingSharpeTimeline,
   refreshSingleStrategy,
   refreshAllStrategies,
 } from '@/lib/backtest-api';
-import { X, RefreshCw, Zap } from 'lucide-react';
+import { RefreshCw, Zap } from 'lucide-react';
 import {
   convertApiParams,
   getDefaultParams,
@@ -40,24 +32,19 @@ import AvgSharpeChart from './AvgSharpeChart';
 import { ChartLegend } from './ui/ChartLegend';
 import { OpenPositionCard } from './ui/OpenPositionCard';
 import { RecentSignalsPanel } from './ui/RecentSignalsPanel';
-import { ChartHeader } from './ui/ChartHeader';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { OptimizeComparisonCard } from './ui/OptimizeComparisonCard';
 import { useStrategyOptimize } from '@/hooks/useStrategyOptimize';
 import { StatisticsHeader } from './ui/StatisticsHeader';
 import { StrategyMiniChart } from './ui/StrategyMiniChart';
 
-// JSON Single Source of Truth: API 캐시에서 로드된 기본값 사용
-// z_score removed - orchestrator handles mean reversion internally
 const getOrchestratorDefaults = () => getDefaultParams('orchestrator');
-import { preloadStrategyDefaults, getCachedStrategyDisplayName, fetchStrategyPreviews, StrategyPreview, StrategyType } from '@/lib/backtest-api';
-import { calculateTotalHoldingTime, calculateMeasurementPeriod, formatDuration } from '@/lib/backtest-calculations';
-import { CHART } from '@/lib/constants';
+import { getCachedStrategyDisplayName, StrategyType } from '@/lib/backtest-api';
+import { calculateTotalHoldingTime } from '@/lib/backtest-calculations';
 import { useAtomValue } from 'jotai';
 import { symbolAtom, symbolIdAtom } from '@/stores/symbolAtom';
-import { toSeconds, formatKST, getTimeframeSeconds } from '@/lib/utils/timestamp';
-// useAutoOptimize removed — optimization integrated into strategy list
-import { usePerformanceMonitor, performanceMonitor } from '@/lib/performance-monitor';
+import { toSeconds, formatKST } from '@/lib/utils/timestamp';
+import { usePerformanceMonitor } from '@/lib/performance-monitor';
 
 // ✅ Custom Hooks
 import { useChartData } from './hooks/useChartData';
@@ -149,7 +136,6 @@ function RealtimeChart() {
   const [selectedStrategy, setSelectedStrategy] = useState<SavedOptimizeResult | null>(null);
   const [selectedTrade, setSelectedTrade] = useState<TradeResult | null>(null);
   const [highlightedStrategy, setHighlightedStrategy] = useState<number | null>(null);
-  const [useWalkForward, setUseWalkForward] = useState(false);
 
   // Tooltip 상태
   const [hoveredTrade, setHoveredTrade] = useState<TradeResult | null>(null);
@@ -205,7 +191,7 @@ function RealtimeChart() {
     allStrategyStats,
     allTradesMap,
     refetch: refetchBacktestData,
-  } = useBacktestRunner(strategies, symbolId, timeframe, useWalkForward);
+  } = useBacktestRunner(strategies, symbolId, timeframe, false);
 
   // 4. Real-time Updates (selected strategy backtest)
   // 미리 로드된 trades/openPositions를 우선 사용 → runBacktest 호출 최소화
@@ -306,7 +292,6 @@ function RealtimeChart() {
   //     timeframe,
   //     selectedStrategy: selectedStrategy?.id,
   //     highlightedStrategy,
-  //     useWalkForward,
 
   //     // Socket data
   //     ticker: ticker?.price,
@@ -956,12 +941,6 @@ function RealtimeChart() {
     [backtestTrades]
   );
 
-  // 측정기간 계산 (백테스트 시작~끝)
-  const measurementPeriod = useMemo(
-    () => calculateMeasurementPeriod(backtestStats, equityCurve, backtestTrades),
-    [backtestStats, equityCurve, backtestTrades]
-  );
-
   // 거래 히스토리 정렬 메모이제이션 (매 렌더마다 정렬 방지)
   const sortedTrades = useMemo(() => {
     return [...backtestTrades].sort(
@@ -971,50 +950,34 @@ function RealtimeChart() {
 
   return (
     <div className='flex flex-col gap-4 w-full'>
-      {/* 상단: 통계 헤더 (전체 너비) */}
-      <StatisticsHeader
-        backtestStats={backtestStats}
-        selectedStrategy={selectedStrategy}
-        leverage={leverage}
-        onLeverageChange={setLeverage}
-        measurementPeriod={measurementPeriod}
-        totalHoldingTime={totalHoldingTime}
-        formatDuration={formatDuration}
-      />
-
-      <div className='grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_280px] lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px] gap-4 min-h-[calc(100vh-180px)]'>
-      {/* 좌측: 메인 차트 영역 */}
-      <div className='bg-zinc-900 p-4 rounded-lg min-w-0 flex flex-col overflow-hidden'>
-        {/* 1. 헤더: 연결 상태 + 설정 */}
-        <ChartHeader
-          isConnected={isConnected}
-          nextCandleCountdown={nextCandleCountdown}
-          isBacktestRunning={isBacktestRunning}
-          lastBacktestTime={lastBacktestTime}
-          isLoadingAllStrategies={isLoadingAllStrategies}
-          selectedStrategy={selectedStrategy}
-          backtestStats={backtestStats}
-          getStrategyDisplayName={getStrategyDisplayName}
+      {/* 상단: 분봉 + 레버리지 설정 */}
+      <div className='relative'>
+        <StatisticsHeader
+          leverage={leverage}
+          onLeverageChange={setLeverage}
           timeframe={timeframe}
+          onTimeframeChange={handleTimeframeChange}
           soundEnabled={soundEnabled}
           isSettingsOpen={isSettingsOpen}
           onSettingsToggle={handleSettingsToggle}
+          isConnected={isConnected}
+          nextCandleCountdown={nextCandleCountdown}
         />
-
-        {/* 설정 패널 */}
+        {/* 설정 패널 (헤더 아래 드롭다운) */}
         <SettingsPanel
           show={isSettingsOpen}
-          timeframe={timeframe}
-          onTimeframeChange={handleTimeframeChange}
           soundEnabled={soundEnabled}
           onSoundToggle={setSoundEnabled}
           soundVolume={soundVolume}
           onVolumeChange={setSoundVolume}
           playAlertSound={playAlertSound}
           playExitSound={playExitSound}
-          useWalkForward={useWalkForward}
-          onWalkForwardToggle={setUseWalkForward}
         />
+      </div>
+
+      <div className='grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_280px] lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px] gap-4 min-h-[calc(100vh-180px)]'>
+      {/* 좌측: 메인 차트 영역 */}
+      <div className='bg-zinc-900 p-4 rounded-lg min-w-0 flex flex-col overflow-hidden'>
 
         {/* 2. 열린 포지션 카드 */}
         <OpenPositionCard openPosition={openPosition} ticker={ticker} />
@@ -1187,6 +1150,7 @@ function RealtimeChart() {
         <div className='bg-zinc-900 p-3 rounded-lg flex-1 min-h-0 flex flex-col'>
           <h3 className='text-sm font-medium text-zinc-400 mb-2 shrink-0 flex items-center gap-2'>
             전략 목록 ({strategies.length})
+            <span className='text-[10px] text-zinc-600 font-normal'>12주 백테스트</span>
             {isLoadingAllStrategies && (
               <span className='text-[10px] text-blue-400 flex items-center gap-1'>
                 <span className='w-2 h-2 rounded-full bg-blue-400 animate-pulse' />
@@ -1410,26 +1374,44 @@ function RealtimeChart() {
                     className='w-full text-left'
                   >
 
-                    {/* 2행: WR | PnL | 거래수 */}
+                    {/* 2행: WR | PnL | 거래수 | MDD */}
                     <div className='flex items-center gap-1.5 mb-1'>
                       {(() => {
                         const stats = allStrategyStats.get(strategyType);
                         if (!stats || stats.totalTrades === 0) {
                           return <span className='text-zinc-600 text-[10px]'>—</span>;
                         }
+                        const equityCurve = allStrategiesEquityCurves.get(strategy.id) || [];
+                        const maxDD = equityCurve.length > 0
+                          ? Math.max(...equityCurve.map(p => p.drawdown || 0))
+                          : 0;
+                        const levPnl = stats.totalPnlPercent * leverage;
+                        const levDD = maxDD * leverage;
                         return (
                           <>
                             <span className={`text-[11px] font-medium ${stats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
                               {stats.winRate.toFixed(0)}%
                             </span>
                             <span className='text-zinc-600 text-[10px]'>|</span>
-                            <span className={`text-[11px] font-medium ${stats.totalPnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {stats.totalPnlPercent >= 0 ? '+' : ''}{stats.totalPnlPercent.toFixed(1)}%
+                            <span className={`text-[11px] font-medium ${levPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {levPnl >= 0 ? '+' : ''}{levPnl.toFixed(1)}%
                             </span>
                             <span className='text-zinc-600 text-[10px]'>|</span>
                             <span className='text-zinc-400 text-[11px]'>
                               {stats.totalTrades}회
                             </span>
+                            {levDD > 0 && (
+                              <>
+                                <span className='text-zinc-600 text-[10px]'>|</span>
+                                <span className={`text-[11px] font-medium ${
+                                  levDD <= 3 ? 'text-orange-400' :
+                                  levDD <= 5 ? 'text-red-400' : 'text-red-500'
+                                }`}>
+                                  DD-{levDD.toFixed(1)}%
+                                </span>
+                                {levDD >= 100 && <span className='text-red-500 text-[10px] ml-0.5'>청산</span>}
+                              </>
+                            )}
                           </>
                         );
                       })()}
@@ -1437,7 +1419,7 @@ function RealtimeChart() {
 
                     {/* 3행: 미니 에쿼티 차트 (전체 폭) */}
                     <div className='w-full mb-1'>
-                      <StrategyMiniChart equityCurve={allStrategiesEquityCurves.get(strategy.id) || []} />
+                      <StrategyMiniChart equityCurve={allStrategiesEquityCurves.get(strategy.id) || []} leverage={leverage} />
                     </div>
 
                     {/* 3행: TP/SL + 마지막 최적화 시각 */}

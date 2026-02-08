@@ -1,31 +1,64 @@
 import { memo } from 'react';
-import { BacktestResult, SavedOptimizeResult } from '@/lib/backtest-api';
 
 interface StatisticsHeaderProps {
-  backtestStats: BacktestResult | null;
-  selectedStrategy: SavedOptimizeResult | null;
   leverage: number;
   onLeverageChange: (value: number) => void;
-  measurementPeriod: number;
-  totalHoldingTime: number;
-  formatDuration: (ms: number, short?: boolean) => string;
+  timeframe: string;
+  onTimeframeChange: (value: string) => void;
+  soundEnabled: boolean;
+  isSettingsOpen: boolean;
+  onSettingsToggle: () => void;
+  isConnected: boolean;
+  nextCandleCountdown: number;
 }
 
-export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
-  ({
-    backtestStats,
-    selectedStrategy,
-    leverage,
-    onLeverageChange,
-    measurementPeriod,
-    totalHoldingTime,
-    formatDuration,
-  }) => {
-    if (!backtestStats && !selectedStrategy) return null;
+const TIMEFRAMES = [
+  { value: '5m', label: '5M' },
+  { value: '15m', label: '15M' },
+  { value: '1h', label: '1H' },
+];
 
-    if (backtestStats) {
-      return (
-        <div className='flex items-center gap-3 px-4 py-2 bg-zinc-900 rounded-lg flex-wrap'>
+export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
+  ({ leverage, onLeverageChange, timeframe, onTimeframeChange, soundEnabled, isSettingsOpen, onSettingsToggle, isConnected, nextCandleCountdown }) => {
+    return (
+      <div className='flex items-center justify-between px-4 py-1.5 bg-zinc-900 rounded-lg'>
+        <div className='flex items-center gap-3'>
+          {/* 연결 상태 */}
+          <div className='flex items-center gap-1.5'>
+            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className='text-xs text-zinc-400'>
+              {isConnected ? '실시간' : '끊김'}
+            </span>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          {/* 다음 캔들 카운트다운 */}
+          <div className='flex items-center gap-1'>
+            <span className='text-xs text-zinc-500'>캔들</span>
+            <span className={`text-xs font-mono ${nextCandleCountdown <= 10 ? 'text-yellow-400' : 'text-zinc-300'}`}>
+              {Math.floor(nextCandleCountdown / 60)}:{(nextCandleCountdown % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
+          {/* 분봉 선택 */}
+          <div className='flex items-center gap-1'>
+            <span className='text-zinc-500 text-xs'>분봉</span>
+            <div className='flex gap-0.5'>
+              {TIMEFRAMES.map((tf) => (
+                <button
+                  key={tf.value}
+                  onClick={() => onTimeframeChange(tf.value)}
+                  className={`px-2 py-0.5 text-xs font-bold rounded transition-colors ${
+                    timeframe === tf.value
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 border border-zinc-700'
+                  }`}
+                >
+                  {tf.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className='w-px h-4 bg-zinc-700' />
           {/* 레버리지 설정 */}
           <div className='flex items-center gap-1'>
             <span className='text-zinc-500 text-xs'>레버리지</span>
@@ -41,149 +74,37 @@ export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
               ))}
             </select>
           </div>
-          <div className='w-px h-4 bg-zinc-700' />
-          {/* 수익 (레버리지 적용) */}
-          <div className='flex items-center gap-2'>
-            <span className='text-zinc-500 text-xs'>수익</span>
-            <span
-              className={`text-sm font-bold ${(backtestStats.totalPnlPercent ?? 0) * leverage >= 0 ? 'text-green-400' : 'text-red-400'}`}
-            >
-              {(backtestStats.totalPnlPercent ?? 0) * leverage >= 0 ? '+' : ''}
-              {((backtestStats.totalPnlPercent ?? 0) * leverage).toFixed(1)}%
-            </span>
-            {leverage > 1 && (
-              <span className='text-zinc-600 text-[10px]'>
-                ({(backtestStats.totalPnlPercent ?? 0) >= 0 ? '+' : ''}
-                {(backtestStats.totalPnlPercent ?? 0).toFixed(1)}% × {leverage})
-              </span>
-            )}
-          </div>
-          <div className='w-px h-4 bg-zinc-700' />
-          {/* 승률 */}
-          <div className='flex items-center gap-2'>
-            <span className='text-zinc-500 text-xs'>승률</span>
-            <span
-              className={`text-sm font-bold ${(backtestStats.winRate ?? 0) >= 50 ? 'text-green-400' : 'text-red-400'}`}
-            >
-              {(backtestStats.winRate ?? 0).toFixed(0)}%
-            </span>
-          </div>
-          <div className='w-px h-4 bg-zinc-700' />
-          {/* 측정기간 */}
-          <div className='flex items-center gap-2'>
-            <span className='text-zinc-500 text-xs'>측정</span>
-            <span className='text-zinc-300 text-sm font-bold'>
-              {formatDuration(measurementPeriod, true)}
-            </span>
-          </div>
-          <div className='w-px h-4 bg-zinc-700' />
-          {/* 포지션 보유시간 */}
-          <div className='flex items-center gap-2'>
-            <span className='text-zinc-500 text-xs'>보유</span>
-            <span className='text-cyan-400 text-sm font-bold'>
-              {formatDuration(totalHoldingTime)}
-            </span>
-          </div>
-          <div className='w-px h-4 bg-zinc-700' />
-          {/* 거래 횟수 */}
-          <div className='flex items-center gap-2'>
-            <span className='text-zinc-500 text-xs'>거래</span>
-            <span
-              className={`text-sm font-bold ${(backtestStats.totalTrades ?? 0) === 0 ? 'text-yellow-500' : 'text-zinc-300'}`}
-            >
-              {backtestStats.totalTrades ?? 0}회
-            </span>
-            {(backtestStats.totalTrades ?? 0) === 0 && selectedStrategy && (
-              <span
-                className='text-yellow-500 text-[10px]'
-                title={`필터: ${(selectedStrategy as any).rsiExtremeFilter || 'OFF'} / 지표: ${selectedStrategy.indicators}`}
-              >
-                ⚠ 필터 확인
-              </span>
-            )}
-          </div>
-          <div className='w-px h-4 bg-zinc-700' />
-          {/* 샤프 비율 (위험 대비 수익) */}
-          <div className='flex items-center gap-1'>
-            <span className='text-zinc-500 text-xs'>샤프</span>
-            <span className='text-zinc-600 text-[10px]'>(위험대비)</span>
-            <span className='text-zinc-300 text-sm font-bold'>
-              {(backtestStats.sharpeRatio ?? 0).toFixed(2)}
-            </span>
-          </div>
-          <div className='w-px h-4 bg-zinc-700' />
-          {/* 손익비 (Profit Factor) */}
-          <div className='flex items-center gap-1'>
-            <span className='text-zinc-500 text-xs'>손익비</span>
-            <span className='text-zinc-600 text-[10px]'>(익절/손절)</span>
-            <span className='text-zinc-300 text-sm font-bold'>
-              {(backtestStats.profitFactor ?? 0).toFixed(2)}
-            </span>
-          </div>
-          <div className='w-px h-4 bg-zinc-700' />
-          {/* MDD (최대 낙폭) - 레버리지 적용 */}
-          <div className='flex items-center gap-1'>
-            <span className='text-zinc-500 text-xs'>MDD</span>
-            <span className='text-zinc-600 text-[10px]'>(최대손실)</span>
-            <span
-              className={`text-sm font-bold ${(backtestStats.maxDrawdownPercent ?? 0) * leverage >= 100 ? 'text-red-500' : 'text-zinc-300'}`}
-            >
-              -{((backtestStats.maxDrawdownPercent ?? 0) * leverage).toFixed(1)}%
-            </span>
-            {(backtestStats.maxDrawdownPercent ?? 0) * leverage >= 100 && (
-              <span className='text-red-500 text-[10px]'>⚠ 청산</span>
-            )}
-          </div>
         </div>
-      );
-    }
 
-    // Skeleton loader
-    return (
-      <div className='flex items-center gap-3 px-4 py-2 bg-zinc-900 rounded-lg animate-pulse'>
+        {/* 우측: 사운드 + 설정 */}
         <div className='flex items-center gap-1'>
-          <span className='text-zinc-500 text-xs'>레버리지</span>
-          <div className='w-12 h-5 bg-zinc-800 rounded' />
-        </div>
-        <div className='w-px h-4 bg-zinc-700' />
-        <div className='flex items-center gap-2'>
-          <span className='text-zinc-500 text-xs'>수익</span>
-          <div className='w-16 h-4 bg-zinc-800 rounded' />
-        </div>
-        <div className='w-px h-4 bg-zinc-700' />
-        <div className='flex items-center gap-2'>
-          <span className='text-zinc-500 text-xs'>승률</span>
-          <div className='w-10 h-4 bg-zinc-800 rounded' />
-        </div>
-        <div className='w-px h-4 bg-zinc-700' />
-        <div className='flex items-center gap-2'>
-          <span className='text-zinc-500 text-xs'>측정</span>
-          <div className='w-12 h-4 bg-zinc-800 rounded' />
-        </div>
-        <div className='w-px h-4 bg-zinc-700' />
-        <div className='flex items-center gap-2'>
-          <span className='text-zinc-500 text-xs'>보유</span>
-          <div className='w-12 h-4 bg-zinc-800 rounded' />
-        </div>
-        <div className='w-px h-4 bg-zinc-700' />
-        <div className='flex items-center gap-2'>
-          <span className='text-zinc-500 text-xs'>거래</span>
-          <div className='w-10 h-4 bg-zinc-800 rounded' />
-        </div>
-        <div className='w-px h-4 bg-zinc-700' />
-        <div className='flex items-center gap-2'>
-          <span className='text-zinc-500 text-xs'>샤프</span>
-          <div className='w-10 h-4 bg-zinc-800 rounded' />
-        </div>
-        <div className='w-px h-4 bg-zinc-700' />
-        <div className='flex items-center gap-2'>
-          <span className='text-zinc-500 text-xs'>손익비</span>
-          <div className='w-10 h-4 bg-zinc-800 rounded' />
-        </div>
-        <div className='w-px h-4 bg-zinc-700' />
-        <div className='flex items-center gap-2'>
-          <span className='text-zinc-500 text-xs'>MDD</span>
-          <div className='w-12 h-4 bg-zinc-800 rounded' />
+          <div className='px-2 py-1 bg-zinc-800 rounded text-sm cursor-default' title={soundEnabled ? '사운드 켜짐' : '사운드 꺼짐'}>
+            {soundEnabled ? '🔊' : '🔇'}
+          </div>
+          <button
+            onClick={onSettingsToggle}
+            className={`p-1.5 rounded transition-colors ${
+              isSettingsOpen
+                ? 'bg-zinc-700 text-white'
+                : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+            }`}
+            title='설정'
+          >
+            <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+              <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                strokeWidth={2}
+                d='M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z'
+              />
+              <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                strokeWidth={2}
+                d='M15 12a3 3 0 11-6 0 3 3 0 016 0z'
+              />
+            </svg>
+          </button>
         </div>
       </div>
     );

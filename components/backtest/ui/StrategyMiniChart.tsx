@@ -5,10 +5,11 @@ import { EquityPoint } from '@/lib/backtest-api';
 
 interface StrategyMiniChartProps {
   equityCurve: EquityPoint[];
+  leverage?: number;
 }
 
 // 미니 차트 컴포넌트 - 메모이제이션으로 불필요한 재계산 방지
-function StrategyMiniChartComponent({ equityCurve }: StrategyMiniChartProps) {
+function StrategyMiniChartComponent({ equityCurve, leverage = 1 }: StrategyMiniChartProps) {
   // 차트 데이터 메모이제이션
   const chartData = useMemo(() => {
     if (!equityCurve || equityCurve.length === 0) {
@@ -35,9 +36,9 @@ function StrategyMiniChartComponent({ equityCurve }: StrategyMiniChartProps) {
       return null;
     }
 
-    // 12주 시작점 기준 수익률 계산
+    // 12주 시작점 기준 수익률 계산 (레버리지 적용)
     const startEquity = filteredCurve[0].equity;
-    const returns = filteredCurve.map(p => ((p.equity - startEquity) / startEquity) * 100);
+    const returns = filteredCurve.map(p => ((p.equity - startEquity) / startEquity) * 100 * leverage);
 
     const finalReturn = returns[returns.length - 1];
     const color = finalReturn >= 0 ? '#22c55e' : '#ef4444';
@@ -67,7 +68,7 @@ function StrategyMiniChartComponent({ equityCurve }: StrategyMiniChartProps) {
     const areaD = pathD + ` L ${points[points.length - 1].x} 44 L ${points[0].x} 44 Z`;
 
     return { pathD, areaD, color, finalReturn, points, zeroY };
-  }, [equityCurve]);
+  }, [equityCurve, leverage]);
 
   if (!chartData) {
     return (
@@ -114,6 +115,7 @@ function StrategyMiniChartComponent({ equityCurve }: StrategyMiniChartProps) {
 
 // React.memo로 래핑 - equityCurve가 변경될 때만 리렌더
 export const StrategyMiniChart = React.memo(StrategyMiniChartComponent, (prev, next) => {
+  if (prev.leverage !== next.leverage) return false;
   // equityCurve 길이와 마지막 값이 같으면 리렌더 스킵
   if (prev.equityCurve === next.equityCurve) return true;
   if (!prev.equityCurve || !next.equityCurve) return false;
