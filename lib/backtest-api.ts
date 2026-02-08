@@ -1426,6 +1426,95 @@ export async function triggerAutoOptimization(
   }
 }
 
+// ============== Strategy Optimization Panel (Propose → Approve/Reject) ==============
+
+export interface OptimizationStatusItem {
+  strategy: string;
+  displayName: string;
+  currentSharpe: number;
+  lastOptimizedAt: string | null;
+  currentParams: Record<string, any>;
+}
+
+export interface ProposeResult {
+  strategy: string;
+  displayName: string;
+  current: {
+    params: Record<string, any>;
+    sharpeRatio: number;
+    totalTrades: number;
+    winRate: number;
+    totalPnlPercent: number;
+    optimizedAt: string | null;
+  };
+  proposed: {
+    params: Record<string, any>;
+    sharpeRatio: number;
+    totalTrades: number;
+    winRate: number;
+    totalPnlPercent: number;
+  };
+  improvement: {
+    sharpeDelta: number;
+    pnlDelta: number;
+  };
+  duration: number;
+}
+
+export interface ApplyResult {
+  success: boolean;
+  message: string;
+  strategy: string;
+  appliedParams: Record<string, any>;
+  refreshed: boolean;
+}
+
+/** 전 전략 최적화 상태 조회 */
+export async function fetchOptimizationStatus(): Promise<OptimizationStatusItem[]> {
+  const res = await fetch(`${API_BASE}/backtest/optimize/status`);
+  if (!res.ok) throw new Error('Failed to fetch optimization status');
+  return res.json();
+}
+
+/** 단일 전략 최적화 제안 (JSON 미수정, 비교 결과 반환) */
+export async function proposeOptimization(strategy: string): Promise<ProposeResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 600000); // 10분 타임아웃 (Python 84일 그리드 서치)
+
+  try {
+    const res = await fetch(`${API_BASE}/backtest/optimize/propose`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ strategy }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || 'Optimization failed');
+    }
+    return res.json();
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw new Error('Optimization timed out (10min)');
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/** 승인된 파라미터 적용 (JSON 업데이트 + 캐시 갱신) */
+export async function applyOptimization(
+  strategy: string,
+  params: Record<string, any>,
+): Promise<ApplyResult> {
+  const res = await fetch(`${API_BASE}/backtest/optimize/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ strategy, params }),
+  });
+  if (!res.ok) throw new Error('Failed to apply optimization');
+  return res.json();
+}
+
 // ============== Walk-Forward Optimization ==============
 
 export interface WeeklyOptimizeRecord {
