@@ -120,6 +120,13 @@ export interface TradingStatus {
     sl: number;
     openedAt: number;
   } | null;
+  retryInfo: {
+    active: boolean;
+    attempt: number;
+    maxAttempts: number;
+    side: 'buy' | 'sell';
+    leverage: number;
+  } | null;
 }
 
 export interface RealtimeDivergenceData {

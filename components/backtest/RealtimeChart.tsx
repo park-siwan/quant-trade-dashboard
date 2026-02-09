@@ -113,6 +113,7 @@ function RealtimeChart() {
     divergenceHistory,
     subscribeKline,
     wakeUpCounter,
+    tradingStatus,
   } = useSocket();
 
   // ticker는 ref로 저장하여 리렌더 없이 접근
@@ -1032,6 +1033,8 @@ function RealtimeChart() {
           openPosition={openPosition}
           ticker={ticker}
           leverage={leverage}
+          tradingEnvEnabled={tradingStatus?.envEnabled}
+          retryInfo={tradingStatus?.retryInfo}
           winRate={allStrategyStats.get(selectedStrategy?.strategy || '')?.winRate}
           maxConsecLoss={(() => {
             const trades = allTradesMap.get(selectedStrategy?.strategy || '') || [];
