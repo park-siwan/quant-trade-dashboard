@@ -1,4 +1,5 @@
-import { memo } from 'react';
+import { memo, useState, useEffect, useCallback } from 'react';
+import { API_CONFIG } from '@/lib/config';
 
 interface StatisticsHeaderProps {
   leverage: number;
@@ -12,6 +13,40 @@ interface StatisticsHeaderProps {
   nextCandleCountdown: number;
 }
 
+interface NotificationSettings {
+  telegram: boolean;
+  twilio: boolean;
+}
+
+function useNotificationSettings() {
+  const [settings, setSettings] = useState<NotificationSettings | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_CONFIG.BASE_URL}/notification/settings`)
+      .then(r => r.json())
+      .then(setSettings)
+      .catch(() => {});
+  }, []);
+
+  const toggle = useCallback(async (key: keyof NotificationSettings) => {
+    if (!settings) return;
+    const newVal = !settings[key];
+    setSettings(s => s ? { ...s, [key]: newVal } : s);
+    try {
+      const res = await fetch(`${API_CONFIG.BASE_URL}/notification/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: newVal }),
+      });
+      setSettings(await res.json());
+    } catch {
+      setSettings(s => s ? { ...s, [key]: !newVal } : s);
+    }
+  }, [settings]);
+
+  return { settings, toggle };
+}
+
 const TIMEFRAMES = [
   { value: '5m', label: '5M' },
   { value: '15m', label: '15M' },
@@ -20,6 +55,8 @@ const TIMEFRAMES = [
 
 export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
   ({ leverage, onLeverageChange, timeframe, onTimeframeChange, soundEnabled, isSettingsOpen, onSettingsToggle, isConnected, nextCandleCountdown }) => {
+    const { settings, toggle } = useNotificationSettings();
+
     return (
       <div className='flex items-center justify-between px-4 py-1.5 bg-zinc-900 rounded-lg'>
         <div className='flex items-center gap-3'>
@@ -89,8 +126,31 @@ export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
           </div>
         </div>
 
-        {/* 우측: 사운드 + 설정 */}
+        {/* 우측: 알림 + 사운드 + 설정 */}
         <div className='flex items-center gap-1'>
+          {settings && (
+            <>
+              <button
+                onClick={() => toggle('telegram')}
+                className={`px-2 py-1 rounded text-sm transition-colors ${
+                  settings.telegram ? 'bg-blue-600/25 hover:bg-blue-600/40' : 'bg-zinc-800 opacity-40 hover:opacity-70'
+                }`}
+                title={`텔레그램 ${settings.telegram ? '켜짐' : '꺼짐'}`}
+              >
+                💬
+              </button>
+              <button
+                onClick={() => toggle('twilio')}
+                className={`px-2 py-1 rounded text-sm transition-colors ${
+                  settings.twilio ? 'bg-purple-600/25 hover:bg-purple-600/40' : 'bg-zinc-800 opacity-40 hover:opacity-70'
+                }`}
+                title={`전화 알림 ${settings.twilio ? '켜짐' : '꺼짐'}`}
+              >
+                📞
+              </button>
+              <div className='w-px h-4 bg-zinc-700' />
+            </>
+          )}
           <div className='px-2 py-1 bg-zinc-800 rounded text-sm cursor-default' title={soundEnabled ? '사운드 켜짐' : '사운드 꺼짐'}>
             {soundEnabled ? '🔊' : '🔇'}
           </div>
