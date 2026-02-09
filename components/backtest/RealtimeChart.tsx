@@ -970,7 +970,12 @@ function RealtimeChart() {
       <div className='bg-zinc-900 p-4 rounded-lg min-w-0 flex flex-col overflow-hidden'>
 
         {/* 2. 열린 포지션 카드 */}
-        <OpenPositionCard openPosition={openPosition} ticker={ticker} leverage={leverage} />
+        <OpenPositionCard
+          openPosition={openPosition}
+          ticker={ticker}
+          leverage={leverage}
+          winRate={allStrategyStats.get(selectedStrategy?.strategy || '')?.winRate}
+        />
 
         {/* 4. 차트 */}
         {isLoading ? (

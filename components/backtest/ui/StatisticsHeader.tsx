@@ -59,20 +59,19 @@ export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
             </div>
           </div>
           <div className='w-px h-4 bg-zinc-700' />
-          {/* 레버리지 설정 */}
-          <div className='flex items-center gap-1'>
+          {/* 레버리지 슬라이더 */}
+          <div className='flex items-center gap-2'>
             <span className='text-zinc-500 text-xs'>레버리지</span>
-            <select
+            <input
+              type='range'
+              min={1}
+              max={125}
+              step={1}
               value={leverage}
               onChange={(e) => onLeverageChange(Number(e.target.value))}
-              className='bg-zinc-800 text-zinc-200 text-xs font-bold px-2 py-0.5 rounded border border-zinc-700 focus:outline-none focus:border-zinc-500'
-            >
-              {[1, 2, 3, 5, 10, 15, 20, 25, 30, 50, 75, 100, 125].map((lev) => (
-                <option key={lev} value={lev}>
-                  {lev}x
-                </option>
-              ))}
-            </select>
+              className='w-24 h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:cursor-pointer'
+            />
+            <span className='text-zinc-200 text-xs font-bold w-8 text-right'>{leverage}x</span>
           </div>
         </div>
 
