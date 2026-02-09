@@ -299,6 +299,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     socket.on('connect', () => {
       console.log('[Socket] Connected');
       setIsConnected(true);
+      // 초기 trading status 가져오기 (소켓 연결 전 broadcast 놓침 방지)
+      fetch(`${API_CONFIG.BASE_URL}/trading/status`)
+        .then(r => r.json())
+        .then(data => setTradingStatus(data))
+        .catch(() => {});
     });
 
     socket.on('disconnect', () => {
