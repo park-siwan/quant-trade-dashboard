@@ -101,8 +101,6 @@ export interface BalanceData {
 export interface TradingStatus {
   envEnabled: boolean;
   enabled: boolean;
-  positionPct: number;
-  leverage: number;
   pendingOrder: {
     orderId: string;
     side: 'buy' | 'sell';
