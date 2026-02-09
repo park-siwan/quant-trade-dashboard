@@ -92,6 +92,12 @@ export interface LongShortRatioData {
   timestamp: number;
 }
 
+export interface BalanceData {
+  totalEquity: number;
+  availableBalance: number;
+  unrealisedPnl: number;
+}
+
 export interface RealtimeDivergenceData {
   id: string;
   symbol: string;
@@ -133,6 +139,7 @@ interface SocketContextValue {
   fundingRateData: FundingRateData | null;
   coinglassData: CoinglassData | null;
   longShortRatioData: LongShortRatioData | null;
+  balanceData: BalanceData | null;
   divergenceData: RealtimeDivergenceData | null;
   divergenceHistory: RealtimeDivergenceData[];
   currentSymbol: string;
@@ -160,6 +167,7 @@ const SocketContext = createContext<SocketContextValue>({
   fundingRateData: null,
   coinglassData: null,
   longShortRatioData: null,
+  balanceData: null,
   divergenceData: null,
   divergenceHistory: [],
   currentSymbol: '',
@@ -196,6 +204,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [fundingRateData, setFundingRateData] = useState<FundingRateData | null>(null);
   const [coinglassData, setCoinglassData] = useState<CoinglassData | null>(null);
   const [longShortRatioData, setLongShortRatioData] = useState<LongShortRatioData | null>(null);
+  const [balanceData, setBalanceData] = useState<BalanceData | null>(null);
   const [divergenceData, setDivergenceData] = useState<RealtimeDivergenceData | null>(null);
   const [divergenceHistory, setDivergenceHistory] = useState<RealtimeDivergenceData[]>([]);
   const [currentSymbol, setCurrentSymbol] = useState<string>('');
@@ -336,6 +345,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setLongShortRatioData(data);
     });
 
+    // Balance (symbol-independent)
+    socket.on('data:balance', (data: BalanceData) => {
+      setBalanceData(data);
+    });
+
     // Divergence signals
     socket.on('data:divergence', (data: RealtimeDivergenceData) => {
       const normalizedSymbol = data.symbol?.replace('/', '');
@@ -442,6 +456,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     fundingRateData,
     coinglassData,
     longShortRatioData,
+    balanceData,
     divergenceData,
     divergenceHistory,
     currentSymbol,
@@ -459,6 +474,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     fundingRateData,
     coinglassData,
     longShortRatioData,
+    balanceData,
     divergenceData,
     divergenceHistory,
     currentSymbol,

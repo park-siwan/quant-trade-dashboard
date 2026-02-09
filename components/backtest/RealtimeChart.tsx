@@ -35,7 +35,7 @@ import { RecentSignalsPanel } from './ui/RecentSignalsPanel';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { OptimizeComparisonCard } from './ui/OptimizeComparisonCard';
 import { useStrategyOptimize } from '@/hooks/useStrategyOptimize';
-import { StatisticsHeader } from './ui/StatisticsHeader';
+import { StatisticsHeader, BalanceHeader } from './ui/StatisticsHeader';
 import { StrategyMiniChart } from './ui/StrategyMiniChart';
 
 const getOrchestratorDefaults = () => getDefaultParams('orchestrator');
@@ -1010,6 +1010,7 @@ function RealtimeChart() {
           isConnected={isConnected}
           nextCandleCountdown={nextCandleCountdown}
         />
+        <BalanceHeader />
         {/* 설정 패널 (헤더 아래 드롭다운) */}
         <SettingsPanel
           show={isSettingsOpen}

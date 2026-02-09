@@ -1,4 +1,5 @@
 import { memo, useState, useEffect, useCallback } from 'react';
+import { useSocket } from '@/contexts/SocketContext';
 import { API_CONFIG } from '@/lib/config';
 
 interface StatisticsHeaderProps {
@@ -176,3 +177,33 @@ export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
 );
 
 StatisticsHeader.displayName = 'StatisticsHeader';
+
+export const BalanceHeader = memo(() => {
+  const { balanceData } = useSocket();
+
+  if (!balanceData) return null;
+
+  return (
+    <div className='flex items-center gap-4 px-4 py-1 bg-zinc-900/60 rounded-lg'>
+      <span className='text-xs text-zinc-500'>Bybit</span>
+      <div className='flex items-center gap-1'>
+        <span className='text-xs text-zinc-400'>순자산</span>
+        <span className='text-xs font-mono text-yellow-400'>${balanceData.totalEquity.toFixed(2)}</span>
+      </div>
+      <div className='flex items-center gap-1'>
+        <span className='text-xs text-zinc-400'>가용</span>
+        <span className='text-xs font-mono text-zinc-300'>${balanceData.availableBalance.toFixed(2)}</span>
+      </div>
+      {balanceData.unrealisedPnl !== 0 && (
+        <div className='flex items-center gap-1'>
+          <span className='text-xs text-zinc-400'>미실현</span>
+          <span className={`text-xs font-mono ${balanceData.unrealisedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {balanceData.unrealisedPnl >= 0 ? '+' : ''}{balanceData.unrealisedPnl.toFixed(2)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+});
+
+BalanceHeader.displayName = 'BalanceHeader';
