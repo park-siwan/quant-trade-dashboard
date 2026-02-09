@@ -93,6 +93,7 @@ export const OpenPositionCard: React.FC<OpenPositionCardProps> = memo(
             entryPrice: openPosition.entryPrice,
             tp: openPosition.tp,
             sl: openPosition.sl,
+            leverage: recLev,
           }),
         });
         const data = await res.json();
