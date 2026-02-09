@@ -970,7 +970,7 @@ function RealtimeChart() {
       <div className='bg-zinc-900 p-4 rounded-lg min-w-0 flex flex-col overflow-hidden'>
 
         {/* 2. 열린 포지션 카드 */}
-        <OpenPositionCard openPosition={openPosition} ticker={ticker} />
+        <OpenPositionCard openPosition={openPosition} ticker={ticker} leverage={leverage} />
 
         {/* 4. 차트 */}
         {isLoading ? (
@@ -1600,11 +1600,7 @@ function RealtimeChart() {
               sortedTrades.map((trade, idx) => {
                   const isSelected =
                     selectedTrade?.entryTime === trade.entryTime;
-                  const pnlPercent =
-                    ((trade.exitPrice - trade.entryPrice) / trade.entryPrice) *
-                    100 *
-                    (trade.direction === 'long' ? 1 : -1) *
-                    leverage;
+                  const pnlPercent = (trade.pnlPercent ?? 0) * leverage;
                   const isWin = pnlPercent > 0;
                   const entryDate = new Date(toSeconds(trade.entryTime) * 1000);
                   const exitDate = new Date(toSeconds(trade.exitTime) * 1000);

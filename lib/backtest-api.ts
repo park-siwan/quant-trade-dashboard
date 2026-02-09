@@ -120,6 +120,16 @@ export interface SkippedSignal {
 }
 
 // 열린 포지션 (아직 청산되지 않은)
+export interface SignalInfo {
+  signalType: 'default' | 'breakout' | 'divergence' | 'mean_reversion';
+  signalCount: string;   // "1x", "2x" etc
+  strength: number;      // divergence strength %
+  regime: string;        // "Bullish" | "Sideways" | "Bearish" | "N/A"
+  atr: number;           // ATR at entry
+  tpAtr: number;         // TP ATR multiplier
+  slAtr: number;         // SL ATR multiplier
+}
+
 export interface OpenPosition {
   entryTime: string;
   direction: 'long' | 'short';
@@ -130,6 +140,7 @@ export interface OpenPosition {
   size: number;
   unrealizedPnl: number;
   unrealizedPnlPercent: number;
+  signalInfo?: SignalInfo;
 }
 
 export interface BacktestResult {

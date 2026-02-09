@@ -121,11 +121,16 @@ export function useRealtimeUpdates(
     try {
       console.log('[Backtest] Running for strategy:', startedForStrategyId, 'type:', strategy.strategy);
 
+      // 12주 데이터로 백테스트 (useBacktestRunner와 동일 기간)
+      const TF_MIN: Record<string, number> = { '1m': 1, '5m': 5, '15m': 15, '30m': 30, '1h': 60, '4h': 240 };
+      const tfMin = TF_MIN[timeframe] || 5;
+      const candleCount = Math.ceil(12 * 7 * 24 * 60 / tfMin);
+
       const result = await runBacktest({
         strategy: (strategy.strategy || 'rsi_div') as any,
         symbol: symbolSlashFormat,
         timeframe: timeframe,
-        candleCount: 5000,
+        candleCount,
         initialCapital: 1000,
         positionSizePercent: 100,
         useLiveData: false,
