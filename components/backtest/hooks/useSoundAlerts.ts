@@ -15,16 +15,16 @@ interface UseSoundAlertsResult {
  * - 진입 신호 (bullish/bearish) 및 청산 (익절/손절) 소리
  */
 export function useSoundAlerts(): UseSoundAlertsResult {
-  const [soundEnabled, setSoundEnabledRaw] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    const saved = localStorage.getItem('soundEnabled');
-    return saved === null ? true : saved === 'true';
-  });
-  const [soundVolume, setSoundVolumeRaw] = useState(() => {
-    if (typeof window === 'undefined') return 1;
-    const saved = localStorage.getItem('soundVolume');
-    return saved === null ? 1 : parseFloat(saved);
-  });
+  const [soundEnabled, setSoundEnabledRaw] = useState(true);
+  const [soundVolume, setSoundVolumeRaw] = useState(1);
+
+  // SSR hydration 후 localStorage에서 복원
+  useEffect(() => {
+    const savedEnabled = localStorage.getItem('soundEnabled');
+    if (savedEnabled !== null) setSoundEnabledRaw(savedEnabled === 'true');
+    const savedVolume = localStorage.getItem('soundVolume');
+    if (savedVolume !== null) setSoundVolumeRaw(parseFloat(savedVolume));
+  }, []);
 
   const setSoundEnabled = useCallback((v: boolean) => {
     setSoundEnabledRaw(v);
