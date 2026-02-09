@@ -18,7 +18,8 @@ interface UseChartDataResult {
 export function useChartData(
   symbol: string,
   timeframe: string,
-  subscribeKline: (timeframe: string) => void
+  subscribeKline: (timeframe: string) => void,
+  wakeUpCounter: number = 0
 ): UseChartDataResult {
   const [candles, setCandles] = useState<CandlestickData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,7 +72,8 @@ export function useChartData(
 
     loadCandles();
     subscribeKline(timeframe);
-  }, [timeframe, subscribeKline, symbol]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeframe, subscribeKline, symbol, wakeUpCounter]);
 
   return {
     candles,

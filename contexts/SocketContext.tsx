@@ -136,6 +136,7 @@ interface SocketContextValue {
   divergenceData: RealtimeDivergenceData | null;
   divergenceHistory: RealtimeDivergenceData[];
   currentSymbol: string;
+  wakeUpCounter: number;
   subscribeKline: (timeframe: string) => void;
   subscribeMtf: (symbol: string) => void;
   subscribeSymbol: (symbol: string) => void;
@@ -162,6 +163,7 @@ const SocketContext = createContext<SocketContextValue>({
   divergenceData: null,
   divergenceHistory: [],
   currentSymbol: '',
+  wakeUpCounter: 0,
   subscribeKline: () => {},
   subscribeMtf: () => {},
   subscribeSymbol: () => {},
@@ -198,6 +200,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [divergenceHistory, setDivergenceHistory] = useState<RealtimeDivergenceData[]>([]);
   const [currentSymbol, setCurrentSymbol] = useState<string>('');
   const currentSymbolRef = useRef<string>('');
+  const [wakeUpCounter, setWakeUpCounter] = useState(0);
 
   // Throttle refs
   const latestTickerRef = useRef<TickerData | null>(null);
@@ -218,6 +221,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           console.log(`[Socket] 잠자기 복귀 (${Math.round(hiddenDuration / 1000)}초), 다이버전스 히스토리 클리어 + 소켓 재연결`);
           setDivergenceHistory([]);
           setDivergenceData(null);
+
+          // 캔들 리로드 트리거
+          setWakeUpCounter(c => c + 1);
 
           // 소켓이 끊겨있으면 강제 재연결
           const sock = socketRef.current;
@@ -439,6 +445,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     divergenceData,
     divergenceHistory,
     currentSymbol,
+    wakeUpCounter,
     subscribeKline,
     subscribeMtf,
     subscribeSymbol,
@@ -455,6 +462,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     divergenceData,
     divergenceHistory,
     currentSymbol,
+    wakeUpCounter,
     subscribeKline,
     subscribeMtf,
     subscribeSymbol,

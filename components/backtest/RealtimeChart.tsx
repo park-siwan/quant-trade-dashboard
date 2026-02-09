@@ -112,6 +112,7 @@ function RealtimeChart() {
     divergenceData,
     divergenceHistory,
     subscribeKline,
+    wakeUpCounter,
   } = useSocket();
 
   // ticker는 ref로 저장하여 리렌더 없이 접근
@@ -169,7 +170,7 @@ function RealtimeChart() {
     isLoading,
     chartKey,
     initialCandlesLoaded,
-  } = useChartData(symbolId, timeframe, subscribeKline);
+  } = useChartData(symbolId, timeframe, subscribeKline, wakeUpCounter);
 
   // Expose setCandles for real-time updates
   const candlesRef = useRef(candles);
