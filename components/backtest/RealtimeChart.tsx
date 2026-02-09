@@ -1004,6 +1004,7 @@ function RealtimeChart() {
           timeframe={timeframe}
           onTimeframeChange={handleTimeframeChange}
           soundEnabled={soundEnabled}
+          onSoundToggle={setSoundEnabled}
           isSettingsOpen={isSettingsOpen}
           onSettingsToggle={handleSettingsToggle}
           isConnected={isConnected}

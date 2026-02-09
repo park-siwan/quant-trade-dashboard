@@ -7,6 +7,7 @@ interface StatisticsHeaderProps {
   timeframe: string;
   onTimeframeChange: (value: string) => void;
   soundEnabled: boolean;
+  onSoundToggle: (enabled: boolean) => void;
   isSettingsOpen: boolean;
   onSettingsToggle: () => void;
   isConnected: boolean;
@@ -54,7 +55,7 @@ const TIMEFRAMES = [
 ];
 
 export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
-  ({ leverage, onLeverageChange, timeframe, onTimeframeChange, soundEnabled, isSettingsOpen, onSettingsToggle, isConnected, nextCandleCountdown }) => {
+  ({ leverage, onLeverageChange, timeframe, onTimeframeChange, soundEnabled, onSoundToggle, isSettingsOpen, onSettingsToggle, isConnected, nextCandleCountdown }) => {
     const { settings, toggle } = useNotificationSettings();
 
     return (
@@ -151,9 +152,15 @@ export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
               <div className='w-px h-4 bg-zinc-700' />
             </>
           )}
-          <div className='px-2 py-1 bg-zinc-800 rounded text-sm cursor-default' title={soundEnabled ? '사운드 켜짐' : '사운드 꺼짐'}>
+          <button
+            onClick={() => onSoundToggle(!soundEnabled)}
+            className={`px-2 py-1 rounded text-sm transition-colors ${
+              soundEnabled ? 'bg-green-600/25 hover:bg-green-600/40' : 'bg-zinc-800 opacity-40 hover:opacity-70'
+            }`}
+            title={`사운드 ${soundEnabled ? '켜짐' : '꺼짐'}`}
+          >
             {soundEnabled ? '🔊' : '🔇'}
-          </div>
+          </button>
           <button
             onClick={onSettingsToggle}
             className={`p-1.5 rounded transition-colors ${
