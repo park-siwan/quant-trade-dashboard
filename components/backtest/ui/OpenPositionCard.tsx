@@ -19,29 +19,49 @@ interface OpenPositionCardProps {
   ticker: any;
   leverage?: number;
   winRate?: number; // 전략 승률 (0-100)
+  maxConsecLoss?: number; // 실제 최대 연속 손실
 }
 
+// 연패3회 시 DD ≤ 20% 를 목표로 하는 실용 레버리지
+const COMFORT_MAX_DD = 0.20; // 목표 최대 DD 20%
+const COMFORT_CONSEC = 3;    // 기준 연패 횟수
+
 /**
- * Half-Kelly 레버리지 계산
- * Kelly f* = μ / σ² (연속 수익률 근사)
- * μ = p * tp_dist - (1-p) * sl_dist
- * σ² = p * tp² + (1-p) * sl² - μ²
- * Half-Kelly = f* / 2 (실무 안전 마진)
+ * Comfort-Kelly: Half-Kelly와 심리적 한계의 타협
+ * 1) Half-Kelly 계산 (수학적 최적)
+ * 2) Comfort 레버리지 = 목표DD / (연패N × SL거리)
+ * 3) 둘 중 작은 값 채택
  */
-function calcKellyLeverage(winRate: number, tpDist: number, slDist: number): number {
+function calcComfortKelly(
+  winRate: number, tpDist: number, slDist: number, actualMaxConsec?: number
+): { comfort: number; halfKelly: number; comfortOnly: number } {
+  // Half-Kelly
   const p = winRate / 100;
   const q = 1 - p;
   const mu = p * tpDist - q * slDist;
-  if (mu <= 0) return 1; // 기대값 음수면 1x
-  const variance = p * tpDist * tpDist + q * slDist * slDist - mu * mu;
-  if (variance <= 0) return 1;
-  const fullKelly = mu / variance;
-  const halfKelly = Math.floor(fullKelly / 2);
-  return Math.max(1, Math.min(halfKelly, 125));
+  let halfKelly = 1;
+  if (mu > 0) {
+    const variance = p * tpDist * tpDist + q * slDist * slDist - mu * mu;
+    if (variance > 0) {
+      halfKelly = Math.max(1, Math.floor((mu / variance) / 2));
+    }
+  }
+
+  // Comfort: 연패N × SL × lev ≤ targetDD (복리 기반)
+  // (1 - slDist * lev)^N ≥ (1 - targetDD) → lev = (1 - (1-DD)^(1/N)) / slDist
+  const consecN = actualMaxConsec && actualMaxConsec > COMFORT_CONSEC
+    ? actualMaxConsec
+    : COMFORT_CONSEC;
+  const comfortOnly = slDist > 0
+    ? Math.floor((1 - Math.pow(1 - COMFORT_MAX_DD, 1 / consecN)) / slDist)
+    : 1;
+
+  const comfort = Math.max(1, Math.min(Math.min(halfKelly, comfortOnly), 125));
+  return { comfort, halfKelly: Math.min(halfKelly, 125), comfortOnly: Math.max(1, Math.min(comfortOnly, 125)) };
 }
 
 export const OpenPositionCard: React.FC<OpenPositionCardProps> = memo(
-  ({ openPosition, ticker, leverage = 1, winRate }) => {
+  ({ openPosition, ticker, leverage = 1, winRate, maxConsecLoss }) => {
     if (!openPosition) {
       return (
         <div className='mb-3 px-3 py-2 rounded-lg border bg-zinc-900/50 border-zinc-700/50'>
@@ -71,13 +91,15 @@ export const OpenPositionCard: React.FC<OpenPositionCardProps> = memo(
       ? ((openPosition.sl - openPosition.entryPrice) / openPosition.entryPrice) * 100 * leverage
       : ((openPosition.entryPrice - openPosition.sl) / openPosition.entryPrice) * 100 * leverage;
 
-    // Kelly 기반 추천 레버리지 (승률 있을 때), 없으면 SL=-20% 기준
-    const recLev = winRate && winRate > 0
-      ? calcKellyLeverage(winRate, tpDist1x, slDist1x)
-      : slDist1x > 0 ? Math.min(Math.floor(0.2 / slDist1x), 125) : 1;
+    // Comfort-Kelly 추천 레버리지
+    const { comfort: recLev, halfKelly, comfortOnly } = winRate && winRate > 0
+      ? calcComfortKelly(winRate, tpDist1x, slDist1x, maxConsecLoss)
+      : { comfort: slDist1x > 0 ? Math.min(Math.floor(0.2 / slDist1x), 125) : 1, halfKelly: 0, comfortOnly: 0 };
 
     // SL 도달 시 손실률 (추천 레버리지 기준)
     const slAtRec = (slDist1x * recLev * 100).toFixed(0);
+    // 연패3 시 DD (복리)
+    const dd3 = ((1 - Math.pow(1 - slDist1x * recLev, COMFORT_CONSEC)) * 100).toFixed(0);
 
     return (
       <div
@@ -121,7 +143,9 @@ export const OpenPositionCard: React.FC<OpenPositionCardProps> = memo(
             <span className='text-red-500'>SL:{si.slAtr}x ({slPct.toFixed(1)}%)</span>
             <span
               className={`font-medium ${leverage <= recLev ? 'text-cyan-400' : 'text-orange-400'}`}
-              title={winRate ? `½Kelly (WR:${winRate}%, SL@rec:-${slAtRec}%)` : `SL@rec: -${slAtRec}%`}
+              title={halfKelly > 0
+                ? `½Kelly:${halfKelly}x, 심리:${comfortOnly}x | SL@rec:-${slAtRec}% | 연패${COMFORT_CONSEC}→DD-${dd3}%`
+                : `SL@rec: -${slAtRec}%`}
             >
               추천 {recLev}x
             </span>

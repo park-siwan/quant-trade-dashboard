@@ -59,19 +59,33 @@ export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
             </div>
           </div>
           <div className='w-px h-4 bg-zinc-700' />
-          {/* 레버리지 슬라이더 */}
-          <div className='flex items-center gap-2'>
+          {/* 레버리지 슬라이더 + 직접 입력 */}
+          <div className='flex items-center gap-1.5'>
             <span className='text-zinc-500 text-xs'>레버리지</span>
             <input
               type='range'
               min={1}
               max={125}
-              step={1}
+              step={0.1}
               value={leverage}
               onChange={(e) => onLeverageChange(Number(e.target.value))}
-              className='w-24 h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:cursor-pointer'
+              className='w-36 h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:cursor-pointer'
             />
-            <span className='text-zinc-200 text-xs font-bold w-8 text-right'>{leverage}x</span>
+            <div className='flex items-center gap-0.5'>
+              <input
+                type='number'
+                min={1}
+                max={125}
+                step={0.1}
+                value={leverage}
+                onChange={(e) => {
+                  const v = Math.max(1, Math.min(125, Math.round((Number(e.target.value) || 1) * 10) / 10));
+                  onLeverageChange(v);
+                }}
+                className='w-12 bg-zinc-800 text-zinc-200 text-xs font-bold text-center rounded border border-zinc-700 focus:border-blue-500 focus:outline-none py-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+              />
+              <span className='text-zinc-400 text-xs'>x</span>
+            </div>
           </div>
         </div>
 

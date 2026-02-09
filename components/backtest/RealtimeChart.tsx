@@ -145,7 +145,8 @@ function RealtimeChart() {
   // Settings
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   // autoOptimizeEnabled removed — optimization integrated into strategy list
-  const [leverage, setLeverage] = useState(20);
+  const [leverage, setLeverage] = useState(1);
+  const leverageAutoSetRef = useRef(false);
   const [nextCandleCountdown, setNextCandleCountdown] = useState<number>(0);
 
   // 전략 비교 차트 탭 (null = 숨김, 'equity' = 자산곡선, 'sharpe' = 샤프 타임라인)
@@ -384,6 +385,60 @@ function RealtimeChart() {
     return () => clearInterval(interval);
   }, [timeframe]);
 
+  // Auto-leverage: 1위 전략의 DD ≈ 20% 되도록 초기 레버리지 설정
+  useEffect(() => {
+    if (leverageAutoSetRef.current) return;
+    if (rollingSharpeData.size === 0 || allStrategiesEquityCurves.size === 0 || strategies.length === 0) return;
+
+    // 1위 전략 찾기 (평균 롤링 샤프 순)
+    let bestId: number | null = null;
+    let bestAvgSharpe = -Infinity;
+    for (const s of strategies) {
+      const type = s.strategy || 'rsi_div';
+      const data = rollingSharpeData.get(type);
+      if (data && data.length > 0) {
+        const avg = data.reduce((sum, d) => sum + d.sharpe, 0) / data.length;
+        if (avg > bestAvgSharpe) {
+          bestAvgSharpe = avg;
+          bestId = s.id;
+        }
+      }
+    }
+    if (bestId === null) return;
+
+    const curve = allStrategiesEquityCurves.get(bestId);
+    if (!curve || curve.length < 2) return;
+
+    // 복리 DD 계산 (전략 카드와 동일 로직)
+    const calcCompoundDD = (lev: number): number => {
+      const start = curve[0].equity;
+      let eq = start;
+      let peak = start;
+      let maxDd = 0;
+      for (let i = 1; i < curve.length; i++) {
+        const r = (curve[i].equity - curve[i - 1].equity) / curve[i - 1].equity;
+        eq *= (1 + r * lev);
+        eq = Math.max(eq, start * 0.01);
+        peak = Math.max(peak, eq);
+        const dd = peak > 0 ? ((peak - eq) / peak) * 100 : 0;
+        maxDd = Math.max(maxDd, dd);
+      }
+      return maxDd;
+    };
+
+    // 이진 탐색: 복리 DD = 20% 되는 레버리지 찾기
+    let lo = 1, hi = 125;
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      const dd = calcCompoundDD(mid);
+      if (dd < 20) lo = mid;
+      else hi = mid;
+    }
+    const autoLev = Math.max(1, Math.min(125, Math.round(lo * 10) / 10));
+    setLeverage(autoLev);
+    leverageAutoSetRef.current = true;
+    console.log(`[AutoLeverage] 1위 전략 → ${autoLev}x (compound DD=${calcCompoundDD(autoLev).toFixed(1)}%, target=20%)`);
+  }, [rollingSharpeData, allStrategiesEquityCurves, strategies]);
 
   // 전략 미리보기 백테스트 실행 (단일 전략)
   // 파라미터를 보내지 않고 Python이 JSON 기본값을 사용하도록 함 (race condition 방지)
@@ -975,6 +1030,12 @@ function RealtimeChart() {
           ticker={ticker}
           leverage={leverage}
           winRate={allStrategyStats.get(selectedStrategy?.strategy || '')?.winRate}
+          maxConsecLoss={(() => {
+            const trades = allTradesMap.get(selectedStrategy?.strategy || '') || [];
+            let max = 0, cur = 0;
+            for (const t of trades) { if (t.pnlPercent < 0) { cur++; max = Math.max(max, cur); } else { cur = 0; } }
+            return max;
+          })()}
         />
 
         {/* 4. 차트 */}
@@ -1377,6 +1438,14 @@ function RealtimeChart() {
                           return <span className='text-zinc-600 text-[10px]'>—</span>;
                         }
                         const equityCurve = allStrategiesEquityCurves.get(strategy.id) || [];
+                        // 최대 연속 손실 계산
+                        const trades = allTradesMap.get(strategyType) || [];
+                        let maxConsecLoss = 0;
+                        let curStreak = 0;
+                        for (const t of trades) {
+                          if (t.pnlPercent < 0) { curStreak++; maxConsecLoss = Math.max(maxConsecLoss, curStreak); }
+                          else { curStreak = 0; }
+                        }
                         // 복리 레버리지 계산 (미니 차트와 동일)
                         let levPnl = stats.totalPnlPercent * leverage;
                         let levDD = 0;
@@ -1432,7 +1501,34 @@ function RealtimeChart() {
                       })()}
                     </div>
 
-                    {/* 3행: 미니 에쿼티 차트 (전체 폭) */}
+                    {/* 3행: 연패 확률 */}
+                    {(() => {
+                      const trades = allTradesMap.get(strategyType) || [];
+                      const st = allStrategyStats.get(strategyType);
+                      if (!st || trades.length === 0) return null;
+                      let maxCL = 0, cur = 0;
+                      for (const t of trades) { if (t.pnlPercent < 0) { cur++; maxCL = Math.max(maxCL, cur); } else { cur = 0; } }
+                      if (maxCL === 0) return null;
+                      const q = 1 - st.winRate / 100;
+                      return (
+                        <div className='flex items-center gap-1 text-[10px] flex-wrap'>
+                          {Array.from({ length: maxCL }, (_, i) => {
+                            const n = i + 1;
+                            const prob = Math.pow(q, n) * 100;
+                            return (
+                              <span key={n} className={
+                                n === maxCL ? 'text-red-400 font-medium' :
+                                prob < 5 ? 'text-orange-400' : 'text-zinc-500'
+                              }>
+                                {n}패({prob < 1 ? prob.toFixed(1) : prob.toFixed(0)}%)
+                              </span>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+
+                    {/* 4행: 미니 에쿼티 차트 (전체 폭) */}
                     <div className='w-full mb-1'>
                       <StrategyMiniChart equityCurve={allStrategiesEquityCurves.get(strategy.id) || []} leverage={leverage} />
                     </div>
@@ -1450,6 +1546,7 @@ function RealtimeChart() {
                         </span>
                       )}
                     </div>
+
                   </button>
                 </div>
               );
