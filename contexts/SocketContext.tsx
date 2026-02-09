@@ -98,6 +98,30 @@ export interface BalanceData {
   unrealisedPnl: number;
 }
 
+export interface TradingStatus {
+  envEnabled: boolean;
+  enabled: boolean;
+  positionPct: number;
+  leverage: number;
+  pendingOrder: {
+    orderId: string;
+    side: 'buy' | 'sell';
+    price: number;
+    amount: number;
+    tp: number;
+    sl: number;
+    createdAt: number;
+  } | null;
+  activePosition: {
+    side: 'buy' | 'sell';
+    entryPrice: number;
+    amount: number;
+    tp: number;
+    sl: number;
+    openedAt: number;
+  } | null;
+}
+
 export interface RealtimeDivergenceData {
   id: string;
   symbol: string;
@@ -140,6 +164,7 @@ interface SocketContextValue {
   coinglassData: CoinglassData | null;
   longShortRatioData: LongShortRatioData | null;
   balanceData: BalanceData | null;
+  tradingStatus: TradingStatus | null;
   divergenceData: RealtimeDivergenceData | null;
   divergenceHistory: RealtimeDivergenceData[];
   currentSymbol: string;
@@ -168,6 +193,7 @@ const SocketContext = createContext<SocketContextValue>({
   coinglassData: null,
   longShortRatioData: null,
   balanceData: null,
+  tradingStatus: null,
   divergenceData: null,
   divergenceHistory: [],
   currentSymbol: '',
@@ -205,6 +231,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [coinglassData, setCoinglassData] = useState<CoinglassData | null>(null);
   const [longShortRatioData, setLongShortRatioData] = useState<LongShortRatioData | null>(null);
   const [balanceData, setBalanceData] = useState<BalanceData | null>(null);
+  const [tradingStatus, setTradingStatus] = useState<TradingStatus | null>(null);
   const [divergenceData, setDivergenceData] = useState<RealtimeDivergenceData | null>(null);
   const [divergenceHistory, setDivergenceHistory] = useState<RealtimeDivergenceData[]>([]);
   const [currentSymbol, setCurrentSymbol] = useState<string>('');
@@ -350,6 +377,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setBalanceData(data);
     });
 
+    // Trading status (symbol-independent)
+    socket.on('data:trading:status', (data: TradingStatus) => {
+      setTradingStatus(data);
+    });
+
     // Divergence signals
     socket.on('data:divergence', (data: RealtimeDivergenceData) => {
       const normalizedSymbol = data.symbol?.replace('/', '');
@@ -457,6 +489,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     coinglassData,
     longShortRatioData,
     balanceData,
+    tradingStatus,
     divergenceData,
     divergenceHistory,
     currentSymbol,
@@ -475,6 +508,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     coinglassData,
     longShortRatioData,
     balanceData,
+    tradingStatus,
     divergenceData,
     divergenceHistory,
     currentSymbol,

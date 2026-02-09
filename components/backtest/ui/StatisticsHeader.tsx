@@ -1,5 +1,5 @@
 import { memo, useState, useEffect, useCallback } from 'react';
-import { useSocket } from '@/contexts/SocketContext';
+import { useSocket, type TradingStatus } from '@/contexts/SocketContext';
 import { API_CONFIG } from '@/lib/config';
 
 interface StatisticsHeaderProps {
@@ -178,28 +178,91 @@ export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
 
 StatisticsHeader.displayName = 'StatisticsHeader';
 
+function useAutoTradeSettings() {
+  const [settings, setSettings] = useState<TradingStatus | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_CONFIG.BASE_URL}/trading/settings`)
+      .then(r => r.json())
+      .then(setSettings)
+      .catch(() => {});
+  }, []);
+
+  const toggle = useCallback(async () => {
+    if (!settings) return;
+    const newVal = !settings.enabled;
+    setSettings(s => s ? { ...s, enabled: newVal } : s);
+    try {
+      const res = await fetch(`${API_CONFIG.BASE_URL}/trading/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: newVal }),
+      });
+      setSettings(await res.json());
+    } catch {
+      setSettings(s => s ? { ...s, enabled: !newVal } : s);
+    }
+  }, [settings]);
+
+  return { settings, setSettings, toggle };
+}
+
 export const BalanceHeader = memo(() => {
-  const { balanceData } = useSocket();
+  const { balanceData, tradingStatus } = useSocket();
+  const { settings, setSettings, toggle } = useAutoTradeSettings();
+
+  // WS 상태 업데이트 반영
+  useEffect(() => {
+    if (tradingStatus) setSettings(tradingStatus);
+  }, [tradingStatus, setSettings]);
 
   if (!balanceData) return null;
 
+  const hasActivity = settings?.pendingOrder || settings?.activePosition;
+
   return (
-    <div className='flex items-center gap-4 px-4 py-1 bg-zinc-900/60 rounded-lg'>
-      <span className='text-xs text-zinc-500'>Bybit</span>
-      <div className='flex items-center gap-1'>
-        <span className='text-xs text-zinc-400'>순자산</span>
-        <span className='text-xs font-mono text-yellow-400'>${balanceData.totalEquity.toFixed(2)}</span>
-      </div>
-      <div className='flex items-center gap-1'>
-        <span className='text-xs text-zinc-400'>가용</span>
-        <span className='text-xs font-mono text-zinc-300'>${balanceData.availableBalance.toFixed(2)}</span>
-      </div>
-      {balanceData.unrealisedPnl !== 0 && (
+    <div className='flex items-center justify-between px-4 py-1 bg-zinc-900/60 rounded-lg'>
+      <div className='flex items-center gap-4'>
+        <span className='text-xs text-zinc-500'>Bybit</span>
         <div className='flex items-center gap-1'>
-          <span className='text-xs text-zinc-400'>미실현</span>
-          <span className={`text-xs font-mono ${balanceData.unrealisedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {balanceData.unrealisedPnl >= 0 ? '+' : ''}{balanceData.unrealisedPnl.toFixed(2)}
-          </span>
+          <span className='text-xs text-zinc-400'>순자산</span>
+          <span className='text-xs font-mono text-yellow-400'>${balanceData.totalEquity.toFixed(2)}</span>
+        </div>
+        <div className='flex items-center gap-1'>
+          <span className='text-xs text-zinc-400'>가용</span>
+          <span className='text-xs font-mono text-zinc-300'>${balanceData.availableBalance.toFixed(2)}</span>
+        </div>
+        {balanceData.unrealisedPnl !== 0 && (
+          <div className='flex items-center gap-1'>
+            <span className='text-xs text-zinc-400'>미실현</span>
+            <span className={`text-xs font-mono ${balanceData.unrealisedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {balanceData.unrealisedPnl >= 0 ? '+' : ''}{balanceData.unrealisedPnl.toFixed(2)}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Auto-trade toggle (envEnabled=true일 때만 표시) */}
+      {settings?.envEnabled && (
+        <div className='flex items-center gap-2'>
+          {hasActivity && (
+            <span className='text-xs font-mono text-yellow-400 animate-pulse'>
+              {settings.pendingOrder ? `대기중 ${settings.pendingOrder.side.toUpperCase()}` : ''}
+              {settings.activePosition ? `포지션 ${settings.activePosition.side.toUpperCase()} @$${settings.activePosition.entryPrice.toFixed(0)}` : ''}
+            </span>
+          )}
+          <button
+            onClick={toggle}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold transition-colors ${
+              settings.enabled
+                ? 'bg-green-600/30 text-green-400 hover:bg-green-600/50 border border-green-600/50'
+                : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300 border border-zinc-700'
+            }`}
+            title={`자동매매 ${settings.enabled ? 'ON' : 'OFF'}`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${settings.enabled ? 'bg-green-400' : 'bg-zinc-600'}`} />
+            자동매매
+          </button>
         </div>
       )}
     </div>
