@@ -15,8 +15,26 @@ interface UseSoundAlertsResult {
  * - 진입 신호 (bullish/bearish) 및 청산 (익절/손절) 소리
  */
 export function useSoundAlerts(): UseSoundAlertsResult {
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [soundVolume, setSoundVolume] = useState(1);
+  const [soundEnabled, setSoundEnabledRaw] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const saved = localStorage.getItem('soundEnabled');
+    return saved === null ? true : saved === 'true';
+  });
+  const [soundVolume, setSoundVolumeRaw] = useState(() => {
+    if (typeof window === 'undefined') return 1;
+    const saved = localStorage.getItem('soundVolume');
+    return saved === null ? 1 : parseFloat(saved);
+  });
+
+  const setSoundEnabled = useCallback((v: boolean) => {
+    setSoundEnabledRaw(v);
+    localStorage.setItem('soundEnabled', String(v));
+  }, []);
+
+  const setSoundVolume = useCallback((v: number) => {
+    setSoundVolumeRaw(v);
+    localStorage.setItem('soundVolume', String(v));
+  }, []);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   // macOS Safari: 사용자 상호작용 시 AudioContext 초기화

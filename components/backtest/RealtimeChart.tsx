@@ -236,6 +236,7 @@ function RealtimeChart() {
     divergenceData,
     openPosition,
     ticker,
+    kline: getKline(timeframe),
     selectedStrategy,
     soundEnabled,
     playAlertSound,
@@ -246,6 +247,26 @@ function RealtimeChart() {
       clearOpenPosition();
     },
   });
+
+  // 백엔드 포지션 청산 감지 → 프론트 openPosition도 정리
+  const prevActivePositionRef = useRef(tradingStatus?.activePosition);
+  useEffect(() => {
+    const prev = prevActivePositionRef.current;
+    const curr = tradingStatus?.activePosition;
+    prevActivePositionRef.current = curr;
+
+    if (!openPosition) return;
+
+    // Case 1: non-null → null 전환 (실시간 포지션 청산)
+    if (prev && !curr) {
+      console.log('[Trading] Bybit position closed, clearing strategy openPosition');
+      clearOpenPosition();
+      return;
+    }
+
+    // Case 2: 페이지 로드 후 tradingStatus 도착 — 백엔드에 포지션 없으면
+    // kline high/low 기반 TP/SL 감지가 다음 틱에서 처리함
+  }, [tradingStatus?.activePosition, openPosition, clearOpenPosition]);
 
   // 전략 최적화 (Propose → Approve/Reject)
   const {

@@ -73,6 +73,9 @@ export function useRealtimeUpdates(
   // 전략 변경 중 플래그
   const isChangingStrategyRef = useRef(false);
 
+  // TP/SL로 퇴출된 포지션의 entryTime (세션 내에서만 유지)
+  const exitedEntryTimeRef = useRef<string | null>(null);
+
   // 백테스트 실행 함수
   const loadBacktestTrades = useCallback(async (
     strategy: SavedOptimizeResult,
@@ -179,7 +182,15 @@ export function useRealtimeUpdates(
       // 상태 업데이트 (방어된 데이터 사용)
       setBacktestTrades(trades);
       setSkippedSignals(result.skippedSignals || []);
-      setOpenPosition(result.openPosition || null);
+      // TP/SL로 퇴출된 포지션이 백테스트에서 다시 돌아오면 무시
+      const newPos = result.openPosition || null;
+      if (newPos && exitedEntryTimeRef.current === newPos.entryTime) {
+        console.log('[Backtest] Suppressing exited position:', newPos.entryTime);
+        setOpenPosition(null);
+      } else {
+        if (newPos) exitedEntryTimeRef.current = null; // 새 포지션이면 리셋
+        setOpenPosition(newPos);
+      }
       setBacktestStats(result);
       setEquityCurve(result.equityCurve || []);
       setLastBacktestTime(new Date());
@@ -218,7 +229,12 @@ export function useRealtimeUpdates(
       console.log('[Backtest] Using pre-loaded data for strategy:', strategyType, 'trades:', trades.length, 'stats:', !!stats);
 
       setBacktestTrades(trades);
-      setOpenPosition(openPos);
+      // TP/SL로 퇴출된 포지션 필터링
+      if (openPos && exitedEntryTimeRef.current === openPos.entryTime) {
+        setOpenPosition(null);
+      } else {
+        setOpenPosition(openPos);
+      }
       setBacktestStats(stats);  // 통계도 설정 (헤더 표시용)
       setSkippedSignals([]); // pre-loaded에서는 skippedSignals 없음
       setLastBacktestTime(new Date());
@@ -234,8 +250,13 @@ export function useRealtimeUpdates(
 
   // TP/SL 도달 시 포지션 즉시 청산 함수
   const clearOpenPosition = useCallback(() => {
-    console.log('[Backtest] Clearing open position (TP/SL hit)');
-    setOpenPosition(null);
+    setOpenPosition(prev => {
+      if (prev) {
+        console.log('[Backtest] Clearing open position (TP/SL hit), entry:', prev.entryTime);
+        exitedEntryTimeRef.current = prev.entryTime;
+      }
+      return null;
+    });
   }, []);
 
   return {

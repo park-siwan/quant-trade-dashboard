@@ -3,12 +3,13 @@ import {
   OpenPosition,
   SavedOptimizeResult,
 } from '@/lib/backtest-api';
-import { RealtimeDivergenceData } from '@/contexts/SocketContext';
+import { KlineData, RealtimeDivergenceData } from '@/contexts/SocketContext';
 
 interface UsePositionAlertsProps {
   divergenceData: RealtimeDivergenceData | null;
   openPosition: OpenPosition | null;
   ticker: any;
+  kline: KlineData | null; // 현재 캔들 고가/저가 기준 TP/SL 체크
   selectedStrategy: SavedOptimizeResult | null;
   soundEnabled: boolean;
   playAlertSound: (direction: 'bullish' | 'bearish', forcePlay?: boolean) => void;
@@ -27,6 +28,7 @@ export function usePositionAlerts({
   divergenceData,
   openPosition,
   ticker,
+  kline,
   selectedStrategy,
   soundEnabled,
   playAlertSound,
@@ -60,31 +62,27 @@ export function usePositionAlerts({
     }
   }, [divergenceData, soundEnabled, playAlertSound, selectedStrategy, loadBacktestTrades]);
 
-  // 2. TP/SL 도달 감지 및 알림 (실시간 가격 모니터링)
+  // 2. TP/SL 도달 감지 및 알림 (현재 캔들 고가/저가 + ticker 모니터링)
   useEffect(() => {
     if (!openPosition || !ticker) return;
 
     const currentPrice = ticker.price;
-    const { tp, sl, direction, entryPrice } = openPosition;
+    const { tp, sl, direction } = openPosition;
     const isLong = direction === 'long';
+
+    // 캔들 고가/저가 사용 (잠깐 터치하고 돌아와도 감지)
+    const high = kline?.high ?? currentPrice;
+    const low = kline?.low ?? currentPrice;
 
     // TP/SL 도달 확인
     let exitType: 'tp' | 'sl' | null = null;
 
     if (isLong) {
-      // 롱 포지션: 가격이 TP 이상이면 익절, SL 이하면 손절
-      if (currentPrice >= tp) {
-        exitType = 'tp';
-      } else if (currentPrice <= sl) {
-        exitType = 'sl';
-      }
+      if (high >= tp) exitType = 'tp';
+      else if (low <= sl) exitType = 'sl';
     } else {
-      // 숏 포지션: 가격이 TP 이하면 익절, SL 이상이면 손절
-      if (currentPrice <= tp) {
-        exitType = 'tp';
-      } else if (currentPrice >= sl) {
-        exitType = 'sl';
-      }
+      if (low <= tp) exitType = 'tp';
+      else if (high >= sl) exitType = 'sl';
     }
 
     if (exitType) {
@@ -109,12 +107,12 @@ export function usePositionAlerts({
         onPositionExit(exitType, currentPrice);
       }
 
-      // TP/SL 도달 후 백테스트 재실행하여 최신 상태 반영 (forceRun=true로 캐시 무시)
+      // TP/SL 도달 후 백테스트 재실행 — 캔들 닫힘 후 반영되도록 60초 대기
       if (selectedStrategy) {
-        setTimeout(() => loadBacktestTrades(selectedStrategy, 0, true), 1000);
+        setTimeout(() => loadBacktestTrades(selectedStrategy, 0, true), 60000);
       }
     }
-  }, [ticker?.price, openPosition, soundEnabled, playExitSound, selectedStrategy, loadBacktestTrades, onPositionExit]);
+  }, [ticker?.price, kline?.high, kline?.low, openPosition, soundEnabled, playExitSound, selectedStrategy, loadBacktestTrades, onPositionExit]);
 
   // 3. 새 포지션 진입 알림
   useEffect(() => {
