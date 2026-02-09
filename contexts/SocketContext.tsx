@@ -215,9 +215,16 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       } else {
         const hiddenDuration = Date.now() - lastHiddenTime;
         if (lastHiddenTime > 0 && hiddenDuration > SIGNAL.SLEEP_THRESHOLD) {
-          console.log(`[Socket] 잠자기 복귀 (${Math.round(hiddenDuration / 1000)}초), 다이버전스 히스토리 클리어`);
+          console.log(`[Socket] 잠자기 복귀 (${Math.round(hiddenDuration / 1000)}초), 다이버전스 히스토리 클리어 + 소켓 재연결`);
           setDivergenceHistory([]);
           setDivergenceData(null);
+
+          // 소켓이 끊겨있으면 강제 재연결
+          const sock = socketRef.current;
+          if (sock && !sock.connected) {
+            console.log('[Socket] 재연결 시도...');
+            sock.connect();
+          }
         }
       }
     };
@@ -235,8 +242,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     const socket = io(`${API_CONFIG.BASE_URL}/mtf`, {
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 10,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
     });
 
     socketRef.current = socket;
