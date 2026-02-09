@@ -73,17 +73,9 @@ export function useMarkerGeneration({
   useEffect(() => {
     if (!candleSeriesRef.current || candles.length === 0) return;
 
-    // 백테스트 시작 시에만 마커 클리어 (isBacktestRunning이 false → true로 변경될 때)
-    if (isBacktestRunning && !prevIsBacktestRunningRef.current) {
-      console.log('[Markers] Backtest started, clearing markers');
-      updateSeriesMarkers([]);
-      candleSeriesRef.current.setData(candles);
-      prevIsBacktestRunningRef.current = true;
-      return;
-    }
-
-    // 백테스트 진행 중이면 대기 (마커 업데이트 안함)
+    // 백테스트 진행 중이면 기존 마커/색상 유지 (깜빡임 방지)
     if (isBacktestRunning) {
+      prevIsBacktestRunningRef.current = true;
       return;
     }
 

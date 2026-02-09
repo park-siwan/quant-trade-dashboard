@@ -652,14 +652,14 @@ function RealtimeChart() {
       lastCandleTimeRef.current > 0 &&
       newCandleTime > lastCandleTimeRef.current;
 
-    // 캔들 확정 시 또는 새 캔들 시작 시 백테스트 재실행 (hook의 loadBacktestTrades 사용)
+    // 캔들 확정 시 또는 새 캔들 시작 시 데이터 갱신 (silent refetch → 마커 깜빡임 방지)
     if (selectedStrategy && (isNewCandle || kline.isFinal)) {
       if (isNewCandle) {
-        console.log('[Candle] New candle started, refreshing backtest...');
+        console.log('[Candle] New candle started, silent refetch...');
       } else if (kline.isFinal) {
-        console.log('[Candle] Candle confirmed (isFinal), refreshing backtest...');
+        console.log('[Candle] Candle confirmed (isFinal), silent refetch...');
       }
-      loadBacktestTrades(selectedStrategy); // from useRealtimeUpdates hook
+      refetchBacktestData(true); // silent=true: 로딩 표시 없이 preloaded 데이터 갱신
     }
 
     lastCandleTimeRef.current = newCandleTime;
@@ -693,7 +693,7 @@ function RealtimeChart() {
     }
 
     // Note: candles state는 useChartData hook에서 관리됨
-  }, [kline, openPosition, selectedStrategy, loadBacktestTrades]);
+  }, [kline, openPosition, selectedStrategy, refetchBacktestData]);
 
   // 차트 초기 생성 (타임프레임 변경 또는 초기 로드 시에만)
   useEffect(() => {
@@ -965,7 +965,7 @@ function RealtimeChart() {
         />
       </div>
 
-      <div className='grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_280px] lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px] gap-4 min-h-[calc(100vh-180px)]'>
+      <div className='grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px] lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px] 2xl:grid-cols-[minmax(0,1fr)_440px] gap-4 min-h-[calc(100vh-180px)]'>
       {/* 좌측: 메인 차트 영역 */}
       <div className='bg-zinc-900 p-4 rounded-lg min-w-0 flex flex-col overflow-hidden'>
 
@@ -1410,6 +1410,10 @@ function RealtimeChart() {
                             <span className='text-zinc-600 text-[10px]'>|</span>
                             <span className='text-zinc-400 text-[11px]'>
                               {stats.totalTrades}회
+                            </span>
+                            <span className='text-zinc-600 text-[10px]'>|</span>
+                            <span className='text-zinc-500 text-[11px]'>
+                              일{(stats.totalTrades / 84).toFixed(1)}
                             </span>
                             {levDD > 0 && (
                               <>
