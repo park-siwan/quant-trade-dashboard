@@ -38,32 +38,6 @@ export function usePositionAlerts({
   const lastExitAlertRef = useRef<string | null>(null);
   const lastEntryAlertRef = useRef<string | null>(null);
 
-  // 브라우저 알림 헬퍼 함수
-  const showNotification = (title: string, body: string) => {
-    if (typeof Notification === 'undefined') return;
-
-    if (Notification.permission === 'granted') {
-      new Notification(title, { body, icon: '/favicon.ico' });
-    } else if (Notification.permission === 'default') {
-      // 권한 요청 후 알림
-      Notification.requestPermission().then((permission) => {
-        if (permission === 'granted') {
-          new Notification(title, { body, icon: '/favicon.ico' });
-        }
-      });
-    }
-  };
-
-  // 브라우저 알림 권한 요청
-  useEffect(() => {
-    if (
-      typeof Notification !== 'undefined' &&
-      Notification.permission === 'default'
-    ) {
-      Notification.requestPermission();
-    }
-  }, []);
-
   // 1. 실시간 다이버전스 신호 알림 + 백테스트 재실행
   useEffect(() => {
     if (!divergenceData) return;
@@ -78,14 +52,6 @@ export function usePositionAlerts({
 
     // 소리 알림
     playAlertSound(divergenceData.direction as 'bullish' | 'bearish');
-
-    // 브라우저 알림
-    const title =
-      divergenceData.direction === 'bullish'
-        ? '🚀 롱 신호 발생!'
-        : '🌧 숏 신호 발생!';
-    const body = `가격: $${divergenceData.currentPrice.toLocaleString()}${divergenceData.rsiValue ? ` | RSI: ${divergenceData.rsiValue.toFixed(1)}` : ''}`;
-    showNotification(title, body);
 
     // 새 신호 발생 시 백테스트 재실행하여 openPosition 업데이트
     if (selectedStrategy) {
@@ -134,20 +100,6 @@ export function usePositionAlerts({
       // 소리 알림
       playExitSound(isProfit);
 
-      // 브라우저 알림
-      const directionText = isLong ? '롱' : '숏';
-      const exitText = isProfit ? '익절' : '손절';
-      const emoji = isProfit ? '🪙' : '💸';
-      const pnlText =
-        openPosition.unrealizedPnl >= 0
-          ? `+$${openPosition.unrealizedPnl.toFixed(2)}`
-          : `-$${Math.abs(openPosition.unrealizedPnl).toFixed(2)}`;
-
-      showNotification(
-        `${emoji} ${directionText} ${exitText}!`,
-        `가격: $${currentPrice.toLocaleString()} | PnL: ${pnlText} (${openPosition.unrealizedPnlPercent.toFixed(2)}%)`,
-      );
-
       console.log(
         `[Exit Alert] ${direction.toUpperCase()} ${exitType.toUpperCase()} @ $${currentPrice}`,
       );
@@ -191,14 +143,6 @@ export function usePositionAlerts({
 
     // 진입 소리 알림 (다이버전스 신호와 동일한 사운드)
     playAlertSound(isLong ? 'bullish' : 'bearish');
-
-    // 브라우저 알림
-    const directionText = isLong ? '롱' : '숏';
-    const emoji = isLong ? '🟢' : '🔴';
-    showNotification(
-      `${emoji} ${directionText} 진입!`,
-      `진입가: $${openPosition.entryPrice.toLocaleString()} | TP: $${openPosition.tp.toLocaleString()} | SL: $${openPosition.sl.toLocaleString()}`,
-    );
 
     console.log(
       `[Entry Alert] ${openPosition.direction.toUpperCase()} @ $${openPosition.entryPrice} (${Math.round(timeSinceEntry / 60000)}min ago)`,
