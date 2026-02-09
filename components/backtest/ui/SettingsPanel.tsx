@@ -1,4 +1,10 @@
-import { memo } from 'react';
+import { memo, useState, useEffect, useCallback } from 'react';
+import { API_CONFIG } from '@/lib/config';
+
+interface NotificationSettings {
+  telegram: boolean;
+  twilio: boolean;
+}
 
 interface SettingsPanelProps {
   show: boolean;
@@ -8,6 +14,37 @@ interface SettingsPanelProps {
   onVolumeChange: (vol: number) => void;
   playAlertSound: (direction: 'bullish' | 'bearish', forcePlay?: boolean) => void;
   playExitSound: (isProfit: boolean, forcePlay?: boolean) => void;
+}
+
+function useNotificationSettings(show: boolean) {
+  const [settings, setSettings] = useState<NotificationSettings | null>(null);
+
+  useEffect(() => {
+    if (!show) return;
+    fetch(`${API_CONFIG.BASE_URL}/notification/settings`)
+      .then(r => r.json())
+      .then(setSettings)
+      .catch(() => {});
+  }, [show]);
+
+  const toggle = useCallback(async (key: keyof NotificationSettings) => {
+    if (!settings) return;
+    const newVal = !settings[key];
+    setSettings(s => s ? { ...s, [key]: newVal } : s);
+    try {
+      const res = await fetch(`${API_CONFIG.BASE_URL}/notification/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: newVal }),
+      });
+      const data = await res.json();
+      setSettings(data);
+    } catch {
+      setSettings(s => s ? { ...s, [key]: !newVal } : s);
+    }
+  }, [settings]);
+
+  return { settings, toggle };
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = memo(
@@ -20,6 +57,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = memo(
     playAlertSound,
     playExitSound,
   }) => {
+    const { settings, toggle } = useNotificationSettings(show);
+
     if (!show) return null;
 
     return (
@@ -79,6 +118,36 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = memo(
             💸 손절
           </button>
         </div>
+
+        {/* 알림 채널 설정 */}
+        {settings && (
+          <>
+            <div className='border-t border-zinc-700 my-3' />
+            <div className='text-xs text-zinc-400 mb-2'>알림 채널</div>
+            <div className='flex gap-2'>
+              <button
+                onClick={() => toggle('telegram')}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs transition-colors ${
+                  settings.telegram
+                    ? 'bg-blue-600/30 text-blue-400'
+                    : 'bg-zinc-700 text-zinc-500'
+                }`}
+              >
+                💬 텔레그램 {settings.telegram ? '켜짐' : '꺼짐'}
+              </button>
+              <button
+                onClick={() => toggle('twilio')}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs transition-colors ${
+                  settings.twilio
+                    ? 'bg-purple-600/30 text-purple-400'
+                    : 'bg-zinc-700 text-zinc-500'
+                }`}
+              >
+                📞 전화 {settings.twilio ? '켜짐' : '꺼짐'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     );
   }
