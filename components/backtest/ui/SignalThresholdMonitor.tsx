@@ -79,14 +79,14 @@ export const SignalThresholdMonitor = memo(({ timeframe }: SignalThresholdMonito
     );
   }
 
-  const { rsi, adx, atr, atrPct, ema200, volumeRatio, regime } = snap;
+  const { rsi, adx, atr, atrPct, ema200, volumeRatio, regime, rsiPivot1, rsiPivot2, rsiDivSignal } = snap;
   const price = ticker?.price || snap.price;
   const regimeStyle = REGIME_STYLE[regime] || REGIME_STYLE.SIDEWAYS;
   const emaDist = price && ema200 ? (((price - ema200) / ema200) * 100) : null;
 
-  // ── rsi_div 조건 ──
+  // ── rsi_div 조건 (3단계: RSI구간 → 피봇1 → 피봇2+다이버전스) ──
   const rdRsi = rsi !== null && (rsi <= THRESH.RSI_OVERSOLD || rsi >= THRESH.RSI_OVERBOUGHT);
-  const rdCount = rdRsi ? 1 : 0;
+  const rdCount = [rdRsi, rsiPivot1, rsiPivot2].filter(Boolean).length;
 
   // ── vol_breakout 조건 ──
   const vbVol = volumeRatio !== null && volumeRatio >= THRESH.VOL_MULT;
@@ -108,20 +108,32 @@ export const SignalThresholdMonitor = memo(({ timeframe }: SignalThresholdMonito
       {/* ↩ 반전매매 (RSI Divergence) */}
       <div
         className='flex items-center gap-2 px-3 py-1 bg-zinc-900/60 text-[10px]'
-        title='RSI가 과매도/과매수 구간에 진입하면 다이버전스 패턴 감지 시작. 피봇 패턴 확인 후 진입.'
+        title='RSI 과매도/과매수 → 가격 피봇 감지 → 두 피봇 간 다이버전스 확인 후 진입'
       >
         <span className='text-zinc-400 font-medium w-13 shrink-0'>↩ 반전</span>
-        <div className='flex items-center gap-1.5 flex-1 min-w-0'>
+        <div className='flex items-center gap-1.5 flex-1 min-w-0 flex-wrap'>
           <Chip
             ok={rdRsi}
             label={`RSI ${rsi?.toFixed(0) ?? '—'}`}
             detail={`≤${THRESH.RSI_OVERSOLD} 과매도 또는 ≥${THRESH.RSI_OVERBOUGHT} 과매수 구간 필요`}
           />
-          {rdRsi && (
-            <span className='text-green-400/50 text-[9px]'>패턴 대기</span>
+          <Chip
+            ok={!!rsiPivot1}
+            label='피봇1'
+            detail='RSI 구간 내 첫 번째 가격 피봇 감지 (pivot_left=5, right=2)'
+          />
+          <Chip
+            ok={!!rsiPivot2}
+            label='피봇2'
+            detail='두 번째 피봇 감지 — 두 피봇 간 가격/RSI 다이버전스 비교 가능'
+          />
+          {rsiDivSignal && (
+            <span className={`text-[9px] font-medium ${rsiDivSignal === 'bullish' ? 'text-green-400' : 'text-red-400'}`}>
+              {rsiDivSignal === 'bullish' ? '강세' : '약세'} DIV
+            </span>
           )}
         </div>
-        <ProgressBar filled={rdCount} total={1} />
+        <ProgressBar filled={rdCount} total={3} />
       </div>
 
       {/* ⚡ 돌파매매 (Volume Breakout) */}

@@ -165,6 +165,10 @@ export interface IndicatorSnapshot {
   ema200: number | null;
   volumeRatio: number | null;
   regime: 'BULL' | 'BEAR' | 'SIDEWAYS';
+  // RSI 다이버전스 피봇 상태
+  rsiPivot1: boolean;
+  rsiPivot2: boolean;
+  rsiDivSignal: 'bullish' | 'bearish' | null;
 }
 
 // ==================== Context Types ====================
