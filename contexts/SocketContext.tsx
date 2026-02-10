@@ -115,6 +115,7 @@ export interface TradingStatus {
     entryPrice: number;
     amount: number;
     leverage: number;
+    positionIM: number;
     tp: number;
     sl: number;
     openedAt: number;
@@ -125,6 +126,12 @@ export interface TradingStatus {
     maxAttempts: number;
     side: 'buy' | 'sell';
     leverage: number;
+  } | null;
+  halfCloseInfo: {
+    active: boolean;
+    attempt: number;
+    maxAttempts: number;
+    amount: number;
   } | null;
 }
 

@@ -1090,7 +1090,16 @@ function RealtimeChart() {
           isConnected={isConnected}
           nextCandleCountdown={nextCandleCountdown}
         />
-        <BalanceHeader />
+        <BalanceHeader
+          openPosition={openPosition}
+          winRate={allStrategyStats.get(selectedStrategy?.strategy || '')?.winRate}
+          maxConsecLoss={(() => {
+            const trades = allTradesMap.get(selectedStrategy?.strategy || '') || [];
+            let max = 0, cur = 0;
+            for (const t of trades) { if (t.pnlPercent < 0) { cur++; max = Math.max(max, cur); } else { cur = 0; } }
+            return max;
+          })()}
+        />
         {/* 설정 패널 (헤더 아래 드롭다운) */}
         <SettingsPanel
           show={isSettingsOpen}
@@ -1112,9 +1121,6 @@ function RealtimeChart() {
           openPosition={openPosition}
           ticker={ticker}
           leverage={leverage}
-          tradingEnvEnabled={tradingStatus?.envEnabled}
-          retryInfo={tradingStatus?.retryInfo}
-          hasRealPosition={!!tradingStatus?.activePosition}
           winRate={allStrategyStats.get(selectedStrategy?.strategy || '')?.winRate}
           maxConsecLoss={(() => {
             const trades = allTradesMap.get(selectedStrategy?.strategy || '') || [];

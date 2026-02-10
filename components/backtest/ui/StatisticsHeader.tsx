@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import { useSocket, useSocketTicker, type TradingStatus } from '@/contexts/SocketContext';
 import { API_CONFIG } from '@/lib/config';
+import type { OpenPosition } from '@/lib/backtest-api';
 
 interface StatisticsHeaderProps {
   leverage: number;
@@ -207,15 +208,107 @@ function useAutoTradeSettings() {
   return { settings, setSettings, toggle };
 }
 
-export const BalanceHeader = memo(() => {
+// Comfort-Kelly 추천 레버리지
+const COMFORT_MAX_DD = 0.20;
+const COMFORT_CONSEC = 3;
+
+function calcRecLev(
+  openPosition: OpenPosition | null, winRate?: number, maxConsecLoss?: number
+): number {
+  if (!openPosition) return 1;
+  const tpDist = Math.abs(openPosition.tp - openPosition.entryPrice) / openPosition.entryPrice;
+  const slDist = Math.abs(openPosition.sl - openPosition.entryPrice) / openPosition.entryPrice;
+  if (slDist <= 0) return 1;
+
+  // Half-Kelly
+  const p = (winRate || 50) / 100;
+  const q = 1 - p;
+  const mu = p * tpDist - q * slDist;
+  let halfKelly = 1;
+  if (mu > 0) {
+    const variance = p * tpDist * tpDist + q * slDist * slDist - mu * mu;
+    if (variance > 0) halfKelly = Math.max(1, Math.floor((mu / variance) / 2));
+  }
+
+  // Comfort
+  const consecN = maxConsecLoss && maxConsecLoss > COMFORT_CONSEC ? maxConsecLoss : COMFORT_CONSEC;
+  const comfortOnly = Math.floor((1 - Math.pow(1 - COMFORT_MAX_DD, 1 / consecN)) / slDist);
+
+  return Math.max(1, Math.min(Math.min(halfKelly, comfortOnly), 125));
+}
+
+interface BalanceHeaderProps {
+  openPosition?: OpenPosition | null;
+  winRate?: number;
+  maxConsecLoss?: number;
+}
+
+export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: BalanceHeaderProps) => {
   const { balanceData, tradingStatus } = useSocket();
   const { ticker } = useSocketTicker();
   const { settings, setSettings, toggle } = useAutoTradeSettings();
+
+  const [orderState, setOrderState] = useState<'idle' | 'confirm' | 'loading' | 'done' | 'error'>('idle');
+  const [orderMsg, setOrderMsg] = useState('');
 
   // WS 상태 업데이트 반영
   useEffect(() => {
     if (tradingStatus) setSettings(tradingStatus);
   }, [tradingStatus, setSettings]);
+
+  const recLev = useMemo(() => calcRecLev(openPosition ?? null, winRate, maxConsecLoss), [openPosition, winRate, maxConsecLoss]);
+
+  const retryInfo = settings?.retryInfo || tradingStatus?.retryInfo;
+  const halfCloseInfo = settings?.halfCloseInfo || tradingStatus?.halfCloseInfo;
+  const hasRealPosition = !!(settings?.activePosition || tradingStatus?.activePosition);
+
+  const executeOrder = useCallback(async () => {
+    if (!openPosition || orderState !== 'confirm') return;
+    setOrderState('loading');
+    try {
+      const res = await fetch(`${API_CONFIG.BASE_URL}/trading/manual-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          side: openPosition.direction === 'long' ? 'buy' : 'sell',
+          entryPrice: openPosition.entryPrice,
+          tp: openPosition.tp,
+          sl: openPosition.sl,
+          leverage: recLev,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOrderState('done');
+        setOrderMsg(`PostOnly ${data.order.side.toUpperCase()} 시도 중...`);
+      } else {
+        setOrderState('error');
+        setOrderMsg(data.message || 'Failed');
+      }
+    } catch (e: any) {
+      setOrderState('error');
+      setOrderMsg(e.message);
+    }
+    setTimeout(() => { setOrderState('idle'); setOrderMsg(''); }, 4000);
+  }, [openPosition, orderState, recLev]);
+
+  const cancelRetry = useCallback(async () => {
+    try { await fetch(`${API_CONFIG.BASE_URL}/trading/cancel`, { method: 'POST' }); } catch {}
+    setOrderState('idle');
+    setOrderMsg('');
+  }, []);
+
+  const closePosition = useCallback(async () => {
+    try { await fetch(`${API_CONFIG.BASE_URL}/trading/close`, { method: 'POST' }); } catch {}
+  }, []);
+
+  const halfClose = useCallback(async () => {
+    try { await fetch(`${API_CONFIG.BASE_URL}/trading/half-close`, { method: 'POST' }); } catch {}
+  }, []);
+
+  const cancelHalfClose = useCallback(async () => {
+    try { await fetch(`${API_CONFIG.BASE_URL}/trading/half-close/cancel`, { method: 'POST' }); } catch {}
+  }, []);
 
   // 실시간 미실현 PnL 계산 (ticker 가격 기반)
   const liveBalance = useMemo(() => {
@@ -228,18 +321,15 @@ export const BalanceHeader = memo(() => {
     const pnl = pos.side === 'buy'
       ? (currentPrice - pos.entryPrice) * pos.amount
       : (pos.entryPrice - currentPrice) * pos.amount;
-    // 순자산 = WS잔고(마지막 wallet 이벤트 기준) - WS미실현 + 실시간미실현
     const equity = balanceData.totalEquity - balanceData.unrealisedPnl + pnl;
-    // ROI% = PnL / 증거금 (Bybit과 동일한 계산)
-    const leverage = pos.leverage || 50;
-    const initialMargin = pos.entryPrice * pos.amount / leverage;
-    const pnlPct = initialMargin > 0 ? (pnl / initialMargin) * 100 : 0;
+    const im = pos.positionIM > 0 ? pos.positionIM : pos.entryPrice * pos.amount / (pos.leverage > 0 ? pos.leverage : 1);
+    const pnlPct = im > 0 ? (pnl / im) * 100 : 0;
     return { equity, pnl, pnlPct };
   }, [balanceData, settings?.activePosition, tradingStatus?.activePosition, ticker?.price]);
 
   if (!balanceData || !liveBalance) return null;
 
-  const hasActivity = settings?.pendingOrder || settings?.activePosition;
+  const isLong = openPosition?.direction === 'long';
 
   return (
     <div className='flex items-center justify-between px-4 py-1 bg-zinc-900/60 rounded-lg'>
@@ -264,15 +354,64 @@ export const BalanceHeader = memo(() => {
         )}
       </div>
 
-      {/* Auto-trade toggle (envEnabled=true일 때만 표시) */}
-      {settings?.envEnabled && (
-        <div className='flex items-center gap-2'>
-          {hasActivity && (
-            <span className='text-xs font-mono text-yellow-400 animate-pulse'>
-              {settings.pendingOrder ? `대기중 ${settings.pendingOrder.side.toUpperCase()}` : ''}
-              {settings.activePosition ? `포지션 ${settings.activePosition.side.toUpperCase()} @$${settings.activePosition.entryPrice.toFixed(0)}` : ''}
+      {/* 우측: 매매 버튼 + 자동매매 */}
+      <div className='flex items-center gap-2'>
+        {/* 매매 실행 / 진입 상태 */}
+        {retryInfo?.active ? (
+          <>
+            <span className='text-xs text-cyan-400 animate-pulse'>
+              {retryInfo.leverage}x 진입 중 ({retryInfo.attempt}/{retryInfo.maxAttempts})
             </span>
-          )}
+            <button onClick={cancelRetry} className='px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'>취소</button>
+          </>
+        ) : hasRealPosition ? (
+          <>
+            <span className='text-xs font-mono text-yellow-400'>
+              {settings?.activePosition
+                ? `${settings.activePosition.side.toUpperCase()} @$${settings.activePosition.entryPrice.toFixed(0)}`
+                : '포지션'}
+            </span>
+            {halfCloseInfo?.active ? (
+              <>
+                <span className='text-xs text-cyan-400 animate-pulse'>
+                  반익 중 ({halfCloseInfo.attempt}/{halfCloseInfo.maxAttempts})
+                </span>
+                <button onClick={cancelHalfClose} className='px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'>취소</button>
+              </>
+            ) : liveBalance.pnl > 0 && (
+              <button onClick={halfClose} className='px-1.5 py-0.5 text-[10px] rounded bg-cyan-900/40 text-cyan-400 hover:bg-cyan-900/60 border border-cyan-800/50'>반익반본</button>
+            )}
+            <button onClick={closePosition} className='px-1.5 py-0.5 text-[10px] rounded bg-red-900/40 text-red-400 hover:bg-red-900/60 border border-red-800/50'>청산</button>
+          </>
+        ) : openPosition && (
+          <>
+            {orderState === 'idle' && (
+              <button
+                onClick={() => setOrderState('confirm')}
+                className={`px-2 py-0.5 text-xs font-bold rounded transition-colors ${
+                  isLong
+                    ? 'bg-green-600/30 text-green-400 hover:bg-green-600/50 border border-green-600/40'
+                    : 'bg-red-600/30 text-red-400 hover:bg-red-600/50 border border-red-600/40'
+                }`}
+              >
+                {isLong ? 'LONG' : 'SHORT'} {recLev}x
+              </button>
+            )}
+            {orderState === 'confirm' && (
+              <>
+                <span className='text-xs text-yellow-400'>{isLong ? 'LONG' : 'SHORT'} {recLev}x 진입?</span>
+                <button onClick={executeOrder} className='px-1.5 py-0.5 text-[10px] font-bold rounded bg-yellow-600/40 text-yellow-300 hover:bg-yellow-600/60 border border-yellow-600/50'>확인</button>
+                <button onClick={() => setOrderState('idle')} className='px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'>취소</button>
+              </>
+            )}
+            {orderState === 'loading' && <span className='text-xs text-zinc-400 animate-pulse'>주문 중...</span>}
+            {orderState === 'done' && <span className='text-xs text-green-400'>{orderMsg}</span>}
+            {orderState === 'error' && <span className='text-xs text-red-400'>{orderMsg}</span>}
+          </>
+        )}
+
+        {/* 자동매매 토글 */}
+        {settings?.envEnabled && (
           <button
             onClick={toggle}
             className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold transition-colors ${
@@ -285,8 +424,8 @@ export const BalanceHeader = memo(() => {
             <span className={`w-1.5 h-1.5 rounded-full ${settings.enabled ? 'bg-green-400' : 'bg-zinc-600'}`} />
             자동매매
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 });

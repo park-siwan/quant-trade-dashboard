@@ -1,6 +1,5 @@
-import { memo, useState, useCallback } from 'react';
+import { memo } from 'react';
 import { OpenPosition } from '@/lib/backtest-api';
-import { API_CONFIG } from '@/lib/config';
 
 const SIGNAL_TYPE_LABEL: Record<string, string> = {
   breakout: '돌파',
@@ -15,23 +14,12 @@ const REGIME_COLOR: Record<string, string> = {
   Sideways: 'text-yellow-400',
 };
 
-interface RetryInfo {
-  active: boolean;
-  attempt: number;
-  maxAttempts: number;
-  side: 'buy' | 'sell';
-  leverage: number;
-}
-
 interface OpenPositionCardProps {
   openPosition: OpenPosition | null;
   ticker: any;
   leverage?: number;
   winRate?: number; // 전략 승률 (0-100)
   maxConsecLoss?: number; // 실제 최대 연속 손실
-  tradingEnvEnabled?: boolean; // AUTO_TRADE_ENABLED from backend
-  retryInfo?: RetryInfo | null;
-  hasRealPosition?: boolean; // 바이빗에 실제 포지션 존재 여부
 }
 
 // 연패3회 시 DD ≤ 20% 를 목표로 하는 실용 레버리지
@@ -73,57 +61,7 @@ function calcComfortKelly(
 }
 
 export const OpenPositionCard: React.FC<OpenPositionCardProps> = memo(
-  ({ openPosition, ticker, leverage = 1, winRate, maxConsecLoss, tradingEnvEnabled, retryInfo, hasRealPosition }) => {
-    const [orderState, setOrderState] = useState<'idle' | 'confirm' | 'loading' | 'done' | 'error'>('idle');
-    const [orderMsg, setOrderMsg] = useState('');
-
-    const startOrder = useCallback(() => {
-      setOrderState('confirm');
-    }, []);
-
-    const executeOrder = useCallback(async () => {
-      if (!openPosition || orderState !== 'confirm') return;
-
-      setOrderState('loading');
-      try {
-        const res = await fetch(`${API_CONFIG.BASE_URL}/trading/manual-order`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            side: openPosition.direction === 'long' ? 'buy' : 'sell',
-            entryPrice: openPosition.entryPrice,
-            tp: openPosition.tp,
-            sl: openPosition.sl,
-            leverage: recLev,
-          }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          setOrderState('done');
-          setOrderMsg(`PostOnly ${data.order.side.toUpperCase()} 시도 중...`);
-        } else {
-          setOrderState('error');
-          setOrderMsg(data.message || 'Failed');
-        }
-      } catch (e: any) {
-        setOrderState('error');
-        setOrderMsg(e.message);
-      }
-      setTimeout(() => { setOrderState('idle'); setOrderMsg(''); }, 4000);
-    }, [openPosition, orderState]);
-
-    const cancelRetry = useCallback(async () => {
-      try {
-        await fetch(`${API_CONFIG.BASE_URL}/trading/cancel`, { method: 'POST' });
-      } catch {}
-      setOrderState('idle');
-      setOrderMsg('');
-    }, []);
-
-    const cancelOrder = useCallback(() => {
-      setOrderState('idle');
-    }, []);
-
+  ({ openPosition, ticker, leverage = 1, winRate, maxConsecLoss }) => {
     if (!openPosition) {
       return (
         <div className='mb-3 px-3 py-2 rounded-lg border bg-zinc-900/50 border-zinc-700/50'>
@@ -217,67 +155,6 @@ export const OpenPositionCard: React.FC<OpenPositionCardProps> = memo(
           </div>
         )}
 
-        {/* 매매 실행 버튼 */}
-        <div className='flex items-center gap-2 mt-1.5'>
-          {retryInfo?.active ? (
-            <>
-              <span className='text-[10px] text-cyan-400 animate-pulse'>
-                {retryInfo.leverage}x 진입 시도 중 ({retryInfo.attempt}/{retryInfo.maxAttempts})
-              </span>
-              <button
-                onClick={cancelRetry}
-                className='px-2 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
-              >
-                취소
-              </button>
-            </>
-          ) : hasRealPosition ? (
-            <span className='text-[10px] text-zinc-500'>진입 완료</span>
-          ) : (
-            <>
-              {orderState === 'idle' && (
-                <button
-                  onClick={startOrder}
-                  className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${
-                    isLong
-                      ? 'bg-green-600/30 text-green-400 hover:bg-green-600/50 border border-green-600/40'
-                      : 'bg-red-600/30 text-red-400 hover:bg-red-600/50 border border-red-600/40'
-                  }`}
-                >
-                  매매 실행
-                </button>
-              )}
-              {orderState === 'confirm' && (
-                <>
-                  <span className='text-[10px] text-yellow-400'>
-                    {isLong ? 'LONG' : 'SHORT'} {recLev}x 진입?
-                  </span>
-                  <button
-                    onClick={executeOrder}
-                    className='px-2 py-0.5 text-[10px] font-bold rounded bg-yellow-600/40 text-yellow-300 hover:bg-yellow-600/60 border border-yellow-600/50'
-                  >
-                    확인
-                  </button>
-                  <button
-                    onClick={cancelOrder}
-                    className='px-2 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
-                  >
-                    취소
-                  </button>
-                </>
-              )}
-              {orderState === 'loading' && (
-                <span className='text-[10px] text-zinc-400 animate-pulse'>주문 중...</span>
-              )}
-              {orderState === 'done' && (
-                <span className='text-[10px] text-green-400'>{orderMsg}</span>
-              )}
-              {orderState === 'error' && (
-                <span className='text-[10px] text-red-400'>{orderMsg}</span>
-              )}
-            </>
-          )}
-        </div>
       </div>
     );
   }
