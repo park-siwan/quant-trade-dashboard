@@ -114,7 +114,7 @@ export const SignalThresholdMonitor = memo(({ timeframe }: SignalThresholdMonito
         <div className='flex items-center gap-1.5 flex-1 min-w-0 flex-wrap'>
           <Chip
             ok={rdRsi}
-            label={`RSI ${rsi?.toFixed(0) ?? '—'}`}
+            label={`RSI ${rsi?.toFixed(0) ?? '—'}/${THRESH.RSI_OVERSOLD}·${THRESH.RSI_OVERBOUGHT}`}
             detail={`≤${THRESH.RSI_OVERSOLD} 과매도 또는 ≥${THRESH.RSI_OVERBOUGHT} 과매수 구간 필요`}
           />
           <Chip
@@ -145,17 +145,17 @@ export const SignalThresholdMonitor = memo(({ timeframe }: SignalThresholdMonito
         <div className='flex items-center gap-1.5 flex-1 min-w-0 flex-wrap'>
           <Chip
             ok={vbVol}
-            label={`Vol ${volumeRatio?.toFixed(1) ?? '—'}x`}
+            label={`Vol ${volumeRatio?.toFixed(1) ?? '—'}/${THRESH.VOL_MULT}x`}
             detail={`거래량 ≥${THRESH.VOL_MULT}x (20봉 평균 대비)`}
           />
           <Chip
             ok={vbAdx}
-            label={`ADX ${adx?.toFixed(0) ?? '—'}`}
+            label={`ADX ${adx?.toFixed(0) ?? '—'}/${THRESH.ADX_TREND}`}
             detail={`ADX ≥${THRESH.ADX_TREND} (강한 추세)`}
           />
           <Chip
             ok={vbEma}
-            label={`EMA ${fmtDist}`}
+            label={`EMA ${fmtDist}/±${THRESH.EMA_MAX_DIST}%`}
             detail={`EMA200 거리 ±${THRESH.EMA_MAX_DIST}% 이내 (위든 아래든 1% 이내여야 통과)`}
           />
           <Chip
@@ -176,7 +176,7 @@ export const SignalThresholdMonitor = memo(({ timeframe }: SignalThresholdMonito
         <div className='flex items-center gap-1.5 flex-1 min-w-0'>
           <Chip
             ok={mrAtr}
-            label={`ATR P${atrPct ?? '—'}`}
+            label={`ATR P${atrPct ?? '—'}/<P${THRESH.ATR_MAX_PCT}`}
             detail={`ATR 백분위 < P${THRESH.ATR_MAX_PCT} (저변동성 구간)`}
           />
           <Chip
