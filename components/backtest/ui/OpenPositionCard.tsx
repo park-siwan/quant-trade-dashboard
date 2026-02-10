@@ -16,7 +16,8 @@ const REGIME_COLOR: Record<string, string> = {
 
 interface OpenPositionCardProps {
   openPosition: OpenPosition | null;
-  ticker: any;
+  currentPrice?: number; // 실시간 가격 (ticker에서 직접 전달)
+  ticker?: any; // 하위호환
   leverage?: number;
   winRate?: number; // 전략 승률 (0-100)
   maxConsecLoss?: number; // 실제 최대 연속 손실
@@ -61,7 +62,7 @@ function calcComfortKelly(
 }
 
 export const OpenPositionCard: React.FC<OpenPositionCardProps> = memo(
-  ({ openPosition, ticker, leverage = 1, winRate, maxConsecLoss }) => {
+  ({ openPosition, currentPrice: currentPriceProp, ticker, leverage = 1, winRate, maxConsecLoss }) => {
     if (!openPosition) {
       return (
         <div className='mb-3 px-3 py-2 rounded-lg border bg-zinc-900/50 border-zinc-700/50'>
@@ -72,7 +73,7 @@ export const OpenPositionCard: React.FC<OpenPositionCardProps> = memo(
       );
     }
 
-    const currentPrice = ticker?.price || openPosition.currentPrice;
+    const currentPrice = currentPriceProp || ticker?.price || openPosition.currentPrice;
     const isLong = openPosition.direction === 'long';
     const pnlPercent = isLong
       ? ((currentPrice - openPosition.entryPrice) / openPosition.entryPrice) * 100 * leverage

@@ -152,16 +152,48 @@ export function useBacktestRunner(
           }
         });
 
-        // openPositions 업데이트
-        setAllOpenPositions(newOpenPositions);
+        // openPositions 업데이트 (안티-리페인팅: 새 데이터에 포지션이 없으면 기존 유지)
+        setAllOpenPositions(prev => {
+          const merged = new Map(prev);
+          // 새 포지션이 있으면 업데이트
+          for (const [strategy, pos] of newOpenPositions) {
+            merged.set(strategy, pos);
+          }
+          // 새 데이터에 없는 전략의 기존 포지션은 유지 (리페인팅 방지)
+          // 단, 새 데이터에서 해당 전략의 마지막 거래가 포지션 진입 이후면 → 청산된 것이므로 제거
+          for (const [strategy, existingPos] of prev) {
+            if (!newOpenPositions.has(strategy)) {
+              const trades = newTradesMap.get(strategy);
+              if (trades && trades.length > 0) {
+                const lastTrade = trades[trades.length - 1];
+                const lastTradeTime = new Date(lastTrade.exitTime || lastTrade.entryTime).getTime();
+                const posEntryTime = new Date(existingPos.entryTime).getTime();
+                if (lastTradeTime >= posEntryTime) {
+                  // 마지막 거래가 포지션 진입 이후 → 청산됨
+                  merged.delete(strategy);
+                  continue;
+                }
+              }
+              // 그 외: 기존 포지션 유지 (리페인팅 방지)
+            }
+          }
+          return merged;
+        });
         console.log('[useBacktestRunner] Open positions:', Array.from(newOpenPositions.entries()).map(([s, p]) => `${s}: ${p.direction}`));
 
         // strategyStats 업데이트
         setAllStrategyStats(newStrategyStats);
         console.log('[useBacktestRunner] Strategy stats:', Array.from(newStrategyStats.entries()).map(([s, st]) => `${s}: ${st.totalTrades}회`));
 
-        // tradesMap 업데이트
-        setAllTradesMap(newTradesMap);
+        // tradesMap 업데이트 (안티-리페인팅: 새 데이터에 거래가 없으면 기존 유지)
+        setAllTradesMap(prev => {
+          const merged = new Map(prev);
+          for (const [strategy, trades] of newTradesMap) {
+            merged.set(strategy, trades);
+          }
+          // 새 데이터에 없는 전략의 기존 거래는 유지
+          return merged;
+        });
         console.log('[useBacktestRunner] Trades loaded:', Array.from(newTradesMap.entries()).map(([s, t]) => `${s}: ${t.length}개`));
 
         // 참조 안정화: rollingSharpeData

@@ -1153,7 +1153,7 @@ function RealtimeChart() {
         {/* 2. 열린 포지션 카드 */}
         <OpenPositionCard
           openPosition={openPosition}
-          ticker={ticker}
+          currentPrice={tickerData?.price}
           leverage={leverage}
           winRate={allStrategyStats.get(selectedStrategy?.strategy || '')?.winRate}
           maxConsecLoss={(() => {
