@@ -250,6 +250,7 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
 
   const [orderState, setOrderState] = useState<'idle' | 'confirm' | 'loading' | 'done' | 'error'>('idle');
   const [orderMsg, setOrderMsg] = useState('');
+  const [closeConfirm, setCloseConfirm] = useState<'idle' | 'half' | 'full' | 'stop'>('idle');
 
   // WS 상태 업데이트 반영
   useEffect(() => {
@@ -373,13 +374,24 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
                 </span>
                 <button onClick={cancelHalfClose} className='px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'>취소</button>
               </>
+            ) : closeConfirm !== 'idle' ? (
+              <>
+                <span className='text-xs text-yellow-400'>
+                  {closeConfirm === 'half' ? '반익반본' : closeConfirm === 'full' ? '완익' : '손절'} 실행?
+                </span>
+                <button
+                  onClick={() => { setCloseConfirm('idle'); closeConfirm === 'half' ? halfClose() : closePosition(); }}
+                  className='px-1.5 py-0.5 text-[10px] font-bold rounded bg-yellow-600/40 text-yellow-300 hover:bg-yellow-600/60 border border-yellow-600/50'
+                >확인</button>
+                <button onClick={() => setCloseConfirm('idle')} className='px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'>취소</button>
+              </>
             ) : liveBalance.pnl > 0 ? (
               <>
-                <button onClick={halfClose} className='px-1.5 py-0.5 text-[10px] rounded bg-cyan-900/40 text-cyan-400 hover:bg-cyan-900/60 border border-cyan-800/50'>반익반본</button>
-                <button onClick={closePosition} className='px-1.5 py-0.5 text-[10px] rounded bg-green-900/40 text-green-400 hover:bg-green-900/60 border border-green-800/50'>완익</button>
+                <button onClick={() => setCloseConfirm('half')} className='px-1.5 py-0.5 text-[10px] rounded bg-cyan-900/40 text-cyan-400 hover:bg-cyan-900/60 border border-cyan-800/50'>반익반본</button>
+                <button onClick={() => setCloseConfirm('full')} className='px-1.5 py-0.5 text-[10px] rounded bg-green-900/40 text-green-400 hover:bg-green-900/60 border border-green-800/50'>완익</button>
               </>
             ) : (
-              <button onClick={closePosition} className='px-1.5 py-0.5 text-[10px] rounded bg-red-900/40 text-red-400 hover:bg-red-900/60 border border-red-800/50'>손절</button>
+              <button onClick={() => setCloseConfirm('stop')} className='px-1.5 py-0.5 text-[10px] rounded bg-red-900/40 text-red-400 hover:bg-red-900/60 border border-red-800/50'>손절</button>
             )}
           </>
         ) : openPosition && (
