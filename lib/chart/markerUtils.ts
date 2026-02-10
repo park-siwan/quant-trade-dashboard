@@ -109,6 +109,13 @@ export function colorizeCandles(
   });
 }
 
+// 신호 타입별 마커 텍스트
+const SIGNAL_TYPE_TEXT: Record<string, string> = {
+  breakout: '⚡',
+  divergence: '↩',
+  mean_reversion: '♻',
+};
+
 /**
  * 백테스트 거래 마커 생성
  */
@@ -138,6 +145,7 @@ export function generateBacktestMarkers(
 
     // 진입 마커 (롱: 밝은 초록 화살표, 숏: 밝은 빨강 화살표)
     if (entryTime >= minCandleTime && entryTime <= maxCandleTime) {
+      const signalText = SIGNAL_TYPE_TEXT[trade.signalType || ''] || '';
       markers.push(createSpacer(entryTime, isLong ? 'belowBar' : 'aboveBar'));
       markers.push({
         time: entryTime as Time,
@@ -145,6 +153,7 @@ export function generateBacktestMarkers(
         color: isLong ? '#22c55e' : '#ef4444',
         shape: isLong ? 'arrowUp' : 'arrowDown',
         size: CHART.MARKER_SIZE_ARROW,
+        ...(signalText && { text: signalText }),
       } as SeriesMarker<Time>);
       tradeMap.set(entryTime, { trade, type: 'entry' });
     }

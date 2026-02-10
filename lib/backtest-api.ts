@@ -100,6 +100,7 @@ export interface TradeResult {
   indicator: string;
   divergenceStrength: number;
   exitReason?: 'TP' | 'SL';  // 청산 사유
+  signalType?: 'default' | 'breakout' | 'divergence' | 'mean_reversion';
 }
 
 export interface EquityPoint {
