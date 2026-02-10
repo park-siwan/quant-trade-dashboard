@@ -150,6 +150,23 @@ export interface RealtimeDivergenceData {
   strategy?: string;
 }
 
+export interface IndicatorSnapshot {
+  symbol: string;
+  timeframe: string;
+  timestamp: number;
+  price: number;
+  rsi: number | null;
+  adx: number | null;
+  plusDi: number | null;
+  minusDi: number | null;
+  atr: number | null;
+  atrPct: number | null;
+  ema50: number | null;
+  ema200: number | null;
+  volumeRatio: number | null;
+  regime: 'BULL' | 'BEAR' | 'SIDEWAYS';
+}
+
 // ==================== Context Types ====================
 
 // 1. Ticker Context (가장 빈번하게 업데이트)
@@ -180,6 +197,7 @@ interface SocketContextValue {
   tradingStatus: TradingStatus | null;
   divergenceData: RealtimeDivergenceData | null;
   divergenceHistory: RealtimeDivergenceData[];
+  indicatorSnapshot: IndicatorSnapshot | null;
   currentSymbol: string;
   wakeUpCounter: number;
   subscribeKline: (timeframe: string) => void;
@@ -209,6 +227,7 @@ const SocketContext = createContext<SocketContextValue>({
   tradingStatus: null,
   divergenceData: null,
   divergenceHistory: [],
+  indicatorSnapshot: null,
   currentSymbol: '',
   wakeUpCounter: 0,
   subscribeKline: () => {},
@@ -247,6 +266,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [tradingStatus, setTradingStatus] = useState<TradingStatus | null>(null);
   const [divergenceData, setDivergenceData] = useState<RealtimeDivergenceData | null>(null);
   const [divergenceHistory, setDivergenceHistory] = useState<RealtimeDivergenceData[]>([]);
+  const [indicatorSnapshot, setIndicatorSnapshot] = useState<IndicatorSnapshot | null>(null);
   const [currentSymbol, setCurrentSymbol] = useState<string>('');
   const currentSymbolRef = useRef<string>('');
   const [wakeUpCounter, setWakeUpCounter] = useState(0);
@@ -414,6 +434,13 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       });
     });
 
+    // Indicator snapshot (BinanceStreamService에서 매 최종 캔들마다 전송)
+    socket.on('data:indicators', (data: IndicatorSnapshot) => {
+      const normalizedSymbol = data.symbol?.replace('/', '');
+      if (!normalizedSymbol || normalizedSymbol !== currentSymbolRef.current) return;
+      setIndicatorSnapshot(data);
+    });
+
     socket.on('connect_error', () => {
       console.warn('[Socket] Connection error');
     });
@@ -510,6 +537,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     tradingStatus,
     divergenceData,
     divergenceHistory,
+    indicatorSnapshot,
     currentSymbol,
     wakeUpCounter,
     subscribeKline,
@@ -529,6 +557,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     tradingStatus,
     divergenceData,
     divergenceHistory,
+    indicatorSnapshot,
     currentSymbol,
     wakeUpCounter,
     subscribeKline,

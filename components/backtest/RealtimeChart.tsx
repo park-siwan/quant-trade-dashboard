@@ -36,6 +36,7 @@ import { SettingsPanel } from './ui/SettingsPanel';
 import { OptimizeComparisonCard } from './ui/OptimizeComparisonCard';
 import { useStrategyOptimize } from '@/hooks/useStrategyOptimize';
 import { StatisticsHeader, BalanceHeader } from './ui/StatisticsHeader';
+import { SignalThresholdMonitor } from './ui/SignalThresholdMonitor';
 import { StrategyMiniChart } from './ui/StrategyMiniChart';
 
 const getOrchestratorDefaults = () => getDefaultParams('orchestrator');
@@ -1134,6 +1135,7 @@ function RealtimeChart() {
             return max;
           })()}
         />
+        <SignalThresholdMonitor timeframe={timeframe} />
         {/* 설정 패널 (헤더 아래 드롭다운) */}
         <SettingsPanel
           show={isSettingsOpen}
