@@ -383,6 +383,7 @@ function RealtimeChart() {
     isChangingStrategyRef,
     updateSeriesMarkers,
     tradeMapRef,
+    chartKey,
   });
 
   // 다음 캔들까지 카운트다운 타이머
@@ -807,13 +808,13 @@ function RealtimeChart() {
         const isLong = openPosition.direction === 'long';
         coloredCandle = {
           ...newCandle,
-          color: isLong ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+          color: isLong ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)',
           borderColor: isLong
-            ? 'rgba(34, 197, 94, 0.25)'
-            : 'rgba(239, 68, 68, 0.25)',
+            ? 'rgba(34, 197, 94, 0.4)'
+            : 'rgba(239, 68, 68, 0.4)',
           wickColor: isLong
-            ? 'rgba(34, 197, 94, 0.18)'
-            : 'rgba(239, 68, 68, 0.18)',
+            ? 'rgba(34, 197, 94, 0.3)'
+            : 'rgba(239, 68, 68, 0.3)',
         } as CandlestickData;
       }
     }

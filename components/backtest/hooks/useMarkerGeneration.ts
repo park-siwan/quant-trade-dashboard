@@ -37,6 +37,7 @@ interface UseMarkerGenerationProps {
   isChangingStrategyRef: MutableRefObject<boolean>;
   updateSeriesMarkers: (markers: SeriesMarker<Time>[]) => void;
   tradeMapRef: MutableRefObject<Map<number, { trade?: TradeResult; skipped?: SkippedSignal; type: 'entry' | 'exit' | 'skipped' }>>;
+  chartKey?: number; // 차트 재생성 시 색상 재적용 트리거
 }
 
 /**
@@ -60,6 +61,7 @@ export function useMarkerGeneration({
   isChangingStrategyRef,
   updateSeriesMarkers,
   tradeMapRef,
+  chartKey,
 }: UseMarkerGenerationProps) {
   // 이전 상태 추적 (불필요한 차트 업데이트 방지)
   const prevCandlesLengthRef = useRef<number>(0);
@@ -68,6 +70,7 @@ export function useMarkerGeneration({
   const prevIsBacktestRunningRef = useRef<boolean>(false);
   const prevSkippedCountRef = useRef<number>(0);
   const prevDivergenceCountRef = useRef<number>(0);
+  const prevChartKeyRef = useRef<number | undefined>(undefined);
 
   // 마커 업데이트 + 거래 구간 캔들 색상 변경
   useEffect(() => {
@@ -105,8 +108,12 @@ export function useMarkerGeneration({
     const tradesChanged = backtestTrades.length !== prevTradesCountRef.current;
     const positionChanged = openPosition?.entryTime !== prevOpenPositionRef.current?.entryTime;
 
-    // 캔들 개수, 거래 수, 포지션 변경 시 setData 호출 (캔들 색상 적용)
-    if (candlesChanged || tradesChanged || positionChanged) {
+    // chartKey 변경 = 차트 재생성 → 반드시 재색칠 필요 (포커스 복귀 시)
+    const chartRecreated = chartKey !== prevChartKeyRef.current;
+    if (chartRecreated) prevChartKeyRef.current = chartKey;
+
+    // 캔들 개수, 거래 수, 포지션 변경, 차트 재생성 시 setData 호출
+    if (candlesChanged || tradesChanged || positionChanged || chartRecreated) {
       candleSeriesRef.current.setData(coloredCandles);
       prevCandlesLengthRef.current = candles.length;
 
@@ -220,6 +227,7 @@ export function useMarkerGeneration({
     isChangingStrategyRef,
     updateSeriesMarkers,
     tradeMapRef,
+    chartKey, // 차트 재생성 시 색상 재적용
     // 주의: 실제 배열 데이터(backtestTrades, candles 등)는 의존성에서 제외
     // -> 길이/특정 속성 변화만 추적하여 불필요한 재실행 방지
     // -> 하지만 effect 내부에서는 props를 통해 최신 데이터 접근 가능
