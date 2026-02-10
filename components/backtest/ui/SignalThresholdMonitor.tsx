@@ -156,7 +156,7 @@ export const SignalThresholdMonitor = memo(({ timeframe }: SignalThresholdMonito
           <Chip
             ok={vbEma}
             label={`EMA ${fmtDist}`}
-            detail={`EMA200 거리 ≤${THRESH.EMA_MAX_DIST}% (가격이 EMA 근처)`}
+            detail={`EMA200 거리 ±${THRESH.EMA_MAX_DIST}% 이내 (위든 아래든 1% 이내여야 통과)`}
           />
           <Chip
             ok={vbRegime}
