@@ -91,16 +91,16 @@ export function colorizeCandles(
       if (tradeInfo.isLong) {
         return {
           ...candle,
-          color: 'rgba(34, 197, 94, 0.12)', // 연한 초록 (롱)
-          borderColor: 'rgba(34, 197, 94, 0.25)',
-          wickColor: 'rgba(34, 197, 94, 0.18)',
+          color: 'rgba(34, 197, 94, 0.25)', // 연한 초록 (롱)
+          borderColor: 'rgba(34, 197, 94, 0.4)',
+          wickColor: 'rgba(34, 197, 94, 0.3)',
         };
       } else {
         return {
           ...candle,
-          color: 'rgba(239, 68, 68, 0.12)', // 연한 빨강 (숏)
-          borderColor: 'rgba(239, 68, 68, 0.25)',
-          wickColor: 'rgba(239, 68, 68, 0.18)',
+          color: 'rgba(239, 68, 68, 0.25)', // 연한 빨강 (숏)
+          borderColor: 'rgba(239, 68, 68, 0.4)',
+          wickColor: 'rgba(239, 68, 68, 0.3)',
         };
       }
     }

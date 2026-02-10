@@ -1064,7 +1064,7 @@ function RealtimeChart() {
       });
       priceLinesRef.current.push(slLine);
     }
-  }, [openPosition?.entryTime, selectedStrategy?.id]); // 포지션 변경 또는 전략 변경 시에만 업데이트
+  }, [openPosition?.entryTime, selectedStrategy?.id, chartKey]); // 포지션/전략/차트 재생성 시 업데이트
 
   // 거래 히스토리 정렬 메모이제이션 (매 렌더마다 정렬 방지)
   const sortedTrades = useMemo(() => {

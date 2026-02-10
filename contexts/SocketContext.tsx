@@ -114,6 +114,7 @@ export interface TradingStatus {
     side: 'buy' | 'sell';
     entryPrice: number;
     amount: number;
+    leverage: number;
     tp: number;
     sl: number;
     openedAt: number;

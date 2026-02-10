@@ -1,5 +1,5 @@
-import { memo, useState, useEffect, useCallback } from 'react';
-import { useSocket, type TradingStatus } from '@/contexts/SocketContext';
+import { memo, useState, useEffect, useCallback, useMemo } from 'react';
+import { useSocket, useSocketTicker, type TradingStatus } from '@/contexts/SocketContext';
 import { API_CONFIG } from '@/lib/config';
 
 interface StatisticsHeaderProps {
@@ -209,6 +209,7 @@ function useAutoTradeSettings() {
 
 export const BalanceHeader = memo(() => {
   const { balanceData, tradingStatus } = useSocket();
+  const { ticker } = useSocketTicker();
   const { settings, setSettings, toggle } = useAutoTradeSettings();
 
   // WS 상태 업데이트 반영
@@ -216,7 +217,27 @@ export const BalanceHeader = memo(() => {
     if (tradingStatus) setSettings(tradingStatus);
   }, [tradingStatus, setSettings]);
 
-  if (!balanceData) return null;
+  // 실시간 미실현 PnL 계산 (ticker 가격 기반)
+  const liveBalance = useMemo(() => {
+    if (!balanceData) return null;
+    const pos = settings?.activePosition || tradingStatus?.activePosition;
+    if (!pos || !ticker?.price) {
+      return { equity: balanceData.totalEquity, pnl: balanceData.unrealisedPnl, pnlPct: 0 };
+    }
+    const currentPrice = ticker.price;
+    const pnl = pos.side === 'buy'
+      ? (currentPrice - pos.entryPrice) * pos.amount
+      : (pos.entryPrice - currentPrice) * pos.amount;
+    // 순자산 = WS잔고(마지막 wallet 이벤트 기준) - WS미실현 + 실시간미실현
+    const equity = balanceData.totalEquity - balanceData.unrealisedPnl + pnl;
+    // ROI% = PnL / 증거금 (Bybit과 동일한 계산)
+    const leverage = pos.leverage || 50;
+    const initialMargin = pos.entryPrice * pos.amount / leverage;
+    const pnlPct = initialMargin > 0 ? (pnl / initialMargin) * 100 : 0;
+    return { equity, pnl, pnlPct };
+  }, [balanceData, settings?.activePosition, tradingStatus?.activePosition, ticker?.price]);
+
+  if (!balanceData || !liveBalance) return null;
 
   const hasActivity = settings?.pendingOrder || settings?.activePosition;
 
@@ -226,17 +247,18 @@ export const BalanceHeader = memo(() => {
         <span className='text-xs text-zinc-500'>Bybit</span>
         <div className='flex items-center gap-1'>
           <span className='text-xs text-zinc-400'>순자산</span>
-          <span className='text-xs font-mono text-yellow-400'>${balanceData.totalEquity.toFixed(2)}</span>
+          <span className='text-xs font-mono text-yellow-400'>${liveBalance.equity.toFixed(2)}</span>
         </div>
         <div className='flex items-center gap-1'>
           <span className='text-xs text-zinc-400'>가용</span>
           <span className='text-xs font-mono text-zinc-300'>${balanceData.availableBalance.toFixed(2)}</span>
         </div>
-        {balanceData.unrealisedPnl !== 0 && (
+        {liveBalance.pnl !== 0 && (
           <div className='flex items-center gap-1'>
             <span className='text-xs text-zinc-400'>미실현</span>
-            <span className={`text-xs font-mono ${balanceData.unrealisedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {balanceData.unrealisedPnl >= 0 ? '+' : ''}{balanceData.unrealisedPnl.toFixed(2)}
+            <span className={`text-xs font-mono ${liveBalance.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {liveBalance.pnl >= 0 ? '+' : ''}{liveBalance.pnl.toFixed(2)}
+              <span className='ml-1 opacity-70'>({liveBalance.pnlPct >= 0 ? '+' : ''}{liveBalance.pnlPct.toFixed(1)}%)</span>
             </span>
           </div>
         )}

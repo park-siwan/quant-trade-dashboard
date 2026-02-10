@@ -76,6 +76,42 @@ export function useRealtimeUpdates(
   // TP/SL로 퇴출된 포지션의 entryTime (세션 내에서만 유지)
   const exitedEntryTimeRef = useRef<string | null>(null);
 
+  // 전략 변경 시 openPosition 리셋 (다른 전략의 포지션이 남는 것 방지)
+  const prevStrategyRef = useRef<string>('');
+  useEffect(() => {
+    const stratType = selectedStrategy?.strategy || '';
+    if (prevStrategyRef.current && stratType !== prevStrategyRef.current) {
+      setOpenPosition(null);
+      exitedEntryTimeRef.current = null;
+    }
+    prevStrategyRef.current = stratType;
+  }, [selectedStrategy?.strategy]);
+
+  // 리페인팅 방지: 완료된 거래 누적 (백테스트 재실행 시 사라지지 않도록)
+  const persistentTradesRef = useRef<Map<string, TradeResult>>(new Map());
+  const persistentKeyRef = useRef<string>('');
+
+  /** 새 백테스트 결과를 기존 거래와 병합 (완료된 거래 보존) */
+  const mergeTrades = useCallback((newTrades: TradeResult[], key: string): TradeResult[] => {
+    // 전략/심볼/타임프레임 변경 시 리셋
+    if (key !== persistentKeyRef.current) {
+      persistentTradesRef.current.clear();
+      persistentKeyRef.current = key;
+    }
+
+    const map = persistentTradesRef.current;
+
+    // 새 결과의 거래를 추가/업데이트
+    for (const trade of newTrades) {
+      map.set(trade.entryTime, trade);
+    }
+
+    // entryTime 기준 정렬 후 반환
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(a.entryTime).getTime() - new Date(b.entryTime).getTime()
+    );
+  }, []);
+
   // 백테스트 실행 함수
   const loadBacktestTrades = useCallback(async (
     strategy: SavedOptimizeResult,
@@ -91,9 +127,10 @@ export function useRealtimeUpdates(
       const cached = backtestCacheRef.current.get(cacheKey);
       if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
         console.log('[Backtest] Using cached result for strategy:', startedForStrategyId);
-        setBacktestTrades(cached.trades);
+        const mergeKey = `${strategy.strategy}_${symbol}_${timeframe}`;
+        setBacktestTrades(mergeTrades(cached.trades, mergeKey));
         setSkippedSignals(cached.skippedSignals);
-        setOpenPosition(cached.openPosition);
+        if (cached.openPosition) setOpenPosition(cached.openPosition);
         setBacktestStats(cached.stats);
         setEquityCurve(cached.equityCurve);
         setLastBacktestTime(new Date(cached.timestamp));
@@ -179,18 +216,22 @@ export function useRealtimeUpdates(
         lastTrade: trades[trades.length - 1],
       });
 
-      // 상태 업데이트 (방어된 데이터 사용)
-      setBacktestTrades(trades);
+      // 상태 업데이트 (완료 거래 보존 + 새 결과 병합)
+      const mergeKey = `${strategy.strategy}_${symbol}_${timeframe}`;
+      setBacktestTrades(mergeTrades(trades, mergeKey));
       setSkippedSignals(result.skippedSignals || []);
-      // TP/SL로 퇴출된 포지션이 백테스트에서 다시 돌아오면 무시
+      // 리페인팅 방지: 포지션이 있으면 업데이트, 없으면 기존 유지
       const newPos = result.openPosition || null;
-      if (newPos && exitedEntryTimeRef.current === newPos.entryTime) {
-        console.log('[Backtest] Suppressing exited position:', newPos.entryTime);
-        setOpenPosition(null);
-      } else {
-        if (newPos) exitedEntryTimeRef.current = null; // 새 포지션이면 리셋
-        setOpenPosition(newPos);
+      if (newPos) {
+        if (exitedEntryTimeRef.current === newPos.entryTime) {
+          console.log('[Backtest] Suppressing exited position:', newPos.entryTime);
+          setOpenPosition(null);
+        } else {
+          exitedEntryTimeRef.current = null; // 새 포지션이면 리셋
+          setOpenPosition(newPos);
+        }
       }
+      // newPos === null이면 기존 openPosition 유지 (리페인팅 방지)
       setBacktestStats(result);
       setEquityCurve(result.equityCurve || []);
       setLastBacktestTime(new Date());
@@ -212,7 +253,7 @@ export function useRealtimeUpdates(
       setIsBacktestRunning(false);
       isChangingStrategyRef.current = false;
     }
-  }, [symbol, symbolSlashFormat, timeframe]);
+  }, [symbol, symbolSlashFormat, timeframe, mergeTrades]);
 
   // 전략/타임프레임 변경 시: 미리 로드된 데이터 우선 사용, 없으면 runBacktest 호출
   useEffect(() => {
@@ -221,30 +262,39 @@ export function useRealtimeUpdates(
     const strategyType = selectedStrategy.strategy || 'rsi_div';
 
     // 1순위: 미리 로드된 데이터 사용 (API 호출 없음)
-    if (preloadedTradesMap && preloadedTradesMap.has(strategyType)) {
-      const trades = preloadedTradesMap.get(strategyType) || [];
-      const openPos = preloadedOpenPositions?.get(strategyType) || null;
-      const stats = preloadedStats?.get(strategyType) || null;
+    if (preloadedTradesMap) {
+      if (preloadedTradesMap.has(strategyType)) {
+        const trades = preloadedTradesMap.get(strategyType) || [];
+        const openPos = preloadedOpenPositions?.get(strategyType) || null;
+        const stats = preloadedStats?.get(strategyType) || null;
 
-      console.log('[Backtest] Using pre-loaded data for strategy:', strategyType, 'trades:', trades.length, 'stats:', !!stats);
+        console.log('[Backtest] Using pre-loaded data for strategy:', strategyType, 'trades:', trades.length, 'stats:', !!stats);
 
-      setBacktestTrades(trades);
-      // TP/SL로 퇴출된 포지션 필터링
-      if (openPos && exitedEntryTimeRef.current === openPos.entryTime) {
-        setOpenPosition(null);
+        const mergeKey = `${strategyType}_${symbol}_${timeframe}`;
+        setBacktestTrades(mergeTrades(trades, mergeKey));
+        // 리페인팅 방지: 포지션이 있으면 업데이트, 없으면 기존 유지 (TP/SL 감지로만 제거)
+        if (openPos) {
+          if (exitedEntryTimeRef.current === openPos.entryTime) {
+            setOpenPosition(null);
+          } else {
+            setOpenPosition(openPos);
+          }
+        }
+        // openPos === null이면 기존 openPosition 유지 (백테스트 리페인팅으로 사라지는 것 방지)
+        setBacktestStats(stats);  // 통계도 설정 (헤더 표시용)
+        setSkippedSignals([]); // pre-loaded에서는 skippedSignals 없음
+        setLastBacktestTime(new Date());
+        setIsBacktestRunning(false);
+        isChangingStrategyRef.current = false;
       } else {
-        setOpenPosition(openPos);
+        // preload 시스템 활성 but 아직 미로딩 → 대기 (API fallback 방지: 리페인팅 원인)
+        console.log('[Backtest] Waiting for pre-loaded data for:', strategyType);
       }
-      setBacktestStats(stats);  // 통계도 설정 (헤더 표시용)
-      setSkippedSignals([]); // pre-loaded에서는 skippedSignals 없음
-      setLastBacktestTime(new Date());
-      setIsBacktestRunning(false);
-      isChangingStrategyRef.current = false;
       return;
     }
 
-    // 2순위: 캐시 또는 API 호출 (fallback)
-    console.log('[Backtest] No pre-loaded data, calling runBacktest for:', strategyType);
+    // preload 시스템 없을 때만 API fallback
+    console.log('[Backtest] No preload system, calling runBacktest for:', strategyType);
     loadBacktestTrades(selectedStrategy);
   }, [selectedStrategy, timeframe, symbol, candlesLength, isLoadingCandles, loadBacktestTrades, preloadedTradesMap, preloadedOpenPositions, preloadedStats]);
 
