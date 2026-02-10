@@ -332,7 +332,7 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
   const isLong = openPosition?.direction === 'long';
 
   return (
-    <div className='flex items-center justify-between px-4 py-1 bg-zinc-900/60 rounded-lg'>
+    <div className='flex items-center justify-between px-4 py-1 mt-1 bg-zinc-900/60 rounded-lg'>
       <div className='flex items-center gap-4'>
         <span className='text-xs text-zinc-500'>Bybit</span>
         <div className='flex items-center gap-1'>
@@ -366,11 +366,6 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
           </>
         ) : hasRealPosition ? (
           <>
-            <span className='text-xs font-mono text-yellow-400'>
-              {settings?.activePosition
-                ? `${settings.activePosition.side.toUpperCase()} @$${settings.activePosition.entryPrice.toFixed(0)}`
-                : '포지션'}
-            </span>
             {halfCloseInfo?.active ? (
               <>
                 <span className='text-xs text-cyan-400 animate-pulse'>
@@ -378,10 +373,14 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
                 </span>
                 <button onClick={cancelHalfClose} className='px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'>취소</button>
               </>
-            ) : liveBalance.pnl > 0 && (
-              <button onClick={halfClose} className='px-1.5 py-0.5 text-[10px] rounded bg-cyan-900/40 text-cyan-400 hover:bg-cyan-900/60 border border-cyan-800/50'>반익반본</button>
+            ) : liveBalance.pnl > 0 ? (
+              <>
+                <button onClick={halfClose} className='px-1.5 py-0.5 text-[10px] rounded bg-cyan-900/40 text-cyan-400 hover:bg-cyan-900/60 border border-cyan-800/50'>반익반본</button>
+                <button onClick={closePosition} className='px-1.5 py-0.5 text-[10px] rounded bg-green-900/40 text-green-400 hover:bg-green-900/60 border border-green-800/50'>완익</button>
+              </>
+            ) : (
+              <button onClick={closePosition} className='px-1.5 py-0.5 text-[10px] rounded bg-red-900/40 text-red-400 hover:bg-red-900/60 border border-red-800/50'>손절</button>
             )}
-            <button onClick={closePosition} className='px-1.5 py-0.5 text-[10px] rounded bg-red-900/40 text-red-400 hover:bg-red-900/60 border border-red-800/50'>청산</button>
           </>
         ) : openPosition && (
           <>

@@ -1029,9 +1029,8 @@ function RealtimeChart() {
     });
     priceLinesRef.current = [];
 
-    // openPosition이 있을 때만 라인 그리기
+    // 백테스트 openPosition 라인
     if (openPosition) {
-      // Entry 라인 (포지션 방향에 따른 색상)
       const isLong = openPosition.direction === 'long';
       const entryLine = candleSeries.createPriceLine({
         price: openPosition.entryPrice,
@@ -1043,7 +1042,6 @@ function RealtimeChart() {
       });
       priceLinesRef.current.push(entryLine);
 
-      // TP 라인 (어두운 녹색 점선)
       const tpLine = candleSeries.createPriceLine({
         price: openPosition.tp,
         color: '#16a34a',
@@ -1054,7 +1052,6 @@ function RealtimeChart() {
       });
       priceLinesRef.current.push(tpLine);
 
-      // SL 라인 (어두운 빨간색 점선)
       const slLine = candleSeries.createPriceLine({
         price: openPosition.sl,
         color: '#dc2626',
@@ -1065,7 +1062,44 @@ function RealtimeChart() {
       });
       priceLinesRef.current.push(slLine);
     }
-  }, [openPosition?.entryTime, selectedStrategy?.id, chartKey]); // 포지션/전략/차트 재생성 시 업데이트
+
+    // 실시간 Bybit 포지션 라인 (항상 표시)
+    const realPos = tradingStatus?.activePosition;
+    if (realPos) {
+      const entryLine = candleSeries.createPriceLine({
+        price: realPos.entryPrice,
+        color: '#eab308',
+        lineWidth: 2,
+        lineStyle: LineStyle.Solid,
+        axisLabelVisible: true,
+        title: '실거래',
+      });
+      priceLinesRef.current.push(entryLine);
+
+      if (realPos.tp > 0) {
+        const tpLine = candleSeries.createPriceLine({
+          price: realPos.tp,
+          color: '#16a34a',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: 'TP',
+        });
+        priceLinesRef.current.push(tpLine);
+      }
+      if (realPos.sl > 0) {
+        const slLine = candleSeries.createPriceLine({
+          price: realPos.sl,
+          color: '#dc2626',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: 'SL',
+        });
+        priceLinesRef.current.push(slLine);
+      }
+    }
+  }, [openPosition?.entryTime, selectedStrategy?.id, chartKey, tradingStatus?.activePosition?.entryPrice]);
 
   // 거래 히스토리 정렬 메모이제이션 (매 렌더마다 정렬 방지)
   const sortedTrades = useMemo(() => {
