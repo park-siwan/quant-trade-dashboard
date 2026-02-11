@@ -62,10 +62,11 @@ function computeBollingerBands(
   candles: CandlestickData[],
   period = 20,
   mult = 2,
-): { upper: { time: Time; value: number }[]; middle: { time: Time; value: number }[]; lower: { time: Time; value: number }[] } {
-  const upper: { time: Time; value: number }[] = [];
-  const middle: { time: Time; value: number }[] = [];
-  const lower: { time: Time; value: number }[] = [];
+) {
+  const upper: { time: Time; value: number; color?: string }[] = [];
+  const middle: { time: Time; value: number; color?: string }[] = [];
+  const lower: { time: Time; value: number; color?: string }[] = [];
+  const bbwHistory: number[] = [];
 
   for (let i = period - 1; i < candles.length; i++) {
     let sum = 0;
@@ -75,11 +76,19 @@ function computeBollingerBands(
     let sqSum = 0;
     for (let j = i - period + 1; j <= i; j++) sqSum += ((candles[j] as any).close - sma) ** 2;
     const std = Math.sqrt(sqSum / period);
+    const bbw = sma > 0 ? (2 * mult * std) / sma : 0;
+    bbwHistory.push(bbw);
+
+    // BBW 백분위: 낮을수록 저변동성 → 평균회귀 유리 → 밝게
+    const lookback = Math.min(bbwHistory.length, 200);
+    const recent = bbwHistory.slice(-lookback);
+    const rank = recent.filter(v => v <= bbw).length / lookback;
+    const alpha = rank < 0.25 ? 0.65 : rank < 0.5 ? 0.35 : 0.12;
 
     const t = candles[i].time;
-    upper.push({ time: t, value: sma + mult * std });
-    middle.push({ time: t, value: sma });
-    lower.push({ time: t, value: sma - mult * std });
+    upper.push({ time: t, value: sma + mult * std, color: `rgba(239, 68, 68, ${alpha})` });
+    middle.push({ time: t, value: sma, color: `rgba(161, 161, 170, ${alpha})` });
+    lower.push({ time: t, value: sma - mult * std, color: `rgba(59, 130, 246, ${alpha})` });
   }
   return { upper, middle, lower };
 }
@@ -193,13 +202,18 @@ function detectDivergences(
   return { pivotLows, pivotHighs, divLines };
 }
 
-// ── 돌파 레벨 계산 (20봉 고/저점) ──
+// ── 돌파 레벨 계산 (20봉 고/저점) + 거래량 백분위 반전 색상 ──
+// 저거래량(하위%) = 못뚫음 = 강한 저항 = 밝게
+// 고거래량(상위%) = 돌파 압력 = 저항 약화 = 희미
 function computeBreakoutLevels(
   candles: CandlestickData[],
   period = 20,
-): { high: { time: Time; value: number }[]; low: { time: Time; value: number }[] } {
-  const high: { time: Time; value: number }[] = [];
-  const low: { time: Time; value: number }[] = [];
+) {
+  const high: { time: Time; value: number; color?: string }[] = [];
+  const low: { time: Time; value: number; color?: string }[] = [];
+  const vrHistory: number[] = [];
+  const alphaHistory: number[] = [];
+  const SMOOTH = 10; // 알파 EMA 스무딩 윈도우
 
   for (let i = period; i < candles.length; i++) {
     let maxH = -Infinity;
@@ -210,9 +224,31 @@ function computeBreakoutLevels(
       if (h > maxH) maxH = h;
       if (l < minL) minL = l;
     }
+
+    // 거래량 비율 (현재 / 20봉 평균)
+    let volSum = 0;
+    for (let j = i - period; j < i; j++) volSum += (candles[j] as any).volume ?? 0;
+    const avgVol = volSum / period;
+    const curVol = (candles[i] as any).volume ?? 0;
+    const vr = avgVol > 0 ? curVol / avgVol : 1;
+    vrHistory.push(vr);
+
+    // 백분위 기반 상대평가 (최근 200봉 내 순위)
+    const lookback = Math.min(vrHistory.length, 200);
+    const recent = vrHistory.slice(-lookback);
+    const rank = recent.filter(v => v <= vr).length / lookback;
+
+    // 세제곱 곡선 + EMA 스무딩 (저거래량=밝고, 고거래량=거의 투명)
+    const t1 = 1 - rank;
+    const rawAlpha = 0.03 + 0.97 * t1 * t1 * t1;
+    const k = 2 / (SMOOTH + 1);
+    const prev = alphaHistory.length > 0 ? alphaHistory[alphaHistory.length - 1] : rawAlpha;
+    const alpha = rawAlpha * k + prev * (1 - k);
+    alphaHistory.push(alpha);
+
     const t = candles[i].time;
-    high.push({ time: t, value: maxH });
-    low.push({ time: t, value: minL });
+    high.push({ time: t, value: maxH, color: `rgba(34, 197, 94, ${alpha.toFixed(3)})` });
+    low.push({ time: t, value: minL, color: `rgba(239, 68, 68, ${alpha.toFixed(3)})` });
   }
   return { high, low };
 }
@@ -284,6 +320,7 @@ function RealtimeChart() {
     subscribeKline,
     wakeUpCounter,
     tradingStatus,
+    indicatorSnapshot,
   } = useSocket();
 
   // ticker는 ref로 저장하여 리렌더 없이 접근
@@ -1170,20 +1207,22 @@ function RealtimeChart() {
 
     // 돌파 레벨 (20봉 고/저점)
     const boHigh = chart.addSeries(LineSeries, {
-      color: 'rgba(34, 197, 94, 0.35)',
+      color: 'rgba(34, 197, 94, 0.4)',  // per-point color의 폴백
       lineWidth: 1,
       lineStyle: LineStyle.Solid,
       lastValueVisible: false,
       priceLineVisible: false,
       crosshairMarkerVisible: false,
+      pointMarkersVisible: false,
     });
     const boLow = chart.addSeries(LineSeries, {
-      color: 'rgba(239, 68, 68, 0.35)',
+      color: 'rgba(239, 68, 68, 0.4)',  // per-point color의 폴백
       lineWidth: 1,
       lineStyle: LineStyle.Solid,
       lastValueVisible: false,
       priceLineVisible: false,
       crosshairMarkerVisible: false,
+      pointMarkersVisible: false,
     });
 
     const bo = computeBreakoutLevels(candles);
@@ -1284,19 +1323,32 @@ function RealtimeChart() {
         createSeriesMarkers(rsiSeries, rsiMarkers);
       }
 
-      // 다이버전스 선분 (RSI 차트에 2-point 라인으로 표시)
+      // 다이버전스 선분 (RSI 차트 + 가격 차트 동시 표시)
       for (const div of divLines) {
-        const divSeries = rsiChart.addSeries(LineSeries, {
+        // RSI 차트
+        const divRsiSeries = rsiChart.addSeries(LineSeries, {
           color: div.type === 'bullish' ? '#22c55e' : '#ef4444',
           lineWidth: 2,
           lineStyle: LineStyle.Solid,
           lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
         });
-        divSeries.setData([
+        divRsiSeries.setData([
           { time: div.p1.time, value: div.p1.rsi },
           { time: div.p2.time, value: div.p2.rsi },
         ]);
-        divSeries.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
+        divRsiSeries.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
+
+        // 가격 차트 (점선으로 가격 피봇 연결)
+        const divPriceSeries = chart.addSeries(LineSeries, {
+          color: div.type === 'bullish' ? '#22c55e' : '#ef4444',
+          lineWidth: 2,
+          lineStyle: LineStyle.Dashed,
+          lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+        });
+        divPriceSeries.setData([
+          { time: div.p1.time, value: div.p1.price },
+          { time: div.p2.time, value: div.p2.price },
+        ]);
       }
 
       // 타임스케일 동기화 (인덱스 기반 + RSI 오프셋 보정)
@@ -1463,6 +1515,51 @@ function RealtimeChart() {
   }, [timeframe, chartKey]);
 
   // Note: Marker generation (chart markers and candle coloring) is now handled by useMarkerGeneration hook
+
+  // BB/돈치안 라인 밝기: 신호 조건 충족도에 따라 굵기+투명도 조절
+  useEffect(() => {
+    const snap = indicatorSnapshot?.timeframe === timeframe ? indicatorSnapshot : null;
+    if (!snap) return;
+
+    const { adx, atrPct, ema200, volumeRatio, regime } = snap;
+    const price = tickerRef.current?.price ?? snap.price;
+
+    // 평균회귀 조건 (BB): ATR 낮음 + 횡보
+    const mrAtr = atrPct !== null && atrPct < 76;
+    const mrRegime = regime === 'SIDEWAYS';
+    const mrScore = [mrAtr, mrRegime].filter(Boolean).length; // 0~2
+
+    // 돌파 조건 (돈치안): 거래량 + ADX + EMA거리 + 추세레짐
+    const emaDist = price && ema200 ? Math.abs((price - ema200) / ema200 * 100) : null;
+    const vbVol = volumeRatio !== null && volumeRatio >= 2.5;
+    const vbAdx = adx !== null && adx >= 25;
+    const vbEma = emaDist !== null && emaDist <= 1;
+    const vbRegime = regime !== 'SIDEWAYS';
+    const vbScore = [vbVol, vbAdx, vbEma, vbRegime].filter(Boolean).length; // 0~4
+
+    // BB 스타일: 0조건=희미, 1=보통, 2(전부)=밝고 굵게
+    const bbOpacity = mrScore === 2 ? 0.7 : mrScore === 1 ? 0.35 : 0.12;
+    const bbWidth = mrScore === 2 ? 2 : 1;
+    if (bbUpperRef.current) {
+      bbUpperRef.current.applyOptions({ color: `rgba(239, 68, 68, ${bbOpacity})`, lineWidth: bbWidth });
+    }
+    if (bbMiddleRef.current) {
+      bbMiddleRef.current.applyOptions({ color: `rgba(161, 161, 170, ${bbOpacity})`, lineWidth: bbWidth });
+    }
+    if (bbLowerRef.current) {
+      bbLowerRef.current.applyOptions({ color: `rgba(59, 130, 246, ${bbOpacity})`, lineWidth: bbWidth });
+    }
+
+    // 돈치안 스타일: per-point color 사용 중이므로 lineWidth만 조절
+    // (applyOptions의 color는 per-point color를 덮어쓰므로 제거)
+    const dcWidth = vbScore >= 4 ? 2 : 1;
+    if (boHighRef.current) {
+      boHighRef.current.applyOptions({ lineWidth: dcWidth });
+    }
+    if (boLowRef.current) {
+      boLowRef.current.applyOptions({ lineWidth: dcWidth });
+    }
+  }, [indicatorSnapshot, timeframe]);
 
   // TP/SL/Entry 가로선 업데이트 (Price Line 사용 - 캔들 위에 표시)
   // 주의: ticker?.price를 의존성에서 제거 - 매 틱마다 라인 재생성 방지

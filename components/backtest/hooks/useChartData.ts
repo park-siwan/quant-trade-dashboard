@@ -46,6 +46,7 @@ export function useChartData(
               high: c[2],
               low: c[3],
               close: c[4],
+              volume: c[5],
             }),
           );
 
