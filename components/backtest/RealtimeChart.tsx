@@ -1035,6 +1035,20 @@ function RealtimeChart() {
       }
     }
 
+    // candlesRef를 실시간 kline으로 갱신 (BB/돈치안 계산에 사용)
+    if (candlesRef.current.length > 0) {
+      const arr = candlesRef.current;
+      const lastTime = (arr[arr.length - 1] as any).time;
+      const rtCandle = { ...newCandle, volume: kline.volume ?? 0 };
+      if (newCandleTime === lastTime) {
+        // 같은 봉 → 마지막 캔들 교체
+        arr[arr.length - 1] = rtCandle as CandlestickData;
+      } else if (newCandleTime > lastTime) {
+        // 새 봉 → 추가
+        arr.push(rtCandle as CandlestickData);
+      }
+    }
+
     // BB 실시간 업데이트: 최근 20개 캔들로 현재 봉의 BB 값 계산
     if (bbUpperRef.current && candlesRef.current.length >= 20) {
       const recent = candlesRef.current.slice(-20);
