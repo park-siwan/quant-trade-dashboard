@@ -1,8 +1,18 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useSocket, useSocketTicker } from '@/contexts/SocketContext';
+import type { TradeResult } from '@/lib/backtest-api';
 
 interface SignalThresholdMonitorProps {
   timeframe: string;
+  trades?: TradeResult[];
+}
+
+interface TypeStats { count: number; wins: number; wr: number; }
+
+function calcTypeStats(trades: TradeResult[], type: string): TypeStats {
+  const filtered = trades.filter(t => t.signalType === type);
+  const wins = filtered.filter(t => t.pnl > 0).length;
+  return { count: filtered.length, wins, wr: filtered.length > 0 ? (wins / filtered.length) * 100 : 0 };
 }
 
 // 전략별 실제 임계값 (JSON config 기준)
@@ -21,7 +31,7 @@ const THRESH = {
 function Chip({ ok, label, detail }: { ok: boolean; label: string; detail: string }) {
   return (
     <span
-      className={`px-1.5 py-px rounded text-[9px] font-mono ${
+      className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
         ok
           ? 'bg-green-500/15 text-green-400 border border-green-500/20'
           : 'bg-zinc-800/60 text-zinc-500 border border-zinc-700/30'
@@ -40,7 +50,7 @@ function ProgressBar({ filled, total }: { filled: number; total: number }) {
 
   return (
     <div className='flex items-center gap-1.5 shrink-0'>
-      <div className='w-28 h-1.25 bg-zinc-800 rounded-full overflow-hidden'>
+      <div className='w-28 h-1.5 bg-zinc-800 rounded-full overflow-hidden'>
         <div
           className={`h-full rounded-full transition-all duration-500 ${
             allMet
@@ -52,10 +62,21 @@ function ProgressBar({ filled, total }: { filled: number; total: number }) {
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className={`font-mono text-[9px] w-5 text-right ${allMet ? 'text-green-400' : 'text-zinc-500'}`}>
+      <span className={`font-mono text-[10px] w-5 text-right ${allMet ? 'text-green-400' : 'text-zinc-500'}`}>
         {filled}/{total}
       </span>
     </div>
+  );
+}
+
+/** 거래수/승률 배지 */
+function StatsBadge({ stats }: { stats: TypeStats | null }) {
+  if (!stats || stats.count === 0) return null;
+  const wrColor = stats.wr >= 50 ? 'text-green-400' : stats.wr >= 40 ? 'text-yellow-400' : 'text-red-400';
+  return (
+    <span className='text-[10px] font-mono text-zinc-500 shrink-0' title={`${stats.wins}승 ${stats.count - stats.wins}패`}>
+      {stats.count}회 <span className={wrColor}>{stats.wr.toFixed(0)}%</span>
+    </span>
   );
 }
 
@@ -65,16 +86,25 @@ const REGIME_STYLE: Record<string, { text: string; color: string; icon: string }
   SIDEWAYS: { text: '횡보', color: 'text-yellow-400', icon: '◆' },
 };
 
-export const SignalThresholdMonitor = memo(({ timeframe }: SignalThresholdMonitorProps) => {
+export const SignalThresholdMonitor = memo(({ timeframe, trades }: SignalThresholdMonitorProps) => {
   const { indicatorSnapshot } = useSocket();
   const { ticker } = useSocketTicker();
+
+  const typeStats = useMemo(() => {
+    if (!trades || trades.length === 0) return null;
+    return {
+      divergence: calcTypeStats(trades, 'divergence'),
+      breakout: calcTypeStats(trades, 'breakout'),
+      mean_reversion: calcTypeStats(trades, 'mean_reversion'),
+    };
+  }, [trades]);
 
   const snap = indicatorSnapshot?.timeframe === timeframe ? indicatorSnapshot : null;
 
   if (!snap) {
     return (
-      <div className='flex items-center px-3 py-1 mt-1 bg-zinc-900/60 rounded-lg'>
-        <span className='text-[10px] text-zinc-600'>지표 로딩 중...</span>
+      <div className='flex items-center px-3 py-1.5 mt-1 bg-zinc-900/60 rounded-lg'>
+        <span className='text-[11px] text-zinc-600'>지표 로딩 중...</span>
       </div>
     );
   }
@@ -107,7 +137,7 @@ export const SignalThresholdMonitor = memo(({ timeframe }: SignalThresholdMonito
     <div className='mt-1 rounded-lg overflow-hidden space-y-px'>
       {/* ↩ 반전매매 (RSI Divergence) */}
       <div
-        className='flex items-center gap-2 px-3 py-1 bg-zinc-900/60 text-[10px]'
+        className='flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 text-[11px]'
         title='RSI 과매도/과매수 → 가격 피봇 감지 → 두 피봇 간 다이버전스 확인 후 진입'
       >
         <span className='text-zinc-400 font-medium w-13 shrink-0'>↩ 반전</span>
@@ -128,17 +158,18 @@ export const SignalThresholdMonitor = memo(({ timeframe }: SignalThresholdMonito
             detail='두 번째 피봇 감지 — 두 피봇 간 가격/RSI 다이버전스 비교 가능'
           />
           {rsiDivSignal && (
-            <span className={`text-[9px] font-medium ${rsiDivSignal === 'bullish' ? 'text-green-400' : 'text-red-400'}`}>
+            <span className={`text-[10px] font-medium ${rsiDivSignal === 'bullish' ? 'text-green-400' : 'text-red-400'}`}>
               {rsiDivSignal === 'bullish' ? '강세' : '약세'} DIV
             </span>
           )}
         </div>
+        <StatsBadge stats={typeStats?.divergence ?? null} />
         <ProgressBar filled={rdCount} total={3} />
       </div>
 
       {/* ⚡ 돌파매매 (Volume Breakout) */}
       <div
-        className='flex items-center gap-2 px-3 py-1 bg-zinc-900/60 text-[10px]'
+        className='flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 text-[11px]'
         title={`4개 필터 모두 통과 + 가격이 ${THRESH.VOL_MULT}x 거래량과 함께 고/저점 돌파 시 진입`}
       >
         <span className='text-zinc-400 font-medium w-13 shrink-0'>⚡ 돌파</span>
@@ -164,12 +195,13 @@ export const SignalThresholdMonitor = memo(({ timeframe }: SignalThresholdMonito
             detail='추세 레짐 필요 (BULL 또는 BEAR, 횡보 제외)'
           />
         </div>
+        <StatsBadge stats={typeStats?.breakout ?? null} />
         <ProgressBar filled={vbCount} total={4} />
       </div>
 
       {/* ♻ 평균회귀 (Mean Reversion) */}
       <div
-        className='flex items-center gap-2 px-3 py-1 bg-zinc-900/60 text-[10px]'
+        className='flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 text-[11px]'
         title={`ATR이 낮고(P${THRESH.ATR_MAX_PCT} 미만) 횡보 레짐일 때 볼린저밴드 기반 평균회귀 진입`}
       >
         <span className='text-zinc-400 font-medium w-13 shrink-0'>♻ 평균회귀</span>
@@ -185,9 +217,10 @@ export const SignalThresholdMonitor = memo(({ timeframe }: SignalThresholdMonito
             detail='횡보 레짐 필요 (SIDEWAYS)'
           />
           {mrCount >= 2 && (
-            <span className='text-green-400/50 text-[9px]'>BB 감시 중</span>
+            <span className='text-green-400/50 text-[10px]'>BB 감시 중</span>
           )}
         </div>
+        <StatsBadge stats={typeStats?.mean_reversion ?? null} />
         <ProgressBar filled={mrCount} total={2} />
       </div>
     </div>

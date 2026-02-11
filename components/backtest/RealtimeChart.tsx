@@ -1135,7 +1135,7 @@ function RealtimeChart() {
             return max;
           })()}
         />
-        <SignalThresholdMonitor timeframe={timeframe} />
+        <SignalThresholdMonitor timeframe={timeframe} trades={allTradesMap.get('orchestrator')} />
         {/* 설정 패널 (헤더 아래 드롭다운) */}
         <SettingsPanel
           show={isSettingsOpen}
