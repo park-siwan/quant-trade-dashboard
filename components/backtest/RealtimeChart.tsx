@@ -6,6 +6,7 @@ import {
   IChartApi,
   CandlestickData,
   CandlestickSeries,
+  LineSeries,
   SeriesMarker,
   Time,
   createSeriesMarkers,
@@ -56,6 +57,166 @@ import { usePositionAlerts } from './hooks/usePositionAlerts';
 import { useMarkerGeneration } from './hooks/useMarkerGeneration';
 // import { useWhyDidYouUpdate } from './hooks/useWhyDidYouUpdate'; // 비활성화
 
+// ── Bollinger Bands 계산 (SMA20 ± 2σ) ──
+function computeBollingerBands(
+  candles: CandlestickData[],
+  period = 20,
+  mult = 2,
+): { upper: { time: Time; value: number }[]; middle: { time: Time; value: number }[]; lower: { time: Time; value: number }[] } {
+  const upper: { time: Time; value: number }[] = [];
+  const middle: { time: Time; value: number }[] = [];
+  const lower: { time: Time; value: number }[] = [];
+
+  for (let i = period - 1; i < candles.length; i++) {
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += (candles[j] as any).close;
+    const sma = sum / period;
+
+    let sqSum = 0;
+    for (let j = i - period + 1; j <= i; j++) sqSum += ((candles[j] as any).close - sma) ** 2;
+    const std = Math.sqrt(sqSum / period);
+
+    const t = candles[i].time;
+    upper.push({ time: t, value: sma + mult * std });
+    middle.push({ time: t, value: sma });
+    lower.push({ time: t, value: sma - mult * std });
+  }
+  return { upper, middle, lower };
+}
+
+// ── RSI 계산 (Wilder's method, period=14) ──
+function computeRSI(candles: CandlestickData[], period = 14): { time: Time; value: number }[] {
+  const closes = candles.map(c => (c as any).close as number);
+  if (closes.length < period + 1) return [];
+
+  const result: { time: Time; value: number }[] = [];
+  let avgGain = 0;
+  let avgLoss = 0;
+
+  // 초기 평균
+  for (let i = 1; i <= period; i++) {
+    const diff = closes[i] - closes[i - 1];
+    if (diff > 0) avgGain += diff;
+    else avgLoss += -diff;
+  }
+  avgGain /= period;
+  avgLoss /= period;
+
+  const rsiVal = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  result.push({ time: candles[period].time, value: rsiVal });
+
+  // Wilder's smoothing
+  for (let i = period + 1; i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1];
+    avgGain = (avgGain * (period - 1) + (diff > 0 ? diff : 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + (diff < 0 ? -diff : 0)) / period;
+    const v = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+    result.push({ time: candles[i].time, value: v });
+  }
+  return result;
+}
+
+// ── RSI 피봇 & 다이버전스 감지 ──
+interface Pivot { idx: number; time: Time; price: number; rsi: number; }
+interface DivLine { p1: Pivot; p2: Pivot; type: 'bullish' | 'bearish'; }
+
+function detectDivergences(
+  candles: CandlestickData[],
+  rsiData: { time: Time; value: number }[],
+  pivotLeft = 5, pivotRight = 2,
+  rsiOversold = 30, rsiOverbought = 60,
+  minRsiDiff = 2, minPriceDiffPct = 0.1,
+): { pivotLows: Pivot[]; pivotHighs: Pivot[]; divLines: DivLine[] } {
+  // RSI를 time 기반 map으로 변환
+  const rsiMap = new Map<number, number>();
+  for (const r of rsiData) rsiMap.set(r.time as number, r.value);
+
+  const lows = candles.map(c => (c as any).low as number);
+  const highs = candles.map(c => (c as any).high as number);
+  const n = candles.length;
+
+  // 피봇 Low 감지
+  const pivotLows: Pivot[] = [];
+  for (let i = pivotLeft; i < n - pivotRight; i++) {
+    const val = lows[i];
+    let ok = true;
+    for (let j = i - pivotLeft; j < i; j++) if (lows[j] < val) { ok = false; break; }
+    if (!ok) continue;
+    for (let j = i + 1; j <= i + pivotRight; j++) if (lows[j] < val) { ok = false; break; }
+    if (!ok) continue;
+    const rsi = rsiMap.get(candles[i].time as number);
+    if (rsi !== undefined && rsi <= rsiOversold) {
+      pivotLows.push({ idx: i, time: candles[i].time, price: val, rsi });
+    }
+  }
+
+  // 피봇 High 감지
+  const pivotHighs: Pivot[] = [];
+  for (let i = pivotLeft; i < n - pivotRight; i++) {
+    const val = highs[i];
+    let ok = true;
+    for (let j = i - pivotLeft; j < i; j++) if (highs[j] > val) { ok = false; break; }
+    if (!ok) continue;
+    for (let j = i + 1; j <= i + pivotRight; j++) if (highs[j] > val) { ok = false; break; }
+    if (!ok) continue;
+    const rsi = rsiMap.get(candles[i].time as number);
+    if (rsi !== undefined && rsi >= rsiOverbought) {
+      pivotHighs.push({ idx: i, time: candles[i].time, price: val, rsi });
+    }
+  }
+
+  // 다이버전스 선분 감지
+  const divLines: DivLine[] = [];
+
+  // Bullish: 가격 Lower Low + RSI Higher Low
+  for (let i = 1; i < pivotLows.length; i++) {
+    const prev = pivotLows[i - 1];
+    const curr = pivotLows[i];
+    const priceDiffPct = (prev.price - curr.price) / prev.price * 100;
+    const rsiDiff = curr.rsi - prev.rsi;
+    if (priceDiffPct >= minPriceDiffPct && rsiDiff >= minRsiDiff) {
+      divLines.push({ p1: prev, p2: curr, type: 'bullish' });
+    }
+  }
+
+  // Bearish: 가격 Higher High + RSI Lower High
+  for (let i = 1; i < pivotHighs.length; i++) {
+    const prev = pivotHighs[i - 1];
+    const curr = pivotHighs[i];
+    const priceDiffPct = (curr.price - prev.price) / prev.price * 100;
+    const rsiDiff = prev.rsi - curr.rsi;
+    if (priceDiffPct >= minPriceDiffPct && rsiDiff >= minRsiDiff) {
+      divLines.push({ p1: prev, p2: curr, type: 'bearish' });
+    }
+  }
+
+  return { pivotLows, pivotHighs, divLines };
+}
+
+// ── 돌파 레벨 계산 (20봉 고/저점) ──
+function computeBreakoutLevels(
+  candles: CandlestickData[],
+  period = 20,
+): { high: { time: Time; value: number }[]; low: { time: Time; value: number }[] } {
+  const high: { time: Time; value: number }[] = [];
+  const low: { time: Time; value: number }[] = [];
+
+  for (let i = period; i < candles.length; i++) {
+    let maxH = -Infinity;
+    let minL = Infinity;
+    for (let j = i - period; j < i; j++) {
+      const h = (candles[j] as any).high;
+      const l = (candles[j] as any).low;
+      if (h > maxH) maxH = h;
+      if (l < minL) minL = l;
+    }
+    const t = candles[i].time;
+    high.push({ time: t, value: maxH });
+    low.push({ time: t, value: minL });
+  }
+  return { high, low };
+}
+
 // 무지개 색상 배열 (빨주노초파보)
 const RAINBOW_COLORS = [
   '#ef4444',  // 빨강 (Red)
@@ -101,6 +262,14 @@ function RealtimeChart() {
   const candleSeriesRef = useRef<any>(null);
   const priceLinesRef = useRef<any[]>([]); // TP/SL/Entry price lines
   const seriesMarkersRef = useRef<any>(null); // 마커 인스턴스 재사용 (누적 방지)
+  const bbUpperRef = useRef<any>(null);
+  const bbMiddleRef = useRef<any>(null);
+  const bbLowerRef = useRef<any>(null);
+  const boHighRef = useRef<any>(null);
+  const boLowRef = useRef<any>(null);
+  const rsiContainerRef = useRef<HTMLDivElement>(null);
+  const rsiChartRef = useRef<IChartApi | null>(null);
+  const rsiSeriesRef = useRef<any>(null);
   const isChartDisposedRef = useRef(false);
   // 🎯 핵심 최적화: Context 분리로 불필요한 리렌더 방지
   // - TickerContext: ticker만 구독 (가장 빈번)
@@ -829,6 +998,52 @@ function RealtimeChart() {
       }
     }
 
+    // BB 실시간 업데이트: 최근 20개 캔들로 현재 봉의 BB 값 계산
+    if (bbUpperRef.current && candlesRef.current.length >= 20) {
+      const recent = candlesRef.current.slice(-20);
+      let sum = 0;
+      for (const c of recent) sum += (c as any).close;
+      const sma = sum / 20;
+      let sqSum = 0;
+      for (const c of recent) sqSum += ((c as any).close - sma) ** 2;
+      const std = Math.sqrt(sqSum / 20);
+      const t = newCandle.time;
+      try {
+        bbUpperRef.current.update({ time: t, value: sma + 2 * std });
+        bbMiddleRef.current.update({ time: t, value: sma });
+        bbLowerRef.current.update({ time: t, value: sma - 2 * std });
+      } catch { /* disposed */ }
+    }
+
+    // 돌파 레벨 실시간 업데이트: 최근 20봉 고/저점
+    if (boHighRef.current && candlesRef.current.length >= 20) {
+      const recent = candlesRef.current.slice(-21, -1); // 현재 봉 제외, 직전 20봉
+      if (recent.length >= 20) {
+        let maxH = -Infinity;
+        let minL = Infinity;
+        for (const c of recent) {
+          if ((c as any).high > maxH) maxH = (c as any).high;
+          if ((c as any).low < minL) minL = (c as any).low;
+        }
+        const t = newCandle.time;
+        try {
+          boHighRef.current.update({ time: t, value: maxH });
+          boLowRef.current.update({ time: t, value: minL });
+        } catch { /* disposed */ }
+      }
+    }
+
+    // RSI 실시간 업데이트
+    if (rsiSeriesRef.current && candlesRef.current.length >= 15) {
+      const rsiUpdate = computeRSI(candlesRef.current.slice(-30));
+      if (rsiUpdate.length > 0) {
+        const last = rsiUpdate[rsiUpdate.length - 1];
+        try {
+          rsiSeriesRef.current.update({ time: newCandle.time, value: last.value });
+        } catch { /* disposed */ }
+      }
+    }
+
     // Note: candles state는 useChartData hook에서 관리됨
   }, [kline, openPosition, selectedStrategy, refetchBacktestData]);
 
@@ -891,7 +1106,7 @@ function RealtimeChart() {
       timeScale: {
         borderColor: '#3f3f46',
         timeVisible: true,
-        rightOffset: 20, // TP/SL 레이블 공간 (적당히)
+        rightOffset: 10, // TP/SL 레이블 공간
         shiftVisibleRangeOnNewBar: true,
       },
       localization: {
@@ -918,6 +1133,238 @@ function RealtimeChart() {
 
     candleSeries.setData(candles);
     candleSeriesRef.current = candleSeries;
+
+    // Bollinger Bands (SMA20 ± 2σ)
+    const bbUpper = chart.addSeries(LineSeries, {
+      color: 'rgba(239, 68, 68, 0.25)',
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
+    });
+    const bbMiddle = chart.addSeries(LineSeries, {
+      color: 'rgba(161, 161, 170, 0.3)',
+      lineWidth: 1,
+      lineStyle: LineStyle.Dotted,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
+    });
+    const bbLower = chart.addSeries(LineSeries, {
+      color: 'rgba(59, 130, 246, 0.25)',
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
+    });
+
+    const bb = computeBollingerBands(candles);
+    bbUpper.setData(bb.upper);
+    bbMiddle.setData(bb.middle);
+    bbLower.setData(bb.lower);
+    bbUpperRef.current = bbUpper;
+    bbMiddleRef.current = bbMiddle;
+    bbLowerRef.current = bbLower;
+
+    // 돌파 레벨 (20봉 고/저점)
+    const boHigh = chart.addSeries(LineSeries, {
+      color: 'rgba(34, 197, 94, 0.35)',
+      lineWidth: 1,
+      lineStyle: LineStyle.Solid,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
+    });
+    const boLow = chart.addSeries(LineSeries, {
+      color: 'rgba(239, 68, 68, 0.35)',
+      lineWidth: 1,
+      lineStyle: LineStyle.Solid,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
+    });
+
+    const bo = computeBreakoutLevels(candles);
+    boHigh.setData(bo.high);
+    boLow.setData(bo.low);
+    boHighRef.current = boHigh;
+    boLowRef.current = boLow;
+
+    // ── RSI 서브 패널 ──
+    if (rsiContainerRef.current) {
+      // 이전 RSI 차트 제거
+      if (rsiChartRef.current) {
+        try { rsiChartRef.current.remove(); } catch {}
+      }
+
+      const rsiChart = createChart(rsiContainerRef.current, {
+        width: rsiContainerRef.current.clientWidth,
+        height: 120,
+        layout: { background: { color: '#18181b' }, textColor: '#71717a' },
+        grid: { vertLines: { color: '#27272a' }, horzLines: { color: '#27272a' } },
+        crosshair: {
+          mode: 1,
+          horzLine: { color: '#e4e4e7', width: 1, style: 0, labelBackgroundColor: '#52525b' },
+          vertLine: { color: '#a1a1aa', width: 1, style: 2, labelBackgroundColor: '#52525b' },
+        },
+        rightPriceScale: {
+          borderColor: '#3f3f46',
+          scaleMargins: { top: 0.05, bottom: 0.05 },
+          autoScale: false,
+        },
+        timeScale: {
+          borderColor: '#3f3f46',
+          timeVisible: true,
+          visible: false,
+          rightOffset: 20,
+        },
+      });
+
+      // 고정 Y축: 0~100
+      rsiChart.priceScale('right').applyOptions({ autoScale: false });
+
+      // RSI 라인
+      const rsiSeries = rsiChart.addSeries(LineSeries, {
+        color: '#a78bfa',
+        lineWidth: 1,
+        lastValueVisible: true,
+        priceLineVisible: false,
+        crosshairMarkerVisible: true,
+      });
+
+      const rsiData = computeRSI(candles);
+      rsiSeries.setData(rsiData);
+      // Y축 0~100 고정
+      rsiSeries.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
+
+      // 과매도/과매수 임계선
+      const thresholdData = (val: number) => {
+        if (rsiData.length < 2) return [];
+        return [
+          { time: rsiData[0].time, value: val },
+          { time: rsiData[rsiData.length - 1].time, value: val },
+        ];
+      };
+
+      const oversoldLine = rsiChart.addSeries(LineSeries, {
+        color: 'rgba(34, 197, 94, 0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed,
+        lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+      });
+      oversoldLine.setData(thresholdData(30));
+      oversoldLine.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
+
+      const overboughtLine = rsiChart.addSeries(LineSeries, {
+        color: 'rgba(239, 68, 68, 0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed,
+        lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+      });
+      overboughtLine.setData(thresholdData(60));
+      overboughtLine.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
+
+      // 다이버전스 감지 & 선분 표시
+      const { pivotLows, pivotHighs, divLines } = detectDivergences(candles, rsiData);
+
+      // 피봇 마커 (◆만 표시, 초록=저점, 빨강=고점)
+      const rsiMarkers: SeriesMarker<Time>[] = [];
+      for (const p of pivotLows) {
+        rsiMarkers.push({
+          time: p.time, position: 'belowBar', color: '#22c55e',
+          shape: 'circle', size: 0, text: '◆',
+        } as SeriesMarker<Time>);
+      }
+      for (const p of pivotHighs) {
+        rsiMarkers.push({
+          time: p.time, position: 'aboveBar', color: '#ef4444',
+          shape: 'circle', size: 0, text: '◆',
+        } as SeriesMarker<Time>);
+      }
+      rsiMarkers.sort((a, b) => (a.time as number) - (b.time as number));
+      if (rsiMarkers.length > 0) {
+        createSeriesMarkers(rsiSeries, rsiMarkers);
+      }
+
+      // 다이버전스 선분 (RSI 차트에 2-point 라인으로 표시)
+      for (const div of divLines) {
+        const divSeries = rsiChart.addSeries(LineSeries, {
+          color: div.type === 'bullish' ? '#22c55e' : '#ef4444',
+          lineWidth: 2,
+          lineStyle: LineStyle.Solid,
+          lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+        });
+        divSeries.setData([
+          { time: div.p1.time, value: div.p1.rsi },
+          { time: div.p2.time, value: div.p2.rsi },
+        ]);
+        divSeries.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
+      }
+
+      // 타임스케일 동기화 (인덱스 기반 + RSI 오프셋 보정)
+      const rsiOffset = candles.length - rsiData.length;
+      let isSyncing = false;
+      chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (isSyncing || !range || !rsiChartRef.current) return;
+        isSyncing = true;
+        rsiChartRef.current.timeScale().setVisibleLogicalRange({
+          from: range.from - rsiOffset,
+          to: range.to - rsiOffset,
+        });
+        isSyncing = false;
+      });
+      rsiChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (isSyncing || !range || !chartRef.current) return;
+        isSyncing = true;
+        chartRef.current.timeScale().setVisibleLogicalRange({
+          from: range.from + rsiOffset,
+          to: range.to + rsiOffset,
+        });
+        isSyncing = false;
+      });
+
+      // 크로스헤어 동기화 (메인 ↔ RSI)
+      let isCrosshairSyncing = false;
+      chart.subscribeCrosshairMove((param) => {
+        if (isCrosshairSyncing || !rsiChartRef.current || !rsiSeriesRef.current) return;
+        isCrosshairSyncing = true;
+        if (param.time) {
+          const rsiVal = rsiSeriesRef.current.dataByIndex(
+            rsiChartRef.current.timeScale().timeToCoordinate(param.time as any) != null
+              ? Math.round(rsiChartRef.current.timeScale().coordinateToLogical(
+                  rsiChartRef.current.timeScale().timeToCoordinate(param.time as any)!
+                ) ?? 0)
+              : 0
+          );
+          // setCrosshairPosition으로 RSI 차트에 크로스헤어 표시
+          rsiChartRef.current.setCrosshairPosition(rsiVal?.value ?? 50, param.time, rsiSeriesRef.current);
+        } else {
+          rsiChartRef.current.clearCrosshairPosition();
+        }
+        isCrosshairSyncing = false;
+      });
+      rsiChart.subscribeCrosshairMove((param) => {
+        if (isCrosshairSyncing || !chartRef.current || !candleSeriesRef.current) return;
+        isCrosshairSyncing = true;
+        if (param.time) {
+          chartRef.current.setCrosshairPosition(0, param.time, candleSeriesRef.current);
+        } else {
+          chartRef.current.clearCrosshairPosition();
+        }
+        isCrosshairSyncing = false;
+      });
+
+      rsiChartRef.current = rsiChart;
+      rsiSeriesRef.current = rsiSeries;
+
+      // RSI ResizeObserver
+      const rsiResizeObs = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.target === rsiContainerRef.current && rsiChartRef.current) {
+            rsiChartRef.current.applyOptions({ width: entry.contentRect.width });
+          }
+        }
+      });
+      rsiResizeObs.observe(rsiContainerRef.current);
+    }
 
     // 크로스헤어 이동 시 거래 정보 표시 (툴팁)
     chart.subscribeCrosshairMove((param) => {
@@ -988,26 +1435,28 @@ function RealtimeChart() {
       new Date(lastCandleTime * 1000).toLocaleString('ko-KR'),
     );
 
-    // scrollToRealTime() + fitContent로 차트 중앙 정렬
+    // scrollToRealTime — rightOffset(80봉)이 자동 적용됨
     requestAnimationFrame(() => {
       if (chartRef.current) {
         chartRef.current.timeScale().scrollToRealTime();
-        // 가격 스케일 자동 조정으로 세로 중앙 정렬
         chartRef.current.priceScale('right').applyOptions({ autoScale: true });
-        console.log('[Chart] Scrolled to realtime with vertical centering');
       }
     });
 
     return () => {
       resizeObserver.disconnect();
       isChartDisposedRef.current = true;
-      try {
-        chart.remove();
-      } catch {
-        // 이미 disposed된 경우 무시
-      }
+      try { chart.remove(); } catch {}
+      try { rsiChartRef.current?.remove(); } catch {}
       chartRef.current = null;
       candleSeriesRef.current = null;
+      bbUpperRef.current = null;
+      bbMiddleRef.current = null;
+      bbLowerRef.current = null;
+      boHighRef.current = null;
+      boLowRef.current = null;
+      rsiChartRef.current = null;
+      rsiSeriesRef.current = null;
       priceLinesRef.current = [];
       seriesMarkersRef.current = null;
     };
@@ -1100,6 +1549,7 @@ function RealtimeChart() {
         priceLinesRef.current.push(slLine);
       }
     }
+
   }, [openPosition?.entryTime, selectedStrategy?.id, chartKey, tradingStatus?.activePosition?.entryPrice]);
 
   // 거래 히스토리 정렬 메모이제이션 (매 렌더마다 정렬 방지)
@@ -1313,6 +1763,14 @@ function RealtimeChart() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* RSI 서브 패널 */}
+        {!isLoading && (
+          <div className='w-full relative' style={{ height: 120 }}>
+            <div ref={rsiContainerRef} className='w-full h-full' />
+            <span className='absolute top-1 left-2 text-[10px] text-zinc-500 z-10 pointer-events-none'>RSI(14)</span>
           </div>
         )}
 
