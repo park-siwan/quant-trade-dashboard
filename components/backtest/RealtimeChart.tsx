@@ -39,6 +39,7 @@ import { useStrategyOptimize } from '@/hooks/useStrategyOptimize';
 import { StatisticsHeader, BalanceHeader } from './ui/StatisticsHeader';
 import { SignalThresholdMonitor } from './ui/SignalThresholdMonitor';
 import { StrategyMiniChart } from './ui/StrategyMiniChart';
+import { TRADING } from '@/lib/constants';
 
 const getOrchestratorDefaults = () => getDefaultParams('orchestrator');
 import { getCachedStrategyDisplayName, StrategyType } from '@/lib/backtest-api';
@@ -354,7 +355,7 @@ function RealtimeChart() {
   // Settings
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   // autoOptimizeEnabled removed — optimization integrated into strategy list
-  const [leverage, setLeverage] = useState(1);
+  const [leverage, setLeverage] = useState(TRADING.FIXED_LEVERAGE || 1);
   const leverageAutoSetRef = useRef(false);
   const [nextCandleCountdown, setNextCandleCountdown] = useState<number>(0);
 
@@ -617,91 +618,10 @@ function RealtimeChart() {
   }, [timeframe]);
 
   // Auto-leverage: Comfort-Kelly 공식 (OpenPositionCard와 동일)
-  useEffect(() => {
-    if (leverageAutoSetRef.current) return;
-    if (strategies.length === 0 || allStrategyStats.size === 0 || allTradesMap.size === 0) return;
-
-    // 선택된 전략 또는 orchestrator 우선
-    const targetType = selectedStrategy?.strategy
-      || (strategies.find(s => s.strategy === 'orchestrator') ? 'orchestrator' : strategies[0]?.strategy || 'rsi_div');
-
-    const stats = allStrategyStats.get(targetType);
-    const trades = allTradesMap.get(targetType);
-    if (!stats || !trades || trades.length < 5) return;
-
-    const p = stats.winRate / 100;
-    const q = 1 - p;
-
-    // 실거래 기반 TP/SL 평균 거리
-    const slTrades = trades.filter(t => t.pnlPercent < 0);
-    const tpTrades = trades.filter(t => t.pnlPercent > 0);
-    if (slTrades.length === 0) return;
-
-    const avgSlDist = slTrades.reduce((s, t) => s + Math.abs(t.pnlPercent), 0) / slTrades.length / 100;
-    const avgTpDist = tpTrades.length > 0
-      ? tpTrades.reduce((s, t) => s + t.pnlPercent, 0) / tpTrades.length / 100
-      : avgSlDist * 2;
-
-    // Half-Kelly
-    const mu = p * avgTpDist - q * avgSlDist;
-    let halfKelly = 125;
-    if (mu > 0) {
-      const variance = p * avgTpDist ** 2 + q * avgSlDist ** 2 - mu ** 2;
-      if (variance > 0) halfKelly = Math.max(1, Math.floor(mu / variance / 2));
-    }
-
-    // Comfort: (1 - (1-DD)^(1/N)) / slDist
-    let maxConsec = 0, cur = 0;
-    for (const t of trades) {
-      if (t.pnlPercent < 0) { cur++; maxConsec = Math.max(maxConsec, cur); } else cur = 0;
-    }
-    const consecN = Math.max(3, maxConsec);
-    const comfortOnly = avgSlDist > 0
-      ? Math.floor((1 - Math.pow(1 - 0.20, 1 / consecN)) / avgSlDist)
-      : 1;
-
-    const autoLev = Math.max(1, Math.min(Math.min(halfKelly, comfortOnly), 125));
-    setLeverage(autoLev);
-    leverageAutoSetRef.current = true;
-    console.log(`[AutoLeverage] Comfort-Kelly: ${autoLev}x (½Kelly=${halfKelly}x, comfort=${comfortOnly}x, WR=${stats.winRate.toFixed(0)}%, slDist=${(avgSlDist * 100).toFixed(2)}%)`);
-  }, [allStrategyStats, allTradesMap, strategies, selectedStrategy?.strategy]);
-
-  // 포지션 열리면 실제 TP/SL 기반 Comfort-Kelly로 레버리지 업데이트
-  useEffect(() => {
-    if (!openPosition || !openPosition.tp || !openPosition.sl) return;
-
-    const stratType = selectedStrategy?.strategy || '';
-    const stats = allStrategyStats.get(stratType);
-    const trades = allTradesMap.get(stratType) || [];
-    const winRate = stats?.winRate || 50;
-
-    const tpDist = Math.abs(openPosition.tp - openPosition.entryPrice) / openPosition.entryPrice;
-    const slDist = Math.abs(openPosition.sl - openPosition.entryPrice) / openPosition.entryPrice;
-    if (slDist <= 0) return;
-
-    const p = winRate / 100;
-    const q = 1 - p;
-
-    // Half-Kelly
-    const mu = p * tpDist - q * slDist;
-    let halfKelly = 125;
-    if (mu > 0) {
-      const variance = p * tpDist ** 2 + q * slDist ** 2 - mu ** 2;
-      if (variance > 0) halfKelly = Math.max(1, Math.floor(mu / variance / 2));
-    }
-
-    // Comfort
-    let maxConsec = 0, cur = 0;
-    for (const t of trades) {
-      if (t.pnlPercent < 0) { cur++; maxConsec = Math.max(maxConsec, cur); } else cur = 0;
-    }
-    const consecN = Math.max(3, maxConsec);
-    const comfortOnly = Math.floor((1 - Math.pow(1 - 0.20, 1 / consecN)) / slDist);
-
-    const recLev = Math.max(1, Math.min(Math.min(halfKelly, comfortOnly), 125));
-    setLeverage(recLev);
-    console.log(`[AutoLeverage] Position-based: ${recLev}x (½Kelly=${halfKelly}x, comfort=${comfortOnly}x, slDist=${(slDist * 100).toFixed(2)}%)`);
-  }, [openPosition?.entryPrice, openPosition?.tp, openPosition?.sl, allStrategyStats, allTradesMap, selectedStrategy?.strategy]);
+  // NOTE: FIXED_LEVERAGE=20 모드 — 자동 레버리지 계산 비활성화
+  // 백엔드 FIXED_LEVERAGE와 동일하게 고정, auto로 돌리려면 아래 주석 해제
+  // useEffect(() => { ... Comfort-Kelly auto leverage ... }, [...]);
+  // useEffect(() => { ... Position-based leverage ... }, [...]);
 
   // Auto-select: 첫 로딩 시 orchestrator 자동 선택 (localStorage 저장 없으면)
   useEffect(() => {

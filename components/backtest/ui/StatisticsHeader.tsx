@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import { useSocket, useSocketTicker, type TradingStatus } from '@/contexts/SocketContext';
 import { API_CONFIG } from '@/lib/config';
+import { TRADING } from '@/lib/constants';
 import type { OpenPosition } from '@/lib/backtest-api';
 
 interface StatisticsHeaderProps {
@@ -208,20 +209,17 @@ function useAutoTradeSettings() {
   return { settings, setSettings, toggle };
 }
 
-// Comfort-Kelly 추천 레버리지
-const COMFORT_MAX_DD = 0.20;
-const COMFORT_CONSEC = 3;
-
+// 레버리지 계산: FIXED_LEVERAGE > 0이면 고정, 아니면 Comfort-Kelly
 function calcRecLev(
-  openPosition: OpenPosition | null, winRate?: number, maxConsecLoss?: number
+  openPosition: OpenPosition | null, _winRate?: number, _maxConsecLoss?: number
 ): number {
+  if (TRADING.FIXED_LEVERAGE > 0) return TRADING.FIXED_LEVERAGE;
   if (!openPosition) return 1;
   const tpDist = Math.abs(openPosition.tp - openPosition.entryPrice) / openPosition.entryPrice;
   const slDist = Math.abs(openPosition.sl - openPosition.entryPrice) / openPosition.entryPrice;
   if (slDist <= 0) return 1;
 
-  // Half-Kelly
-  const p = (winRate || 50) / 100;
+  const p = (_winRate || 50) / 100;
   const q = 1 - p;
   const mu = p * tpDist - q * slDist;
   let halfKelly = 1;
@@ -229,11 +227,8 @@ function calcRecLev(
     const variance = p * tpDist * tpDist + q * slDist * slDist - mu * mu;
     if (variance > 0) halfKelly = Math.max(1, Math.floor((mu / variance) / 2));
   }
-
-  // Comfort
-  const consecN = maxConsecLoss && maxConsecLoss > COMFORT_CONSEC ? maxConsecLoss : COMFORT_CONSEC;
-  const comfortOnly = Math.floor((1 - Math.pow(1 - COMFORT_MAX_DD, 1 / consecN)) / slDist);
-
+  const consecN = _maxConsecLoss && _maxConsecLoss > TRADING.CONSEC_LOSSES ? _maxConsecLoss : TRADING.CONSEC_LOSSES;
+  const comfortOnly = Math.floor((1 - Math.pow(1 - TRADING.TARGET_DD, 1 / consecN)) / slDist);
   return Math.max(1, Math.min(Math.min(halfKelly, comfortOnly), 125));
 }
 

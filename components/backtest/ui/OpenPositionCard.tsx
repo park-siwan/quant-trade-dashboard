@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { OpenPosition } from '@/lib/backtest-api';
+import { TRADING } from '@/lib/constants';
 
 const SIGNAL_TYPE_LABEL: Record<string, string> = {
   breakout: '돌파',
@@ -92,14 +93,17 @@ export const OpenPositionCard: React.FC<OpenPositionCardProps> = memo(
       ? ((openPosition.sl - openPosition.entryPrice) / openPosition.entryPrice) * 100 * leverage
       : ((openPosition.entryPrice - openPosition.sl) / openPosition.entryPrice) * 100 * leverage;
 
-    // Comfort-Kelly 추천 레버리지
-    const { comfort: recLev, halfKelly, comfortOnly } = winRate && winRate > 0
-      ? calcComfortKelly(winRate, tpDist1x, slDist1x, maxConsecLoss)
-      : { comfort: slDist1x > 0 ? Math.min(Math.floor(0.2 / slDist1x), 125) : 1, halfKelly: 0, comfortOnly: 0 };
+    // 레버리지: 고정 모드이면 FIXED_LEVERAGE, 아니면 Comfort-Kelly 계산
+    const recLev = TRADING.FIXED_LEVERAGE > 0
+      ? TRADING.FIXED_LEVERAGE
+      : (() => {
+          if (winRate && winRate > 0) return calcComfortKelly(winRate, tpDist1x, slDist1x, maxConsecLoss).comfort;
+          return slDist1x > 0 ? Math.min(Math.floor(0.2 / slDist1x), 125) : 1;
+        })();
+    const halfKelly = 0, comfortOnly = 0;
 
-    // SL 도달 시 손실률 (추천 레버리지 기준)
+    // SL 도달 시 손실률
     const slAtRec = (slDist1x * recLev * 100).toFixed(0);
-    // 연패3 시 DD (복리)
     const dd3 = ((1 - Math.pow(1 - slDist1x * recLev, COMFORT_CONSEC)) * 100).toFixed(0);
 
     return (
