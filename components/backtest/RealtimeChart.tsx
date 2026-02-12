@@ -355,7 +355,7 @@ function RealtimeChart() {
   // Settings
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   // autoOptimizeEnabled removed — optimization integrated into strategy list
-  const [leverage, setLeverage] = useState(TRADING.FIXED_LEVERAGE || 1);
+  const [leverage, setLeverage] = useState<number>(TRADING.FIXED_LEVERAGE || 1);
   const leverageAutoSetRef = useRef(false);
   const [nextCandleCountdown, setNextCandleCountdown] = useState<number>(0);
 
