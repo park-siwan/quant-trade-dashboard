@@ -413,6 +413,7 @@ function RealtimeChart() {
     isBacktestRunning,
     loadBacktestTrades,
     clearOpenPosition,
+    closePositionWithTrade,
   } = useRealtimeUpdates(
     selectedStrategy,
     symbolId,
@@ -452,7 +453,7 @@ function RealtimeChart() {
     loadBacktestTrades,
     onPositionExit: (exitType, exitPrice) => {
       console.log(`[Position Exit] ${exitType.toUpperCase()} @ $${exitPrice}`);
-      clearOpenPosition();
+      closePositionWithTrade(exitType, exitPrice);  // 완료된 거래를 히스토리에 추가하며 청산
     },
   });
 
@@ -468,13 +469,21 @@ function RealtimeChart() {
     // Case 1: non-null → null 전환 (실시간 포지션 청산)
     if (prev && !curr) {
       console.log('[Trading] Bybit position closed, clearing strategy openPosition');
-      clearOpenPosition();
+      // 현재 가격으로 청산 처리 (TP/SL 판별은 가격 비교로)
+      const currentPrice = ticker?.price || openPosition.currentPrice;
+      const { tp, sl, direction, entryPrice } = openPosition;
+      const isLong = direction === 'long';
+      // 현재가 vs TP/SL 거리로 판별 (정확하지 않을 수 있지만 마커 표시용으로 충분)
+      const exitType = isLong
+        ? (currentPrice >= tp || (currentPrice - entryPrice) > 0 ? 'tp' : 'sl')
+        : (currentPrice <= tp || (entryPrice - currentPrice) > 0 ? 'tp' : 'sl');
+      closePositionWithTrade(exitType, currentPrice);
       return;
     }
 
     // Case 2: 페이지 로드 후 tradingStatus 도착 — 백엔드에 포지션 없으면
     // kline high/low 기반 TP/SL 감지가 다음 틱에서 처리함
-  }, [tradingStatus?.activePosition, openPosition, clearOpenPosition]);
+  }, [tradingStatus?.activePosition, openPosition, clearOpenPosition, closePositionWithTrade, ticker]);
 
   // 전략 최적화 (Propose → Approve/Reject)
   const {

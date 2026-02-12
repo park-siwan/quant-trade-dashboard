@@ -28,7 +28,8 @@ interface UseRealtimeUpdatesResult {
   isBacktestRunning: boolean;
   backtestCacheRef: React.MutableRefObject<Map<string, BacktestCache>>;
   loadBacktestTrades: (strategy: SavedOptimizeResult, retryCount?: number, forceRun?: boolean) => Promise<void>;
-  clearOpenPosition: () => void;  // TP/SL 도달 시 포지션 즉시 청산
+  clearOpenPosition: () => void;  // TP/SL 도달 시 포지션 즉시 청산 (deprecated - use closePositionWithTrade)
+  closePositionWithTrade: (exitType: 'tp' | 'sl', exitPrice: number) => void;  // TP/SL 도달 시 완료된 거래 추가 및 포지션 청산
 }
 
 const BACKTEST_THROTTLE_MS = 2000;
@@ -298,12 +299,49 @@ export function useRealtimeUpdates(
     loadBacktestTrades(selectedStrategy);
   }, [selectedStrategy, timeframe, symbol, candlesLength, isLoadingCandles, loadBacktestTrades, preloadedTradesMap, preloadedOpenPositions, preloadedStats]);
 
-  // TP/SL 도달 시 포지션 즉시 청산 함수
+  // TP/SL 도달 시 포지션 즉시 청산 함수 (deprecated - use closePositionWithTrade)
   const clearOpenPosition = useCallback(() => {
     setOpenPosition(prev => {
       if (prev) {
         console.log('[Backtest] Clearing open position (TP/SL hit), entry:', prev.entryTime);
         exitedEntryTimeRef.current = prev.entryTime;
+      }
+      return null;
+    });
+  }, []);
+
+  // TP/SL 도달 시 완료된 거래 추가 및 포지션 청산 함수
+  const closePositionWithTrade = useCallback((exitType: 'tp' | 'sl', exitPrice: number) => {
+    setOpenPosition(prev => {
+      if (prev) {
+        console.log(`[Backtest] Closing position with ${exitType.toUpperCase()} @ $${exitPrice}, entry:`, prev.entryTime);
+        exitedEntryTimeRef.current = prev.entryTime;
+
+        // OpenPosition을 TradeResult로 변환하여 즉시 추가
+        const closedTrade: TradeResult = {
+          entryTime: prev.entryTime,
+          exitTime: new Date().toISOString(),
+          direction: prev.direction,
+          entryPrice: prev.entryPrice,
+          exitPrice: exitPrice,
+          pnl: (exitPrice - prev.entryPrice) * (prev.direction === 'long' ? 1 : -1) * prev.size,
+          pnlPercent: ((exitPrice - prev.entryPrice) / prev.entryPrice) * (prev.direction === 'long' ? 1 : -1) * 100,
+          indicator: prev.signalInfo?.signalType || 'unknown',
+          divergenceStrength: prev.signalInfo?.strength || 0,
+          exitReason: exitType.toUpperCase() as 'TP' | 'SL',
+          signalType: prev.signalInfo?.signalType || 'default',
+        };
+
+        // backtestTrades에 완료된 거래 추가 (persistentTradesRef 사용)
+        const key = persistentKeyRef.current;
+        if (key) {
+          persistentTradesRef.current.set(closedTrade.entryTime, closedTrade);
+          // 상태 업데이트 트리거
+          setBacktestTrades(Array.from(persistentTradesRef.current.values()).sort(
+            (a, b) => new Date(a.entryTime).getTime() - new Date(b.entryTime).getTime()
+          ));
+          console.log('[Backtest] Added closed trade to history:', closedTrade.exitReason, closedTrade.pnlPercent.toFixed(2) + '%');
+        }
       }
       return null;
     });
@@ -320,5 +358,6 @@ export function useRealtimeUpdates(
     backtestCacheRef,
     loadBacktestTrades,
     clearOpenPosition,
+    closePositionWithTrade,
   };
 }
