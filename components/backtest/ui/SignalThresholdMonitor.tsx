@@ -1,5 +1,6 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState, useEffect } from 'react';
 import { useSocket, useSocketTicker } from '@/contexts/SocketContext';
+import type { SignalStats } from '@/contexts/SocketContext';
 import type { TradeResult } from '@/lib/backtest-api';
 
 interface SignalThresholdMonitorProps {
@@ -80,6 +81,100 @@ function StatsBadge({ stats }: { stats: TypeStats | null }) {
   );
 }
 
+/** 상대 시간 포맷 (ms timestamp → "3분전") */
+function formatRelativeTime(ts: number | null): string {
+  if (!ts) return '—';
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return `${Math.floor(diff / 1000)}초전`;
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}분전`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}시간전`;
+  return `${Math.floor(diff / 86_400_000)}일전`;
+}
+
+/** 상태 표시등 색상 */
+function getHealthColor(stats: SignalStats | null): { dot: string; text: string; label: string } {
+  if (!stats) return { dot: 'bg-zinc-600', text: 'text-zinc-500', label: '대기' };
+  if (stats.pythonErrors > 0 && stats.lastErrorAt && Date.now() - stats.lastErrorAt < 600_000) {
+    return { dot: 'bg-red-500', text: 'text-red-400', label: '오류' };
+  }
+  if (!stats.lastSignalAt) return { dot: 'bg-zinc-600', text: 'text-zinc-500', label: '대기' };
+  const age = Date.now() - stats.lastSignalAt;
+  if (age < 1_800_000) return { dot: 'bg-green-500', text: 'text-green-400', label: '정상' };
+  if (age < 7_200_000) return { dot: 'bg-yellow-500', text: 'text-yellow-400', label: '유휴' };
+  return { dot: 'bg-red-500', text: 'text-red-400', label: '중단' };
+}
+
+const TYPE_ICONS: Record<string, string> = {
+  breakout: '\u26A1',
+  divergence: '\u21A9',
+  mean_reversion: '\u267B',
+  rsi: '\u21A9',
+  default: '\u2022',
+};
+
+const DIR_LABEL: Record<string, { text: string; color: string }> = {
+  bullish: { text: 'LONG', color: 'text-green-400' },
+  bearish: { text: 'SHORT', color: 'text-red-400' },
+};
+
+/** 실매매 신호 모니터링 헤더 */
+function LiveSignalHeader({ stats }: { stats: SignalStats | null }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 5_000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!stats) return null;
+
+  const health = getHealthColor(stats);
+  const dirStyle = stats.lastSignalDirection ? DIR_LABEL[stats.lastSignalDirection] : null;
+  const typeIcon = stats.lastSignalType ? (TYPE_ICONS[stats.lastSignalType] || '') : '';
+
+  return (
+    <div className='flex items-center gap-2 px-3 py-1.5 bg-zinc-900/80 text-[11px] border-b border-zinc-800/50'>
+      <span className='text-zinc-300 font-medium shrink-0'>{stats.liveStrategy}</span>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${health.dot}`} title={health.label} />
+      <span className={`${health.text} text-[10px] shrink-0`}>{health.label}</span>
+
+      {stats.lastSignalAt && (
+        <span className='text-zinc-500 text-[10px] shrink-0'>
+          {formatRelativeTime(stats.lastSignalAt)}
+          {dirStyle && <span className={`ml-1 ${dirStyle.color}`}>{dirStyle.text}</span>}
+          {typeIcon && <span className='ml-0.5 text-zinc-500'>{typeIcon}</span>}
+        </span>
+      )}
+
+      <div className='flex-1' />
+
+      {/* 타입별 카운트 */}
+      {Object.entries(stats.byType).map(([type, count]) => (
+        <span key={type} className='text-[10px] font-mono text-zinc-500' title={type}>
+          {TYPE_ICONS[type] || ''}{count}
+        </span>
+      ))}
+
+      {stats.totalSignals > 0 && (
+        <span className='text-[10px] font-mono text-zinc-600'>
+          ={stats.totalSignals}
+        </span>
+      )}
+
+      {stats.pythonErrors > 0 && (
+        <span className='text-[10px] font-mono text-red-400' title={stats.lastErrorMsg || ''}>
+          err:{stats.pythonErrors}
+        </span>
+      )}
+
+      {stats.avgExecMs !== null && (
+        <span className='text-[10px] font-mono text-zinc-600'>
+          {(stats.avgExecMs / 1000).toFixed(1)}s
+        </span>
+      )}
+    </div>
+  );
+}
+
 const REGIME_STYLE: Record<string, { text: string; color: string; icon: string }> = {
   BULL: { text: '상승', color: 'text-green-400', icon: '▲' },
   BEAR: { text: '하락', color: 'text-red-400', icon: '▼' },
@@ -87,7 +182,7 @@ const REGIME_STYLE: Record<string, { text: string; color: string; icon: string }
 };
 
 export const SignalThresholdMonitor = memo(({ timeframe, trades }: SignalThresholdMonitorProps) => {
-  const { indicatorSnapshot } = useSocket();
+  const { indicatorSnapshot, signalStats } = useSocket();
   const { ticker } = useSocketTicker();
 
   const typeStats = useMemo(() => {
@@ -135,6 +230,9 @@ export const SignalThresholdMonitor = memo(({ timeframe, trades }: SignalThresho
 
   return (
     <div className='mt-1 rounded-lg overflow-hidden space-y-px'>
+      {/* 실매매 신호 모니터링 헤더 */}
+      <LiveSignalHeader stats={signalStats} />
+
       {/* ↩ 반전매매 (RSI Divergence) */}
       <div
         className='flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 text-[11px]'

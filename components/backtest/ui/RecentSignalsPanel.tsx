@@ -2,6 +2,25 @@ import { memo } from 'react';
 import { RealtimeDivergenceData } from '@/contexts/SocketContext';
 import { formatKST, toSeconds } from '@/lib/utils/timestamp';
 
+const TYPE_LABELS: Record<string, { short: string; color: string }> = {
+  breakout: { short: '\uB3CC\uD30C', color: 'text-amber-400' },
+  divergence: { short: '\uBC18\uC804', color: 'text-blue-400' },
+  mean_reversion: { short: 'MR', color: 'text-purple-400' },
+  rsi: { short: 'RSI', color: 'text-blue-400' },
+  default: { short: '', color: 'text-zinc-500' },
+};
+
+function SignalTypeTag({ type }: { type?: string }) {
+  if (!type || type === 'default') return null;
+  const label = TYPE_LABELS[type] || TYPE_LABELS.default;
+  if (!label.short) return null;
+  return (
+    <span className={`text-[10px] font-mono px-1 py-0.5 rounded bg-zinc-700/50 ${label.color}`}>
+      {label.short}
+    </span>
+  );
+}
+
 interface RecentSignalsPanelProps {
   divergenceData: RealtimeDivergenceData | null;
   divergenceHistory: RealtimeDivergenceData[];
@@ -20,9 +39,10 @@ export const RecentSignalsPanel: React.FC<RecentSignalsPanelProps> = memo(
                   className={`text-lg ${divergenceData.direction === 'bullish' ? 'text-green-400' : 'text-red-400'}`}
                 >
                   {divergenceData.direction === 'bullish'
-                    ? '🚀 롱 신호'
-                    : '🌧 숏 신호'}
+                    ? '\uD83D\uDE80 \uB871 \uC2E0\uD638'
+                    : '\uD83C\uDF27 \uC20F \uC2E0\uD638'}
                 </span>
+                <SignalTypeTag type={divergenceData.signalType} />
                 <span className='text-zinc-400 text-sm'>
                   @ ${divergenceData.currentPrice.toLocaleString()}
                 </span>
@@ -43,7 +63,7 @@ export const RecentSignalsPanel: React.FC<RecentSignalsPanelProps> = memo(
         {divergenceHistory.length > 0 && (
           <div className='mt-4'>
             <h3 className='text-sm font-medium text-zinc-400 mb-2'>
-              최근 신호 ({divergenceHistory.length})
+              \uCD5C\uADFC \uC2E0\uD638 ({divergenceHistory.length})
             </h3>
             <div className='max-h-40 overflow-y-auto space-y-1 custom-scrollbar'>
               {[...divergenceHistory]
@@ -61,8 +81,9 @@ export const RecentSignalsPanel: React.FC<RecentSignalsPanelProps> = memo(
                           : 'text-red-400'
                       }
                     >
-                      {signal.direction === 'bullish' ? '🚀 롱' : '🌧 숏'}
+                      {signal.direction === 'bullish' ? '\uD83D\uDE80 \uB871' : '\uD83C\uDF27 \uC20F'}
                     </span>
+                    <SignalTypeTag type={signal.signalType} />
                     <span className='text-zinc-300'>
                       ${signal.currentPrice.toLocaleString()}
                     </span>

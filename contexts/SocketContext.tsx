@@ -148,6 +148,22 @@ export interface RealtimeDivergenceData {
   timeframe: string;
   rsiValue?: number;
   strategy?: string;
+  signalType?: string; // breakout | divergence | mean_reversion | rsi | default
+}
+
+export interface SignalStats {
+  liveStrategy: string;
+  totalSignals: number;
+  byType: Record<string, number>;
+  lastSignalAt: number | null;
+  lastSignalDirection: string | null;
+  lastSignalType: string | null;
+  lastSignalPrice: number | null;
+  pythonErrors: number;
+  lastErrorAt: number | null;
+  lastErrorMsg: string | null;
+  avgExecMs: number | null;
+  startedAt: number;
 }
 
 export interface IndicatorSnapshot {
@@ -202,6 +218,7 @@ interface SocketContextValue {
   divergenceData: RealtimeDivergenceData | null;
   divergenceHistory: RealtimeDivergenceData[];
   indicatorSnapshot: IndicatorSnapshot | null;
+  signalStats: SignalStats | null;
   currentSymbol: string;
   wakeUpCounter: number;
   subscribeKline: (timeframe: string) => void;
@@ -232,6 +249,7 @@ const SocketContext = createContext<SocketContextValue>({
   divergenceData: null,
   divergenceHistory: [],
   indicatorSnapshot: null,
+  signalStats: null,
   currentSymbol: '',
   wakeUpCounter: 0,
   subscribeKline: () => {},
@@ -271,6 +289,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [divergenceData, setDivergenceData] = useState<RealtimeDivergenceData | null>(null);
   const [divergenceHistory, setDivergenceHistory] = useState<RealtimeDivergenceData[]>([]);
   const [indicatorSnapshot, setIndicatorSnapshot] = useState<IndicatorSnapshot | null>(null);
+  const [signalStats, setSignalStats] = useState<SignalStats | null>(null);
   const [currentSymbol, setCurrentSymbol] = useState<string>('');
   const currentSymbolRef = useRef<string>('');
   const [wakeUpCounter, setWakeUpCounter] = useState(0);
@@ -331,10 +350,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     socket.on('connect', () => {
       console.log('[Socket] Connected');
       setIsConnected(true);
-      // 초기 trading status 가져오기 (소켓 연결 전 broadcast 놓침 방지)
+      // 초기 trading status + signal stats 가져오기 (소켓 연결 전 broadcast 놓침 방지)
       fetch(`${API_CONFIG.BASE_URL}/trading/status`)
         .then(r => r.json())
         .then(data => setTradingStatus(data))
+        .catch(() => {});
+      fetch(`${API_CONFIG.BASE_URL}/trading/signal-stats`)
+        .then(r => r.json())
+        .then(data => setSignalStats(data))
         .catch(() => {});
     });
 
@@ -422,6 +445,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     // Trading status (symbol-independent)
     socket.on('data:trading:status', (data: TradingStatus) => {
       setTradingStatus(data);
+    });
+
+    // Signal stats (symbol-independent)
+    socket.on('data:signal:stats', (data: SignalStats) => {
+      setSignalStats(data);
     });
 
     // Divergence signals
@@ -542,6 +570,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     divergenceData,
     divergenceHistory,
     indicatorSnapshot,
+    signalStats,
     currentSymbol,
     wakeUpCounter,
     subscribeKline,
@@ -562,6 +591,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     divergenceData,
     divergenceHistory,
     indicatorSnapshot,
+    signalStats,
     currentSymbol,
     wakeUpCounter,
     subscribeKline,
