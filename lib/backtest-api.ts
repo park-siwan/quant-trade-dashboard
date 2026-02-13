@@ -1723,6 +1723,60 @@ export async function refreshSingleStrategy(
   }
 }
 
+// ============== 실매매 거래 기록 ==============
+
+export interface LiveTrade {
+  id: string;
+  source: 'auto' | 'manual';
+  strategy?: string;
+  signalType?: string;
+  symbol: string;
+  side: 'buy' | 'sell';
+  entryPrice: number;
+  exitPrice?: number;
+  amount: number;
+  leverage: number;
+  pnl?: number;
+  pnlPercent?: number;
+  status: 'open' | 'closed_tp' | 'closed_sl' | 'closed_manual';
+  openedAt: number;
+  closedAt?: number;
+}
+
+export interface SourceStats {
+  totalTrades: number;
+  wins: number;
+  winRate: number;
+  totalPnl: number;
+  avgPnl: number;
+  sharpeRatio: number;
+  byType: Record<string, { count: number; wins: number; pnl: number }>;
+}
+
+export interface TradeStats {
+  auto: SourceStats;
+  manual: SourceStats;
+  overall: SourceStats;
+}
+
+export async function fetchLiveTrades(): Promise<LiveTrade[]> {
+  try {
+    const res = await fetch(`${API_BASE}/trading/live-trades`);
+    return res.json();
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchLiveTradeStats(): Promise<TradeStats | null> {
+  try {
+    const res = await fetch(`${API_BASE}/trading/live-trades/stats`);
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * 전체 전략 캐시 강제 갱신
  * JSON 파라미터 변경 후 즉시 반영 필요 시 사용

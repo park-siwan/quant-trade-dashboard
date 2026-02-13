@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDown, BarChart3, CandlestickChart, Target, BookOpen } from 'lucide-react';
+import { ChevronDown, BarChart3, CandlestickChart, Target, Swords, BookOpen } from 'lucide-react';
 import { useAtom, useAtomValue } from 'jotai';
 import { symbolSlugAtom, symbolAtom, symbolListAtom } from '@/stores/symbolAtom';
 import { usePrice } from '@/hooks/usePrice';
@@ -13,6 +13,7 @@ const tabs = [
   { href: '/', label: '분석', icon: BarChart3 },
   { href: '/chart', label: '차트', icon: CandlestickChart },
   { href: '/strategy', label: '전략', icon: Target },
+  { href: '/trades', label: '거래', icon: Swords },
   { href: '/glossary', label: '용어', icon: BookOpen },
 ];
 
