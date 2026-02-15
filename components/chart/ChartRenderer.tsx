@@ -227,15 +227,8 @@ export default function ChartRenderer({
         current.timestamp > latest.timestamp ? current : latest
       );
 
-      // 새 다이버전스 감지 시 8비트 사운드 재생
+      // 새 다이버전스 감지 시 타임스탬프 업데이트
       if (lastDivergenceTimestampRef.current !== latestSignal.timestamp) {
-        // 초기 로드가 아닌 경우에만 사운드 재생 (이전 값이 있을 때)
-        if (lastDivergenceTimestampRef.current !== null) {
-          // 동적 import로 8비트 사운드 재생
-          import('@/hooks/useTTS').then(({ play8BitSound }) => {
-            play8BitSound(latestSignal.direction);
-          });
-        }
         lastDivergenceTimestampRef.current = latestSignal.timestamp;
       }
 
