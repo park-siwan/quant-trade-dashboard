@@ -297,6 +297,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   // Throttle refs
   const latestTickerRef = useRef<TickerData | null>(null);
   const tickerThrottleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const latestKlineRef = useRef<KlineData | null>(null);
   const klineThrottleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const orderbookThrottleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -390,17 +391,36 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       }, TICKER_THROTTLE_MS);
     });
 
-    // Kline (throttled)
+    // Kline (throttled with trailing update)
     socket.on('binance:kline', (data: KlineData) => {
       if (!data.symbol || data.symbol !== currentSymbolRef.current) return;
 
       klineMapRef.current.set(data.timeframe, data);
+      latestKlineRef.current = data;
+
+      // isFinal 캔들은 즉시 업데이트 (캔들 종료 시점 누락 방지)
+      if (data.isFinal) {
+        if (klineThrottleTimerRef.current) {
+          clearTimeout(klineThrottleTimerRef.current);
+          klineThrottleTimerRef.current = null;
+        }
+        setKlineMapVersion(v => v + 1);
+        setKline(data);
+        return;
+      }
+
       if (klineThrottleTimerRef.current) return;
 
       setKlineMapVersion(v => v + 1);
       setKline(data);
       klineThrottleTimerRef.current = setTimeout(() => {
         klineThrottleTimerRef.current = null;
+        // 스로틀 중 들어온 최신 데이터가 있으면 업데이트 (trailing)
+        const latest = latestKlineRef.current;
+        if (latest && latest !== data) {
+          setKlineMapVersion(v => v + 1);
+          setKline(latest);
+        }
       }, KLINE_THROTTLE_MS);
     });
 

@@ -275,7 +275,7 @@ export default function ChartRenderer({
 
   // 실시간 캔들 업데이트 (update 방식으로 뷰 유지)
   useEffect(() => {
-    // 차트가 아직 준비되지 않았거나, realtimeCandle이 없거나, 캔들이 닫힌 경우 스킵
+    // 차트가 아직 준비되지 않았거나 realtimeCandle이 없으면 스킵
     if (!realtimeCandle) {
       debug.chart('⚠️ realtimeCandle 없음');
       return;
@@ -284,10 +284,7 @@ export default function ChartRenderer({
       debug.chart('⚠️ candlestickSeriesRef 없음');
       return;
     }
-    if (realtimeCandle.isFinal) {
-      debug.chart('⚠️ 캔들 종료됨, 업데이트 스킵');
-      return;
-    }
+    // isFinal 캔들도 마지막 틱 반영을 위해 업데이트 (이후 캐시 동기화됨)
     if (!chartRef.current) {
       debug.chart('⚠️ chartRef 없음');
       return;
