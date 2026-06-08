@@ -123,14 +123,7 @@ export function useStrategyOptimize(): UseStrategyOptimizeReturn {
   const startOptimizeAll = useCallback((strategyNames: string[]) => {
     if (isOptimizingRef.current || strategyNames.length === 0) return;
 
-    const today = new Date().toDateString();
-    const pending = strategyNames.filter(s => {
-      const status = strategies.find(os => os.strategy === s);
-      if (!status?.lastOptimizedAt) return true;
-      return new Date(status.lastOptimizedAt).toDateString() !== today;
-    });
-
-    if (pending.length === 0) return;
+    const pending = strategyNames;
 
     optimizeQueueRef.current = pending.slice(1);
     setOptimizeAllProgress({ current: 1, total: pending.length });
