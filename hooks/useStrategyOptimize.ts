@@ -120,19 +120,29 @@ export function useStrategyOptimize(): UseStrategyOptimizeReturn {
   }, []);
 
   // 전체 전략 순차 최적화
-  const startOptimizeAll = useCallback((strategies: string[]) => {
-    if (isOptimizingRef.current || strategies.length === 0) return;
-    optimizeQueueRef.current = strategies.slice(1);
-    setOptimizeAllProgress({ current: 1, total: strategies.length });
+  const startOptimizeAll = useCallback((strategyNames: string[]) => {
+    if (isOptimizingRef.current || strategyNames.length === 0) return;
+
+    const today = new Date().toDateString();
+    const pending = strategyNames.filter(s => {
+      const status = strategies.find(os => os.strategy === s);
+      if (!status?.lastOptimizedAt) return true;
+      return new Date(status.lastOptimizedAt).toDateString() !== today;
+    });
+
+    if (pending.length === 0) return;
+
+    optimizeQueueRef.current = pending.slice(1);
+    setOptimizeAllProgress({ current: 1, total: pending.length });
 
     // 첫 번째 전략 시작
     isOptimizingRef.current = true;
-    setOptimizingStrategy(strategies[0]);
+    setOptimizingStrategy(pending[0]);
     setProposeResult(null);
     setApplyResult(null);
     setError(null);
 
-    proposeOptimization(strategies[0])
+    proposeOptimization(pending[0])
       .then(result => setProposeResult(result))
       .catch((err: any) => {
         setError(err.message);
@@ -143,7 +153,7 @@ export function useStrategyOptimize(): UseStrategyOptimizeReturn {
         isOptimizingRef.current = false;
         setOptimizingStrategy(null);
       });
-  }, [processNextInQueue]);
+  }, [processNextInQueue, strategies]);
 
   // 승인
   const approve = useCallback(async () => {

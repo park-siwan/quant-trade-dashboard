@@ -254,6 +254,21 @@ function computeBreakoutLevels(
   return { high, low };
 }
 
+function computeZScore(candles: CandlestickData[], period = 20): { time: Time; value: number }[] {
+  const closes = candles.map(c => (c as any).close as number);
+  const result: { time: Time; value: number }[] = [];
+  for (let i = period - 1; i < candles.length; i++) {
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += closes[j];
+    const sma = sum / period;
+    let sqSum = 0;
+    for (let j = i - period + 1; j <= i; j++) sqSum += (closes[j] - sma) ** 2;
+    const std = Math.sqrt(sqSum / period);
+    result.push({ time: candles[i].time, value: std > 0 ? (closes[i] - sma) / std : 0 });
+  }
+  return result;
+}
+
 // 무지개 색상 배열 (빨주노초파보)
 const RAINBOW_COLORS = [
   '#ef4444',  // 빨강 (Red)
@@ -307,6 +322,9 @@ function RealtimeChart() {
   const rsiContainerRef = useRef<HTMLDivElement>(null);
   const rsiChartRef = useRef<IChartApi | null>(null);
   const rsiSeriesRef = useRef<any>(null);
+  const zscoreContainerRef = useRef<HTMLDivElement>(null);
+  const zscoreChartRef = useRef<IChartApi | null>(null);
+  const zscoreSeriesRef = useRef<any>(null);
   const isChartDisposedRef = useRef(false);
   // 🎯 핵심 최적화: Context 분리로 불필요한 리렌더 방지
   // - TickerContext: ticker만 구독 (가장 빈번)
@@ -1361,6 +1379,108 @@ function RealtimeChart() {
       rsiResizeObs.observe(rsiContainerRef.current);
     }
 
+    // ── Z-Score 서브 패널 ──
+    if (zscoreContainerRef.current) {
+      if (zscoreChartRef.current) {
+        try { zscoreChartRef.current.remove(); } catch {}
+      }
+
+      const zscoreChart = createChart(zscoreContainerRef.current, {
+        width: zscoreContainerRef.current.clientWidth,
+        height: 100,
+        layout: { background: { color: '#18181b' }, textColor: '#71717a' },
+        grid: { vertLines: { color: '#27272a' }, horzLines: { color: '#27272a' } },
+        crosshair: {
+          mode: 1,
+          horzLine: { color: '#e4e4e7', width: 1, style: 0, labelBackgroundColor: '#52525b' },
+          vertLine: { color: '#a1a1aa', width: 1, style: 2, labelBackgroundColor: '#52525b' },
+        },
+        rightPriceScale: { borderColor: '#3f3f46', scaleMargins: { top: 0.1, bottom: 0.1 } },
+        timeScale: { borderColor: '#3f3f46', timeVisible: true, visible: false, rightOffset: 20 },
+      });
+
+      const zscoreData = computeZScore(candles);
+      const zOffset = candles.length - zscoreData.length;
+
+      const zSeries = zscoreChart.addSeries(LineSeries, {
+        color: '#34d399',
+        lineWidth: 1,
+        lastValueVisible: true,
+        priceLineVisible: false,
+        crosshairMarkerVisible: true,
+      });
+      zSeries.setData(zscoreData);
+
+      // 진입 임계선 (+2.5 / -2.5 고변동, +1.5 / -1.5 저변동)
+      const thresholdZ = (val: number, color: string) => {
+        if (zscoreData.length < 2) return;
+        const s = zscoreChart.addSeries(LineSeries, {
+          color, lineWidth: 1, lineStyle: LineStyle.Dashed,
+          lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+        });
+        s.setData([
+          { time: zscoreData[0].time, value: val },
+          { time: zscoreData[zscoreData.length - 1].time, value: val },
+        ]);
+      };
+      thresholdZ(2.5, 'rgba(239,68,68,0.5)');
+      thresholdZ(-2.5, 'rgba(34,197,94,0.5)');
+      thresholdZ(1.5, 'rgba(239,68,68,0.25)');
+      thresholdZ(-1.5, 'rgba(34,197,94,0.25)');
+      // 0선
+      thresholdZ(0, 'rgba(161,161,170,0.3)');
+
+      // 타임스케일 동기화
+      let isZSyncing = false;
+      chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (isZSyncing || !range || !zscoreChartRef.current) return;
+        isZSyncing = true;
+        zscoreChartRef.current.timeScale().setVisibleLogicalRange({ from: range.from - zOffset, to: range.to - zOffset });
+        isZSyncing = false;
+      });
+      zscoreChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (isZSyncing || !range || !chartRef.current) return;
+        isZSyncing = true;
+        chartRef.current.timeScale().setVisibleLogicalRange({ from: range.from + zOffset, to: range.to + zOffset });
+        isZSyncing = false;
+      });
+
+      // 크로스헤어 동기화
+      let isZCrosshairSyncing = false;
+      chart.subscribeCrosshairMove((param) => {
+        if (isZCrosshairSyncing || !zscoreChartRef.current || !zscoreSeriesRef.current) return;
+        isZCrosshairSyncing = true;
+        if (param.time) {
+          zscoreChartRef.current.setCrosshairPosition(0, param.time, zscoreSeriesRef.current);
+        } else {
+          zscoreChartRef.current.clearCrosshairPosition();
+        }
+        isZCrosshairSyncing = false;
+      });
+      zscoreChart.subscribeCrosshairMove((param) => {
+        if (isZCrosshairSyncing || !chartRef.current || !candleSeriesRef.current) return;
+        isZCrosshairSyncing = true;
+        if (param.time) {
+          chartRef.current.setCrosshairPosition(0, param.time, candleSeriesRef.current);
+        } else {
+          chartRef.current.clearCrosshairPosition();
+        }
+        isZCrosshairSyncing = false;
+      });
+
+      zscoreChartRef.current = zscoreChart;
+      zscoreSeriesRef.current = zSeries;
+
+      const zResizeObs = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.target === zscoreContainerRef.current && zscoreChartRef.current) {
+            zscoreChartRef.current.applyOptions({ width: entry.contentRect.width });
+          }
+        }
+      });
+      zResizeObs.observe(zscoreContainerRef.current);
+    }
+
     // 크로스헤어 이동 시 거래 정보 표시 (툴팁)
     chart.subscribeCrosshairMove((param) => {
       if (!param.time || !param.point) {
@@ -1663,6 +1783,29 @@ function RealtimeChart() {
           </div>
         ) : (
           <div ref={containerRef} className='w-full relative flex-1 min-h-[400px]'>
+            {/* 차트 범례 */}
+            <div className='absolute top-2 left-2 z-30 flex flex-col gap-0.5 bg-zinc-900/70 rounded px-2 py-1.5 text-[10px] pointer-events-none select-none'>
+              <div className='flex items-center gap-1.5'>
+                <span className='inline-block w-5 border-t border-dashed' style={{ borderColor: 'rgba(239,68,68,0.6)' }} />
+                <span className='text-zinc-400'>BB Upper</span>
+              </div>
+              <div className='flex items-center gap-1.5'>
+                <span className='inline-block w-5 border-t border-dotted' style={{ borderColor: 'rgba(161,161,170,0.6)' }} />
+                <span className='text-zinc-400'>BB Mid (SMA20)</span>
+              </div>
+              <div className='flex items-center gap-1.5'>
+                <span className='inline-block w-5 border-t border-dashed' style={{ borderColor: 'rgba(59,130,246,0.6)' }} />
+                <span className='text-zinc-400'>BB Lower</span>
+              </div>
+              <div className='flex items-center gap-1.5'>
+                <span className='inline-block w-5 border-t border-solid' style={{ borderColor: 'rgba(34,197,94,0.6)' }} />
+                <span className='text-zinc-400'>BO High (20봉)</span>
+              </div>
+              <div className='flex items-center gap-1.5'>
+                <span className='inline-block w-5 border-t border-solid' style={{ borderColor: 'rgba(239,68,68,0.6)' }} />
+                <span className='text-zinc-400'>BO Low (20봉)</span>
+              </div>
+            </div>
             {/* 진행 중 포지션 이모지 오버레이 */}
             {openPosition &&
               chartRef.current &&
@@ -1811,6 +1954,15 @@ function RealtimeChart() {
           <div className='w-full relative' style={{ height: 120 }}>
             <div ref={rsiContainerRef} className='w-full h-full' />
             <span className='absolute top-1 left-2 text-[10px] text-zinc-500 z-10 pointer-events-none'>RSI(14)</span>
+          </div>
+        )}
+
+        {/* Z-Score 서브 패널 */}
+        {!isLoading && (
+          <div className='w-full relative' style={{ height: 100 }}>
+            <div ref={zscoreContainerRef} className='w-full h-full' />
+            <span className='absolute top-1 left-2 text-[10px] text-zinc-500 z-10 pointer-events-none'>Z-Score(20)</span>
+            <span className='absolute top-1 right-10 text-[9px] text-zinc-600 z-10 pointer-events-none'>±1.5 / ±2.5</span>
           </div>
         )}
 
