@@ -201,10 +201,8 @@ interface KlineContextValue {
   getKline: (timeframe: string) => KlineData | null;
 }
 
-// 3. Socket Context (나머지 + functions)
-interface SocketContextValue {
-  socket: Socket | null;
-  isConnected: boolean;
+// 3. Market Data Context (3초 주기 volatile 데이터 — RealtimeChart 불필요 구독 방지)
+interface MarketDataContextValue {
   orderbook: OrderBookData | null;
   mtfData: BackendMTFData | null;
   lastMtfUpdate: number;
@@ -214,6 +212,12 @@ interface SocketContextValue {
   coinglassData: CoinglassData | null;
   longShortRatioData: LongShortRatioData | null;
   balanceData: BalanceData | null;
+}
+
+// 4. Socket Context (stable + infrequent data)
+interface SocketContextValue {
+  socket: Socket | null;
+  isConnected: boolean;
   tradingStatus: TradingStatus | null;
   divergenceData: RealtimeDivergenceData | null;
   divergenceHistory: RealtimeDivergenceData[];
@@ -226,6 +230,9 @@ interface SocketContextValue {
   subscribeSymbol: (symbol: string) => void;
 }
 
+// ==================== Shared Ticker Ref (re-render 없이 최신 ticker 접근용) ====================
+export const tickerSharedRef: { current: TickerData | null } = { current: null };
+
 // ==================== Contexts ====================
 const TickerContext = createContext<TickerContextValue>({ ticker: null });
 const KlineContext = createContext<KlineContextValue>({
@@ -233,9 +240,7 @@ const KlineContext = createContext<KlineContextValue>({
   klineMap: new Map(),
   getKline: () => null,
 });
-const SocketContext = createContext<SocketContextValue>({
-  socket: null,
-  isConnected: false,
+const MarketDataContext = createContext<MarketDataContextValue>({
   orderbook: null,
   mtfData: null,
   lastMtfUpdate: 0,
@@ -245,6 +250,10 @@ const SocketContext = createContext<SocketContextValue>({
   coinglassData: null,
   longShortRatioData: null,
   balanceData: null,
+});
+const SocketContext = createContext<SocketContextValue>({
+  socket: null,
+  isConnected: false,
   tradingStatus: null,
   divergenceData: null,
   divergenceHistory: [],
@@ -371,12 +380,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       if (!data.symbol || data.symbol !== currentSymbolRef.current) return;
 
       latestTickerRef.current = data;
+      tickerSharedRef.current = data; // ref-based 접근용 (re-render 없이 최신 ticker)
       if (tickerThrottleTimerRef.current) return;
 
       setTicker(data);
       tickerThrottleTimerRef.current = setTimeout(() => {
         tickerThrottleTimerRef.current = null;
         if (latestTickerRef.current && latestTickerRef.current !== data) {
+          tickerSharedRef.current = latestTickerRef.current;
           setTicker(latestTickerRef.current);
         }
       }, TICKER_THROTTLE_MS);
@@ -415,12 +426,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setKline(data);
       klineThrottleTimerRef.current = setTimeout(() => {
         klineThrottleTimerRef.current = null;
-        // 스로틀 중 들어온 최신 데이터가 있으면 업데이트 (trailing)
-        const latest = latestKlineRef.current;
-        if (latest && latest !== data) {
-          setKlineMapVersion(v => v + 1);
-          setKline(latest);
-        }
       }, KLINE_THROTTLE_MS);
     });
 
@@ -574,9 +579,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     getKline,
   }), [kline, getKline]);
 
-  const socketValue = useMemo(() => ({
-    socket: socketRef.current,
-    isConnected,
+  // MarketData: 3초 주기 volatile 데이터 (RealtimeChart와 분리)
+  const marketDataValue = useMemo(() => ({
     orderbook,
     mtfData,
     lastMtfUpdate,
@@ -586,6 +590,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     coinglassData,
     longShortRatioData,
     balanceData,
+  }), [orderbook, mtfData, lastMtfUpdate, liquidationData, whaleData, fundingRateData, coinglassData, longShortRatioData, balanceData]);
+
+  // SocketContext: stable + infrequent 데이터만 포함 → RealtimeChart re-render 최소화
+  const socketValue = useMemo(() => ({
+    socket: socketRef.current,
+    isConnected,
     tradingStatus,
     divergenceData,
     divergenceHistory,
@@ -598,15 +608,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     subscribeSymbol,
   }), [
     isConnected,
-    orderbook,
-    mtfData,
-    lastMtfUpdate,
-    liquidationData,
-    whaleData,
-    fundingRateData,
-    coinglassData,
-    longShortRatioData,
-    balanceData,
     tradingStatus,
     divergenceData,
     divergenceHistory,
@@ -621,19 +622,26 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <SocketContext.Provider value={socketValue}>
-      <TickerContext.Provider value={tickerValue}>
-        <KlineContext.Provider value={klineValue}>
-          {children}
-        </KlineContext.Provider>
-      </TickerContext.Provider>
+      <MarketDataContext.Provider value={marketDataValue}>
+        <TickerContext.Provider value={tickerValue}>
+          <KlineContext.Provider value={klineValue}>
+            {children}
+          </KlineContext.Provider>
+        </TickerContext.Provider>
+      </MarketDataContext.Provider>
     </SocketContext.Provider>
   );
 }
 
 // ==================== Hooks ====================
-// 메인 소켓 hook (orderbook, divergence 등)
+// 메인 소켓 hook (stable + infrequent data)
 export function useSocket() {
   return useContext(SocketContext);
+}
+
+// Market data hook (volatile 3s data: liquidation, whale, orderbook 등)
+export function useMarketData() {
+  return useContext(MarketDataContext);
 }
 
 // Ticker 전용 hook (가장 빈번하게 업데이트)
@@ -646,14 +654,16 @@ export function useSocketKline() {
   return useContext(KlineContext);
 }
 
-// 하위 호환성: ticker + kline + socket 전부 필요한 경우
+// 하위 호환성: ticker + kline + socket + marketData 전부 필요한 경우
 export function useSocketAll() {
   const socket = useSocket();
+  const marketData = useMarketData();
   const { ticker } = useSocketTicker();
   const klineData = useSocketKline();
 
   return {
     ...socket,
+    ...marketData,
     ticker,
     ...klineData,
   };

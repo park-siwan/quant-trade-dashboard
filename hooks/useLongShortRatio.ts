@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useSocket, LongShortRatioData } from '@/contexts/SocketContext';
+import { useSocket, useMarketData, LongShortRatioData } from '@/contexts/SocketContext';
 
 interface UseLongShortRatioParams {
   symbol?: string;
@@ -54,7 +54,8 @@ export function useLongShortRatio({
   period = '1h',
   enabled = true,
 }: UseLongShortRatioParams = {}) {
-  const { longShortRatioData, isConnected } = useSocket();
+  const { longShortRatioData } = useMarketData();
+  const { isConnected } = useSocket();
 
   // LongShortRatioData → LongShortRatio 변환 (메모이제이션)
   const ratio = useMemo(() => transformToLegacy(longShortRatioData), [longShortRatioData]);

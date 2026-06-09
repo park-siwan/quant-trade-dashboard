@@ -1,6 +1,6 @@
 'use client';
 
-import { useSocket, LiquidationData } from '@/contexts/SocketContext';
+import { useSocket, useMarketData, LiquidationData } from '@/contexts/SocketContext';
 
 interface UseLiquidationsParams {
   symbol: string;
@@ -12,7 +12,8 @@ interface UseLiquidationsParams {
  * 백엔드 socket.io를 통해 실시간 데이터 수신
  */
 export function useLiquidations({ symbol }: UseLiquidationsParams) {
-  const { liquidationData, isConnected } = useSocket();
+  const { liquidationData } = useMarketData();
+  const { isConnected } = useSocket();
 
   return {
     data: liquidationData,

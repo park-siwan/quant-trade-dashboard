@@ -12,7 +12,7 @@ import {
   createSeriesMarkers,
   LineStyle,
 } from 'lightweight-charts';
-import { useSocket, useSocketTicker, useSocketKline } from '@/contexts/SocketContext';
+import { useSocket, useSocketKline, tickerSharedRef } from '@/contexts/SocketContext';
 import {
   SavedOptimizeResult,
   RollingParamResult,
@@ -327,10 +327,9 @@ function RealtimeChart() {
   const zscoreSeriesRef = useRef<any>(null);
   const isChartDisposedRef = useRef(false);
   // 🎯 핵심 최적화: Context 분리로 불필요한 리렌더 방지
-  // - TickerContext: ticker만 구독 (가장 빈번)
+  // - tickerSharedRef: ticker는 re-render 없이 ref로만 접근 (500ms 절약)
   // - KlineContext: kline 데이터만 구독
-  // - SocketContext: 나머지 (divergence, subscriptions 등)
-  const { ticker: tickerData } = useSocketTicker();
+  // - SocketContext: stable + infrequent data (market data 분리로 3s 절약)
   const { getKline } = useSocketKline();
   const {
     isConnected,
@@ -342,16 +341,10 @@ function RealtimeChart() {
     indicatorSnapshot,
   } = useSocket();
 
-  // ticker는 ref로 저장하여 리렌더 없이 접근
-  const tickerRef = useRef(tickerData);
-  useEffect(() => {
-    tickerRef.current = tickerData;
-  }, [tickerData]);
-
-  // ticker 접근용 프록시 객체 (ref를 통해 최신 값 반환)
+  // ticker 접근용 프록시 객체 (tickerSharedRef를 통해 최신 값 반환, re-render 없음)
   const ticker = useMemo(() => ({
-    get price() { return tickerRef.current?.price; },
-    get timestamp() { return tickerRef.current?.timestamp; }
+    get price() { return tickerSharedRef.current?.price; },
+    get timestamp() { return tickerSharedRef.current?.timestamp; }
   }), []); // 빈 deps = 객체 참조 안정화
 
   // 현재 선택된 심볼
@@ -1585,7 +1578,7 @@ function RealtimeChart() {
     if (!snap) return;
 
     const { adx, atrPct, ema200, volumeRatio, regime } = snap;
-    const price = tickerRef.current?.price ?? snap.price;
+    const price = tickerSharedRef.current?.price ?? snap.price;
 
     // 평균회귀 조건 (BB): ATR 낮음 + 횡보
     const mrAtr = atrPct !== null && atrPct < 76;
@@ -1765,7 +1758,7 @@ function RealtimeChart() {
         {/* 2. 열린 포지션 카드 */}
         <OpenPositionCard
           openPosition={openPosition}
-          currentPrice={tickerData?.price}
+          currentPrice={tickerSharedRef.current?.price}
           leverage={leverage}
           winRate={allStrategyStats.get(selectedStrategy?.strategy || '')?.winRate}
           maxConsecLoss={(() => {

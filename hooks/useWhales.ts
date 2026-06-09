@@ -1,6 +1,6 @@
 'use client';
 
-import { useSocket, WhaleData } from '@/contexts/SocketContext';
+import { useSocket, useMarketData, WhaleData } from '@/contexts/SocketContext';
 
 interface UseWhalesParams {
   symbol: string;
@@ -12,7 +12,8 @@ interface UseWhalesParams {
  * 백엔드 socket.io를 통해 실시간 데이터 수신
  */
 export function useWhales({ symbol }: UseWhalesParams) {
-  const { whaleData, isConnected } = useSocket();
+  const { whaleData } = useMarketData();
+  const { isConnected } = useSocket();
 
   return {
     data: whaleData,

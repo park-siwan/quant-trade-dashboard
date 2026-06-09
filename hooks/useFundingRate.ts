@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSocket, FundingRateData } from '@/contexts/SocketContext';
+import { useSocket, useMarketData, FundingRateData } from '@/contexts/SocketContext';
 
 interface UseFundingRateParams {
   symbol: string;
@@ -13,7 +13,8 @@ interface UseFundingRateParams {
  * 백엔드 socket.io를 통해 실시간 데이터 수신
  */
 export function useFundingRate({ symbol }: UseFundingRateParams) {
-  const { fundingRateData, isConnected } = useSocket();
+  const { fundingRateData } = useMarketData();
+  const { isConnected } = useSocket();
   const [timeUntilFunding, setTimeUntilFunding] = useState<string>('--:--:--');
 
   // 다음 펀딩까지 남은 시간 계산

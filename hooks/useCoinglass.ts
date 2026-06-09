@@ -1,6 +1,6 @@
 'use client';
 
-import { useSocket, CoinglassData } from '@/contexts/SocketContext';
+import { useSocket, useMarketData, CoinglassData } from '@/contexts/SocketContext';
 
 interface UseCoinglassParams {
   symbol?: string;
@@ -12,7 +12,8 @@ interface UseCoinglassParams {
  * 백엔드 socket.io를 통해 실시간 데이터 수신
  */
 export function useCoinglass({ symbol = 'BTC' }: UseCoinglassParams = {}) {
-  const { coinglassData, isConnected } = useSocket();
+  const { coinglassData } = useMarketData();
+  const { isConnected } = useSocket();
 
   return {
     data: coinglassData,
