@@ -1,5 +1,6 @@
 import { memo, useMemo, useState, useEffect } from 'react';
-import { useSocket, useSocketTicker } from '@/contexts/SocketContext';
+import { useAtomValue } from 'jotai';
+import { indicatorSnapshotAtom, signalStatsAtom, tickerAtom } from '@/stores/socketAtoms';
 import type { SignalStats } from '@/contexts/SocketContext';
 import type { TradeResult } from '@/lib/backtest-api';
 
@@ -349,8 +350,9 @@ function LiveSignalHeader({ stats }: { stats: SignalStats | null }) {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────
 
 export const SignalThresholdMonitor = memo(({ timeframe, trades }: SignalThresholdMonitorProps) => {
-  const { indicatorSnapshot, signalStats } = useSocket();
-  const { ticker } = useSocketTicker();
+  const indicatorSnapshot = useAtomValue(indicatorSnapshotAtom);
+  const signalStats = useAtomValue(signalStatsAtom);
+  const ticker = useAtomValue(tickerAtom);
 
   const typeStats = useMemo(() => {
     if (!trades || trades.length === 0) return null;

@@ -21,7 +21,9 @@ import {
   DIVERGENCE_TYPE_PRIORITY,
 } from '@/lib/divergence';
 import { ADX } from '@/lib/thresholds';
-import { useSocket, useMarketData } from '@/contexts/SocketContext';
+import { useAtomValue } from 'jotai';
+import { mtfDataAtom, lastMtfUpdateAtom, isConnectedAtom } from '@/stores/socketAtoms';
+import { useSocket } from '@/contexts/SocketContext';
 
 // Re-export for backward compatibility
 export { getNextCandleClose, getSecondsUntilClose };
@@ -523,8 +525,10 @@ export const validateMTFSignal = (
 };
 
 export function useMTFSocket({ symbol = 'BTCUSDT', enabled = true }: UseMTFSocketParams = {}) {
-  const { mtfData: backendData, lastMtfUpdate: lastUpdate } = useMarketData();
-  const { isConnected, subscribeMtf } = useSocket();
+  const backendData = useAtomValue(mtfDataAtom);
+  const lastUpdate = useAtomValue(lastMtfUpdateAtom);
+  const isConnected = useAtomValue(isConnectedAtom);
+  const { subscribeMtf } = useSocket();
   const [isLoading, setIsLoading] = useState(true);
 
   // 로딩 상태 업데이트

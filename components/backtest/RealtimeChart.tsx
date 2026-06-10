@@ -12,7 +12,8 @@ import {
   createSeriesMarkers,
   LineStyle,
 } from 'lightweight-charts';
-import { useSocket, useSocketKline, tickerSharedRef } from '@/contexts/SocketContext';
+import { useSocket, tickerSharedRef } from '@/contexts/SocketContext';
+import { isConnectedAtom, divergenceDataAtom, divergenceHistoryAtom, wakeUpCounterAtom, tradingStatusAtom, indicatorSnapshotAtom } from '@/stores/socketAtoms';
 import {
   SavedOptimizeResult,
   RollingParamResult,
@@ -330,16 +331,13 @@ function RealtimeChart() {
   // - tickerSharedRef: ticker는 re-render 없이 ref로만 접근 (500ms 절약)
   // - KlineContext: kline 데이터만 구독
   // - SocketContext: stable + infrequent data (market data 분리로 3s 절약)
-  const { getKline } = useSocketKline();
-  const {
-    isConnected,
-    divergenceData,
-    divergenceHistory,
-    subscribeKline,
-    wakeUpCounter,
-    tradingStatus,
-    indicatorSnapshot,
-  } = useSocket();
+  const { subscribeKline, getKline } = useSocket();
+  const isConnected = useAtomValue(isConnectedAtom);
+  const divergenceData = useAtomValue(divergenceDataAtom);
+  const divergenceHistory = useAtomValue(divergenceHistoryAtom);
+  const wakeUpCounter = useAtomValue(wakeUpCounterAtom);
+  const tradingStatus = useAtomValue(tradingStatusAtom);
+  const indicatorSnapshot = useAtomValue(indicatorSnapshotAtom);
 
   // ticker 접근용 프록시 객체 (tickerSharedRef를 통해 최신 값 반환, re-render 없음)
   const ticker = useMemo(() => ({

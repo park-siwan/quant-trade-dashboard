@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useSocket, useMarketData, OrderBookLevel, OrderBookData as SocketOrderBookData } from '@/contexts/SocketContext';
+import { useAtomValue } from 'jotai';
+import { orderbookAtom, isConnectedAtom } from '@/stores/socketAtoms';
+import type { OrderBookLevel, OrderBookData as SocketOrderBookData } from '@/contexts/SocketContext';
 
 // Re-export types for backward compatibility
 export type { OrderBookLevel };
@@ -27,8 +29,8 @@ interface UseOrderBookProps {
  * 백엔드 socket.io를 통해 Binance 데이터 수신
  */
 export function useOrderBook({ symbol = 'BTCUSDT', limit = 20 }: UseOrderBookProps = {}) {
-  const { orderbook } = useMarketData();
-  const { isConnected } = useSocket();
+  const orderbook = useAtomValue(orderbookAtom);
+  const isConnected = useAtomValue(isConnectedAtom);
   const [ratioHistory, setRatioHistory] = useState<RatioHistoryPoint[]>([]);
   const lastRatioUpdateRef = useRef<number>(0);
 

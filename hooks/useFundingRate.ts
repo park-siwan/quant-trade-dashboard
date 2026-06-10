@@ -1,50 +1,35 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSocket, useMarketData, FundingRateData } from '@/contexts/SocketContext';
+import { useAtomValue } from 'jotai';
+import { fundingRateDataAtom, isConnectedAtom } from '@/stores/socketAtoms';
+import type { FundingRateData } from '@/contexts/SocketContext';
 
 interface UseFundingRateParams {
   symbol: string;
-  refreshInterval?: number; // Ignored - data comes from socket
+  refreshInterval?: number;
 }
 
-/**
- * 펀딩 레이트 데이터 훅
- * 백엔드 socket.io를 통해 실시간 데이터 수신
- */
 export function useFundingRate({ symbol }: UseFundingRateParams) {
-  const { fundingRateData } = useMarketData();
-  const { isConnected } = useSocket();
+  const fundingRateData = useAtomValue(fundingRateDataAtom);
+  const isConnected = useAtomValue(isConnectedAtom);
   const [timeUntilFunding, setTimeUntilFunding] = useState<string>('--:--:--');
 
-  // 다음 펀딩까지 남은 시간 계산
   useEffect(() => {
     if (!fundingRateData?.fundingTime) return;
 
     const updateCountdown = () => {
-      const now = Date.now();
-      const diff = fundingRateData.fundingTime - now;
-
-      if (diff <= 0) {
-        setTimeUntilFunding('00:00:00');
-        return;
-      }
-
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-      setTimeUntilFunding(
-        `${hours.toString().padStart(2, '0')}:${minutes
-          .toString()
-          .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-      );
+      const diff = fundingRateData.fundingTime - Date.now();
+      if (diff <= 0) { setTimeUntilFunding('00:00:00'); return; }
+      const h = Math.floor(diff / 3_600_000);
+      const m = Math.floor((diff % 3_600_000) / 60_000);
+      const s = Math.floor((diff % 60_000) / 1000);
+      setTimeUntilFunding(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`);
     };
 
     updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-
-    return () => clearInterval(interval);
+    const id = setInterval(updateCountdown, 1000);
+    return () => clearInterval(id);
   }, [fundingRateData?.fundingTime]);
 
   return {

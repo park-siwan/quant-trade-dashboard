@@ -1,5 +1,7 @@
 import { memo, useState, useEffect, useCallback, useMemo } from 'react';
-import { useSocket, useMarketData, useSocketTicker, type TradingStatus } from '@/contexts/SocketContext';
+import { useAtomValue } from 'jotai';
+import { balanceDataAtom, tradingStatusAtom, tickerAtom } from '@/stores/socketAtoms';
+import type { TradingStatus } from '@/contexts/SocketContext';
 import { API_CONFIG } from '@/lib/config';
 import { TRADING } from '@/lib/constants';
 import type { OpenPosition } from '@/lib/backtest-api';
@@ -239,9 +241,9 @@ interface BalanceHeaderProps {
 }
 
 export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: BalanceHeaderProps) => {
-  const { balanceData } = useMarketData();
-  const { tradingStatus } = useSocket();
-  const { ticker } = useSocketTicker();
+  const balanceData = useAtomValue(balanceDataAtom);
+  const tradingStatus = useAtomValue(tradingStatusAtom);
+  const ticker = useAtomValue(tickerAtom);
   const { settings, setSettings, toggle } = useAutoTradeSettings();
 
   const [orderState, setOrderState] = useState<'idle' | 'confirm' | 'loading' | 'done' | 'error'>('idle');

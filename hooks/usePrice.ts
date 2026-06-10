@@ -1,6 +1,7 @@
 'use client';
 
-import { useSocketTicker } from '@/contexts/SocketContext';
+import { useAtomValue } from 'jotai';
+import { tickerAtom } from '@/stores/socketAtoms';
 
 interface PriceData {
   price: number;
@@ -8,15 +9,9 @@ interface PriceData {
   changePercent24h: number;
 }
 
-/**
- * 현재 선택된 심볼의 실시간 가격 훅
- * 백엔드 socket.io를 통해 Binance 데이터 수신
- */
 export function usePrice(): PriceData | null {
-  const { ticker } = useSocketTicker();
-
+  const ticker = useAtomValue(tickerAtom);
   if (!ticker) return null;
-
   return {
     price: ticker.price,
     change24h: ticker.change24h,
@@ -24,5 +19,4 @@ export function usePrice(): PriceData | null {
   };
 }
 
-// 하위 호환성을 위한 alias
 export const useBTCPrice = usePrice;

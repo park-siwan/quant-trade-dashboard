@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useSocketKline } from '@/contexts/SocketContext';
+import { useAtomValue } from 'jotai';
+import { klineMapAtom } from '@/stores/socketAtoms';
 import { triggerAutoOptimization, AutoOptimizeResult, getActiveStrategyIds } from '@/lib/backtest-api';
 
 interface UseAutoOptimizeParams {
@@ -41,8 +42,8 @@ export function useAutoOptimize({
   strategies = getActiveStrategyIds(),
   candleCount = 3000,
 }: UseAutoOptimizeParams): UseAutoOptimizeReturn {
-  const { getKline } = useSocketKline();
-  const kline = getKline(timeframe);
+  const klineMap = useAtomValue(klineMapAtom);
+  const kline = klineMap.get(timeframe) ?? null;
 
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [lastOptimizeTime, setLastOptimizeTime] = useState<number | null>(null);

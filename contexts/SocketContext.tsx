@@ -1,9 +1,32 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useSetAtom } from 'jotai';
 import { io, Socket } from 'socket.io-client';
 import { API_CONFIG } from '@/lib/config';
 import { SIGNAL } from '@/lib/constants';
+import {
+  isConnectedAtom,
+  wakeUpCounterAtom,
+  tickerAtom,
+  klineAtom,
+  klineMapAtom,
+  orderbookAtom,
+  mtfDataAtom,
+  lastMtfUpdateAtom,
+  liquidationDataAtom,
+  whaleDataAtom,
+  fundingRateDataAtom,
+  coinglassDataAtom,
+  longShortRatioDataAtom,
+  balanceDataAtom,
+  tradingStatusAtom,
+  divergenceDataAtom,
+  divergenceHistoryAtom,
+  indicatorSnapshotAtom,
+  signalStatsAtom,
+  resetSocketSymbolDataAtom,
+} from '@/stores/socketAtoms';
 
 // ==================== Types ====================
 export interface TickerData {
@@ -148,7 +171,7 @@ export interface RealtimeDivergenceData {
   timeframe: string;
   rsiValue?: number;
   strategy?: string;
-  signalType?: string; // breakout | divergence | mean_reversion | rsi | default
+  signalType?: string;
 }
 
 export interface SignalStats {
@@ -181,90 +204,28 @@ export interface IndicatorSnapshot {
   ema200: number | null;
   volumeRatio: number | null;
   regime: 'BULL' | 'BEAR' | 'SIDEWAYS';
-  // RSI 다이버전스 피봇 상태
   rsiPivot1: boolean;
   rsiPivot2: boolean;
   rsiDivSignal: 'bullish' | 'bearish' | null;
 }
 
-// ==================== Context Types ====================
-
-// 1. Ticker Context (가장 빈번하게 업데이트)
-interface TickerContextValue {
-  ticker: TickerData | null;
-}
-
-// 2. Kline Context (실시간 캔들)
-interface KlineContextValue {
-  kline: KlineData | null;
-  klineMap: Map<string, KlineData>;
-  getKline: (timeframe: string) => KlineData | null;
-}
-
-// 3. Market Data Context (3초 주기 volatile 데이터 — RealtimeChart 불필요 구독 방지)
-interface MarketDataContextValue {
-  orderbook: OrderBookData | null;
-  mtfData: BackendMTFData | null;
-  lastMtfUpdate: number;
-  liquidationData: LiquidationData | null;
-  whaleData: WhaleData | null;
-  fundingRateData: FundingRateData | null;
-  coinglassData: CoinglassData | null;
-  longShortRatioData: LongShortRatioData | null;
-  balanceData: BalanceData | null;
-}
-
-// 4. Socket Context (stable + infrequent data)
-interface SocketContextValue {
-  socket: Socket | null;
-  isConnected: boolean;
-  tradingStatus: TradingStatus | null;
-  divergenceData: RealtimeDivergenceData | null;
-  divergenceHistory: RealtimeDivergenceData[];
-  indicatorSnapshot: IndicatorSnapshot | null;
-  signalStats: SignalStats | null;
-  currentSymbol: string;
-  wakeUpCounter: number;
+// ==================== Actions Context (stable methods only) ====================
+interface SocketActionsValue {
   subscribeKline: (timeframe: string) => void;
   subscribeMtf: (symbol: string) => void;
   subscribeSymbol: (symbol: string) => void;
+  getKline: (timeframe: string) => KlineData | null;
 }
 
-// ==================== Shared Ticker Ref (re-render 없이 최신 ticker 접근용) ====================
-export const tickerSharedRef: { current: TickerData | null } = { current: null };
-
-// ==================== Contexts ====================
-const TickerContext = createContext<TickerContextValue>({ ticker: null });
-const KlineContext = createContext<KlineContextValue>({
-  kline: null,
-  klineMap: new Map(),
-  getKline: () => null,
-});
-const MarketDataContext = createContext<MarketDataContextValue>({
-  orderbook: null,
-  mtfData: null,
-  lastMtfUpdate: 0,
-  liquidationData: null,
-  whaleData: null,
-  fundingRateData: null,
-  coinglassData: null,
-  longShortRatioData: null,
-  balanceData: null,
-});
-const SocketContext = createContext<SocketContextValue>({
-  socket: null,
-  isConnected: false,
-  tradingStatus: null,
-  divergenceData: null,
-  divergenceHistory: [],
-  indicatorSnapshot: null,
-  signalStats: null,
-  currentSymbol: '',
-  wakeUpCounter: 0,
+const SocketActionsContext = createContext<SocketActionsValue>({
   subscribeKline: () => {},
   subscribeMtf: () => {},
   subscribeSymbol: () => {},
+  getKline: () => null,
 });
+
+// ==================== Shared Ticker Ref (re-render 없이 최신 ticker 접근용) ====================
+export const tickerSharedRef: { current: TickerData | null } = { current: null };
 
 // ==================== Constants ====================
 let lastHiddenTime = 0;
@@ -274,34 +235,8 @@ const KLINE_THROTTLE_MS = 500;
 // ==================== Provider ====================
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-
-  // Ticker state (별도 context)
-  const [ticker, setTicker] = useState<TickerData | null>(null);
-
-  // Kline state (별도 context)
-  const [kline, setKline] = useState<KlineData | null>(null);
   const klineMapRef = useRef<Map<string, KlineData>>(new Map());
-  const [klineMapVersion, setKlineMapVersion] = useState(0);
-
-  // Socket state (나머지)
-  const [orderbook, setOrderbook] = useState<OrderBookData | null>(null);
-  const [mtfData, setMtfData] = useState<BackendMTFData | null>(null);
-  const [lastMtfUpdate, setLastMtfUpdate] = useState(0);
-  const [liquidationData, setLiquidationData] = useState<LiquidationData | null>(null);
-  const [whaleData, setWhaleData] = useState<WhaleData | null>(null);
-  const [fundingRateData, setFundingRateData] = useState<FundingRateData | null>(null);
-  const [coinglassData, setCoinglassData] = useState<CoinglassData | null>(null);
-  const [longShortRatioData, setLongShortRatioData] = useState<LongShortRatioData | null>(null);
-  const [balanceData, setBalanceData] = useState<BalanceData | null>(null);
-  const [tradingStatus, setTradingStatus] = useState<TradingStatus | null>(null);
-  const [divergenceData, setDivergenceData] = useState<RealtimeDivergenceData | null>(null);
-  const [divergenceHistory, setDivergenceHistory] = useState<RealtimeDivergenceData[]>([]);
-  const [indicatorSnapshot, setIndicatorSnapshot] = useState<IndicatorSnapshot | null>(null);
-  const [signalStats, setSignalStats] = useState<SignalStats | null>(null);
-  const [currentSymbol, setCurrentSymbol] = useState<string>('');
   const currentSymbolRef = useRef<string>('');
-  const [wakeUpCounter, setWakeUpCounter] = useState(0);
 
   // Throttle refs
   const latestTickerRef = useRef<TickerData | null>(null);
@@ -309,6 +244,28 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const latestKlineRef = useRef<KlineData | null>(null);
   const klineThrottleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const orderbookThrottleTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Atom setters
+  const setIsConnected = useSetAtom(isConnectedAtom);
+  const setWakeUpCounter = useSetAtom(wakeUpCounterAtom);
+  const setTicker = useSetAtom(tickerAtom);
+  const setKline = useSetAtom(klineAtom);
+  const setKlineMap = useSetAtom(klineMapAtom);
+  const setOrderbook = useSetAtom(orderbookAtom);
+  const setMtfData = useSetAtom(mtfDataAtom);
+  const setLastMtfUpdate = useSetAtom(lastMtfUpdateAtom);
+  const setLiquidationData = useSetAtom(liquidationDataAtom);
+  const setWhaleData = useSetAtom(whaleDataAtom);
+  const setFundingRateData = useSetAtom(fundingRateDataAtom);
+  const setCoinglassData = useSetAtom(coinglassDataAtom);
+  const setLongShortRatioData = useSetAtom(longShortRatioDataAtom);
+  const setBalanceData = useSetAtom(balanceDataAtom);
+  const setTradingStatus = useSetAtom(tradingStatusAtom);
+  const setDivergenceData = useSetAtom(divergenceDataAtom);
+  const setDivergenceHistory = useSetAtom(divergenceHistoryAtom);
+  const setIndicatorSnapshot = useSetAtom(indicatorSnapshotAtom);
+  const setSignalStats = useSetAtom(signalStatsAtom);
+  const resetSymbolData = useSetAtom(resetSocketSymbolDataAtom);
 
   // Visibility change handler
   useEffect(() => {
@@ -323,11 +280,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           console.log(`[Socket] 잠자기 복귀 (${Math.round(hiddenDuration / 1000)}초), 다이버전스 히스토리 클리어 + 소켓 재연결`);
           setDivergenceHistory([]);
           setDivergenceData(null);
-
-          // 캔들 리로드 트리거
           setWakeUpCounter(c => c + 1);
 
-          // 소켓이 끊겨있으면 강제 재연결
           const sock = socketRef.current;
           if (sock && !sock.connected) {
             console.log('[Socket] 재연결 시도...');
@@ -338,9 +292,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   // Socket connection
@@ -360,7 +312,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     socket.on('connect', () => {
       console.log('[Socket] Connected');
       setIsConnected(true);
-      // 초기 trading status + signal stats 가져오기 (소켓 연결 전 broadcast 놓침 방지)
       fetch(`${API_CONFIG.BASE_URL}/trading/status`)
         .then(r => r.json())
         .then(data => setTradingStatus(data))
@@ -371,16 +322,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         .catch(() => {});
     });
 
-    socket.on('disconnect', () => {
-      setIsConnected(false);
-    });
+    socket.on('disconnect', () => setIsConnected(false));
 
     // Ticker (throttled)
     socket.on('binance:ticker', (data: TickerData) => {
       if (!data.symbol || data.symbol !== currentSymbolRef.current) return;
 
       latestTickerRef.current = data;
-      tickerSharedRef.current = data; // ref-based 접근용 (re-render 없이 최신 ticker)
+      tickerSharedRef.current = data;
       if (tickerThrottleTimerRef.current) return;
 
       setTicker(data);
@@ -409,27 +358,25 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       klineMapRef.current.set(data.timeframe, data);
       latestKlineRef.current = data;
 
-      // isFinal 캔들은 즉시 업데이트 (캔들 종료 시점 누락 방지)
       if (data.isFinal) {
         if (klineThrottleTimerRef.current) {
           clearTimeout(klineThrottleTimerRef.current);
           klineThrottleTimerRef.current = null;
         }
-        setKlineMapVersion(v => v + 1);
+        setKlineMap(new Map(klineMapRef.current));
         setKline(data);
         return;
       }
 
       if (klineThrottleTimerRef.current) return;
 
-      setKlineMapVersion(v => v + 1);
+      setKlineMap(new Map(klineMapRef.current));
       setKline(data);
       klineThrottleTimerRef.current = setTimeout(() => {
         klineThrottleTimerRef.current = null;
       }, KLINE_THROTTLE_MS);
     });
 
-    // MTF data
     socket.on('mtf:data', (data: BackendMTFData) => {
       const normalizedSymbol = data.symbol?.replace('/', '');
       if (!normalizedSymbol || normalizedSymbol !== currentSymbolRef.current) return;
@@ -437,7 +384,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setLastMtfUpdate(Date.now());
     });
 
-    // Market data
     socket.on('data:liquidation', (data: LiquidationData) => {
       if (data.symbol !== currentSymbolRef.current) return;
       setLiquidationData(data);
@@ -462,22 +408,18 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setLongShortRatioData(data);
     });
 
-    // Balance (symbol-independent)
     socket.on('data:balance', (data: BalanceData) => {
       setBalanceData(data);
     });
 
-    // Trading status (symbol-independent)
     socket.on('data:trading:status', (data: TradingStatus) => {
       setTradingStatus(data);
     });
 
-    // Signal stats (symbol-independent)
     socket.on('data:signal:stats', (data: SignalStats) => {
       setSignalStats(data);
     });
 
-    // Divergence signals
     socket.on('data:divergence', (data: RealtimeDivergenceData) => {
       const normalizedSymbol = data.symbol?.replace('/', '');
       if (!normalizedSymbol || normalizedSymbol !== currentSymbolRef.current) return;
@@ -486,12 +428,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setDivergenceHistory(prev => {
         const exists = prev.some(d => d.id === data.id);
         if (exists) return prev;
-        const newHistory = [data, ...prev];
-        return newHistory.slice(0, SIGNAL.MAX_HISTORY);
+        return [data, ...prev].slice(0, SIGNAL.MAX_HISTORY);
       });
     });
 
-    // Indicator snapshot (BinanceStreamService에서 매 최종 캔들마다 전송)
     socket.on('data:indicators', (data: IndicatorSnapshot) => {
       const normalizedSymbol = data.symbol?.replace('/', '');
       if (!normalizedSymbol || normalizedSymbol !== currentSymbolRef.current) return;
@@ -524,11 +464,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
   // Auto-subscribe when connected
   useEffect(() => {
-    if (isConnected && pendingKlineTimeframeRef.current) {
+    const isConnectedNow = socketRef.current?.connected;
+    if (isConnectedNow && pendingKlineTimeframeRef.current) {
       console.log('[Socket] Connected, subscribing to pending kline:', pendingKlineTimeframeRef.current);
       socketRef.current?.emit('subscribe:kline', { timeframe: pendingKlineTimeframeRef.current });
     }
-  }, [isConnected]);
+  });
 
   const subscribeMtf = useCallback((symbol: string) => {
     if (socketRef.current?.connected) {
@@ -538,7 +479,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
   const getKline = useCallback((timeframe: string): KlineData | null => {
     return klineMapRef.current.get(timeframe) || null;
-  }, [klineMapVersion]);
+  }, []);
 
   const subscribeSymbol = useCallback((symbol: string) => {
     if (symbol === currentSymbolRef.current) return;
@@ -546,125 +487,36 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     const isFirstSubscription = currentSymbolRef.current === '';
     console.log(`[Socket] ${isFirstSubscription ? 'First subscription' : 'Changing symbol'} to: ${symbol}`);
 
-    setCurrentSymbol(symbol);
     currentSymbolRef.current = symbol;
 
     if (!isFirstSubscription) {
-      setTicker(null);
-      setOrderbook(null);
-      setKline(null);
       klineMapRef.current.clear();
-      setKlineMapVersion(v => v + 1);
-      setMtfData(null);
-      setLiquidationData(null);
-      setWhaleData(null);
-      setFundingRateData(null);
-      setCoinglassData(null);
-      setLongShortRatioData(null);
-      setDivergenceData(null);
-      setDivergenceHistory([]);
+      resetSymbolData();
     }
 
     if (socketRef.current?.connected) {
       socketRef.current.emit('subscribe', { symbol });
     }
-  }, []);
+  }, [resetSymbolData]);
 
-  // Memoized context values (각각 별도로 메모이제이션)
-  const tickerValue = useMemo(() => ({ ticker }), [ticker]);
-
-  const klineValue = useMemo(() => ({
-    kline,
-    klineMap: klineMapRef.current,
-    getKline,
-  }), [kline, getKline]);
-
-  // MarketData: 3초 주기 volatile 데이터 (RealtimeChart와 분리)
-  const marketDataValue = useMemo(() => ({
-    orderbook,
-    mtfData,
-    lastMtfUpdate,
-    liquidationData,
-    whaleData,
-    fundingRateData,
-    coinglassData,
-    longShortRatioData,
-    balanceData,
-  }), [orderbook, mtfData, lastMtfUpdate, liquidationData, whaleData, fundingRateData, coinglassData, longShortRatioData, balanceData]);
-
-  // SocketContext: stable + infrequent 데이터만 포함 → RealtimeChart re-render 최소화
-  const socketValue = useMemo(() => ({
-    socket: socketRef.current,
-    isConnected,
-    tradingStatus,
-    divergenceData,
-    divergenceHistory,
-    indicatorSnapshot,
-    signalStats,
-    currentSymbol,
-    wakeUpCounter,
-    subscribeKline,
-    subscribeMtf,
-    subscribeSymbol,
-  }), [
-    isConnected,
-    tradingStatus,
-    divergenceData,
-    divergenceHistory,
-    indicatorSnapshot,
-    signalStats,
-    currentSymbol,
-    wakeUpCounter,
-    subscribeKline,
-    subscribeMtf,
-    subscribeSymbol,
-  ]);
+  const socketActions = useMemo(
+    () => ({ subscribeKline, subscribeMtf, subscribeSymbol, getKline }),
+    [subscribeKline, subscribeMtf, subscribeSymbol, getKline],
+  );
 
   return (
-    <SocketContext.Provider value={socketValue}>
-      <MarketDataContext.Provider value={marketDataValue}>
-        <TickerContext.Provider value={tickerValue}>
-          <KlineContext.Provider value={klineValue}>
-            {children}
-          </KlineContext.Provider>
-        </TickerContext.Provider>
-      </MarketDataContext.Provider>
-    </SocketContext.Provider>
+    <SocketActionsContext.Provider value={socketActions}>
+      {children}
+    </SocketActionsContext.Provider>
   );
 }
 
 // ==================== Hooks ====================
-// 메인 소켓 hook (stable + infrequent data)
+
+// 소켓 액션 훅 (subscribeKline, subscribeMtf, subscribeSymbol, getKline)
 export function useSocket() {
-  return useContext(SocketContext);
+  return useContext(SocketActionsContext);
 }
 
-// Market data hook (volatile 3s data: liquidation, whale, orderbook 등)
-export function useMarketData() {
-  return useContext(MarketDataContext);
-}
-
-// Ticker 전용 hook (가장 빈번하게 업데이트)
-export function useSocketTicker() {
-  return useContext(TickerContext);
-}
-
-// Kline 전용 hook
-export function useSocketKline() {
-  return useContext(KlineContext);
-}
-
-// 하위 호환성: ticker + kline + socket + marketData 전부 필요한 경우
-export function useSocketAll() {
-  const socket = useSocket();
-  const marketData = useMarketData();
-  const { ticker } = useSocketTicker();
-  const klineData = useSocketKline();
-
-  return {
-    ...socket,
-    ...marketData,
-    ticker,
-    ...klineData,
-  };
-}
+// 하위 호환성 유지 — 신규 코드는 useAtomValue(xxxAtom) 직접 사용 권장
+export { useAtomValue as useSocketAtom } from 'jotai';

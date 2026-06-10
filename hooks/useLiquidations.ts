@@ -1,19 +1,17 @@
 'use client';
 
-import { useSocket, useMarketData, LiquidationData } from '@/contexts/SocketContext';
+import { useAtomValue } from 'jotai';
+import { liquidationDataAtom, isConnectedAtom } from '@/stores/socketAtoms';
+import type { LiquidationData } from '@/contexts/SocketContext';
 
 interface UseLiquidationsParams {
   symbol: string;
-  refreshInterval?: number; // Ignored - data comes from socket
+  refreshInterval?: number;
 }
 
-/**
- * 청산 데이터 훅
- * 백엔드 socket.io를 통해 실시간 데이터 수신
- */
 export function useLiquidations({ symbol }: UseLiquidationsParams) {
-  const { liquidationData } = useMarketData();
-  const { isConnected } = useSocket();
+  const liquidationData = useAtomValue(liquidationDataAtom);
+  const isConnected = useAtomValue(isConnectedAtom);
 
   return {
     data: liquidationData,

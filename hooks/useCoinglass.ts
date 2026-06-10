@@ -1,19 +1,17 @@
 'use client';
 
-import { useSocket, useMarketData, CoinglassData } from '@/contexts/SocketContext';
+import { useAtomValue } from 'jotai';
+import { coinglassDataAtom, isConnectedAtom } from '@/stores/socketAtoms';
+import type { CoinglassData } from '@/contexts/SocketContext';
 
 interface UseCoinglassParams {
   symbol?: string;
-  refreshInterval?: number; // Ignored - data comes from socket
+  refreshInterval?: number;
 }
 
-/**
- * 코인글래스 트레이딩 시그널 훅
- * 백엔드 socket.io를 통해 실시간 데이터 수신
- */
 export function useCoinglass({ symbol = 'BTC' }: UseCoinglassParams = {}) {
-  const { coinglassData } = useMarketData();
-  const { isConnected } = useSocket();
+  const coinglassData = useAtomValue(coinglassDataAtom);
+  const isConnected = useAtomValue(isConnectedAtom);
 
   return {
     data: coinglassData,
@@ -23,5 +21,4 @@ export function useCoinglass({ symbol = 'BTC' }: UseCoinglassParams = {}) {
   };
 }
 
-// Re-export types for backwards compatibility
 export type CoinglassTradingSignals = CoinglassData;
