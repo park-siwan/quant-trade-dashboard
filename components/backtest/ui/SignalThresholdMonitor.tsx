@@ -59,124 +59,57 @@ const THRESH = {
   ATR_MAX_PCT: 76,
 };
 
-// ── 미니 게이지 바 ──────────────────────────────────────────────────
-
-interface OkZone {
-  from: number;
-  to: number;
-  /** 초록(기본), 빨강(숏), 노랑(횡보) */
-  color?: 'green' | 'red' | 'yellow';
-}
+// ── 미니 게이지 바 (충족 진행도) ─────────────────────────────────────
 
 /**
- * 연속 지표값을 범위 바로 시각화.
- * okZones = 조건 충족 구간. 현재값은 흰 수직선으로 표시.
+ * 조건 충족까지의 진행도를 채움 바로 시각화.
+ * progress 1.0 = 임계 도달(충족). 가득 찬 바 = 조건 ON — 모든 지표가 같은 방식으로 읽힘.
  */
 function GaugeBar({
   name,
-  value,
   displayValue,
-  min,
-  max,
-  okZones,
+  progress,
   met,
+  color = 'green',
   tooltip,
-  centerMark,
 }: {
   name: string;
-  value: number | null;
   displayValue: string;
-  min: number;
-  max: number;
-  okZones: OkZone[];
+  /** 0~1 = 임계까지 진행도, ≥1 = 충족 (null = 데이터 없음) */
+  progress: number | null;
   met: boolean;
+  /** 충족 시 채움 색 (롱=초록, 숏=빨강, 횡보=노랑) */
+  color?: 'green' | 'red' | 'yellow';
   tooltip?: string;
-  /** 0 위치에 중앙 눈금 표시 (EMA 거리 등) */
-  centerMark?: number;
 }) {
-  const norm = (v: number) => `${Math.max(0, Math.min(100, ((v - min) / (max - min)) * 100))}%`;
-  const markerPct = value !== null ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100)) : null;
+  const pct = progress !== null ? Math.max(0, Math.min(100, progress * 100)) : 0;
 
-  const zoneColor: Record<string, string> = {
-    green: 'bg-green-500/35',
-    red: 'bg-red-500/35',
-    yellow: 'bg-yellow-500/35',
-  };
-
-  const borderColor = met
-    ? okZones[0]?.color === 'red'
-      ? 'border-red-500/30'
-      : okZones[0]?.color === 'yellow'
-        ? 'border-yellow-500/30'
-        : 'border-green-500/25'
-    : 'border-zinc-700/30';
-
-  const bgColor = met
-    ? okZones[0]?.color === 'red'
-      ? 'bg-red-500/8'
-      : okZones[0]?.color === 'yellow'
-        ? 'bg-yellow-500/8'
-        : 'bg-green-500/8'
-    : 'bg-zinc-800/50';
-
-  const nameColor = met
-    ? okZones[0]?.color === 'red'
-      ? 'text-red-400/70'
-      : okZones[0]?.color === 'yellow'
-        ? 'text-yellow-400/70'
-        : 'text-green-400/70'
-    : 'text-zinc-600';
-
-  const valueColor = met
-    ? okZones[0]?.color === 'red'
-      ? 'text-red-300'
-      : okZones[0]?.color === 'yellow'
-        ? 'text-yellow-300'
-        : 'text-green-300'
-    : 'text-zinc-400';
-
-  const markerColor = met
-    ? okZones[0]?.color === 'red'
-      ? 'bg-red-400'
-      : okZones[0]?.color === 'yellow'
-        ? 'bg-yellow-400'
-        : 'bg-green-400'
-    : 'bg-zinc-400';
+  const palette = {
+    green: { border: 'border-green-500/25', bg: 'bg-green-500/8', name: 'text-green-400/70', value: 'text-green-300', fill: 'bg-green-400' },
+    red: { border: 'border-red-500/30', bg: 'bg-red-500/8', name: 'text-red-400/70', value: 'text-red-300', fill: 'bg-red-400' },
+    yellow: { border: 'border-yellow-500/30', bg: 'bg-yellow-500/8', name: 'text-yellow-400/70', value: 'text-yellow-300', fill: 'bg-yellow-400' },
+  }[color];
 
   return (
     <div
-      className={`flex items-center gap-1.5 px-1.5 py-1 rounded border ${bgColor} ${borderColor}`}
+      className={`flex items-center gap-1.5 px-1.5 py-1 rounded border ${
+        met ? `${palette.bg} ${palette.border}` : 'bg-zinc-800/50 border-zinc-700/30'
+      }`}
       title={tooltip}
     >
-      <span className={`text-[9px] font-mono w-5 shrink-0 ${nameColor}`}>{name}</span>
+      <span className={`text-[9px] font-mono w-5 shrink-0 ${met ? palette.name : 'text-zinc-600'}`}>{name}</span>
 
-      {/* 게이지 바 */}
+      {/* 진행도 채움 바: 가득 차면 충족 */}
       <div className='relative w-10 h-2 bg-zinc-800/80 rounded-full overflow-hidden shrink-0'>
-        {/* ok 구간 색상 존 */}
-        {okZones.map((z, i) => (
-          <div
-            key={i}
-            className={`absolute inset-y-0 ${zoneColor[z.color ?? 'green']}`}
-            style={{ left: norm(z.from), width: `calc(${norm(z.to)} - ${norm(z.from)})` }}
-          />
-        ))}
-        {/* 중앙 눈금 (EMA 등 0 기준) */}
-        {centerMark !== undefined && (
-          <div
-            className='absolute top-0 w-px h-full bg-zinc-600/60'
-            style={{ left: norm(centerMark) }}
-          />
-        )}
-        {/* 현재값 마커 */}
-        {markerPct !== null && (
-          <div
-            className={`absolute top-0 w-0.5 h-full rounded-full ${markerColor}`}
-            style={{ left: `${markerPct}%`, transform: 'translateX(-50%)' }}
-          />
-        )}
+        <div
+          className={`absolute inset-y-0 left-0 rounded-full transition-all duration-300 ${
+            met ? palette.fill : 'bg-zinc-500'
+          }`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
 
-      <span className={`text-[9px] font-mono shrink-0 ${valueColor}`}>{displayValue}</span>
+      <span className={`text-[9px] font-mono shrink-0 ${met ? palette.value : 'text-zinc-400'}`}>{displayValue}</span>
     </div>
   );
 }
@@ -414,6 +347,21 @@ export const SignalThresholdMonitor = memo(({ timeframe, trades }: SignalThresho
   const mrRegime = regime === 'SIDEWAYS';
   const mrCount = [mrAtr, mrRegime].filter(Boolean).length;
 
+  // ── 충족 진행도 (1.0 = 임계 도달) ──
+  // RSI: 중립(45)에서 과매도/과매수 중 가까운 쪽으로의 진행도
+  const RSI_NEUTRAL = (THRESH.RSI_OVERSOLD + THRESH.RSI_OVERBOUGHT) / 2;
+  const rsiLongProg = rsi !== null ? (RSI_NEUTRAL - rsi) / (RSI_NEUTRAL - THRESH.RSI_OVERSOLD) : null;
+  const rsiShortProg = rsi !== null ? (rsi - RSI_NEUTRAL) / (THRESH.RSI_OVERBOUGHT - RSI_NEUTRAL) : null;
+  const rsiProg = rsi !== null ? Math.max(rsiLongProg!, rsiShortProg!) : null;
+  const rsiSide: 'green' | 'red' = (rsiShortProg ?? 0) > (rsiLongProg ?? 0) ? 'red' : 'green';
+
+  const volProg = volumeRatio !== null ? volumeRatio / THRESH.VOL_MULT : null;
+  const adxProg = adx !== null ? adx / THRESH.ADX_TREND : null;
+  // EMA: 거리 5% 밖 = 0, ±1% 이내 = 충족
+  const emaProg = emaDist !== null ? (5 - Math.abs(emaDist)) / (5 - THRESH.EMA_MAX_DIST) : null;
+  // ATR: P100 = 0, P76 미만 = 충족 (낮을수록 좋음)
+  const atrProg = atrPct !== null ? (100 - atrPct) / (100 - THRESH.ATR_MAX_PCT) : null;
+
   // 레짐별 스타일
   const regimeColor: 'green' | 'red' | 'yellow' =
     regime === 'BULL' ? 'green' : regime === 'BEAR' ? 'red' : 'yellow';
@@ -461,18 +409,14 @@ export const SignalThresholdMonitor = memo(({ timeframe, trades }: SignalThresho
       >
         <span className='text-zinc-400 font-medium w-13 shrink-0'>↩ 반전</span>
         <div className='flex items-center gap-1.5 flex-1 min-w-0 flex-wrap'>
-          {/* RSI: 양끝이 진입 존 (≤30 과매도, ≥60 과매수) */}
+          {/* RSI: 과매도(롱·초록)/과매수(숏·빨강) 중 가까운 쪽 진행도 */}
           <GaugeBar
             name='RSI'
-            value={rsi}
             displayValue={rsi?.toFixed(0) ?? '—'}
-            min={0} max={100}
-            okZones={[
-              { from: 0, to: THRESH.RSI_OVERSOLD, color: 'green' },
-              { from: THRESH.RSI_OVERBOUGHT, to: 100, color: 'red' },
-            ]}
+            progress={rsiProg}
             met={rdRsi}
-            tooltip={`RSI ${rsi?.toFixed(1)} | 조건: ≤${THRESH.RSI_OVERSOLD}(과매도·롱) 또는 ≥${THRESH.RSI_OVERBOUGHT}(과매수·숏)`}
+            color={rsiSide}
+            tooltip={`RSI ${rsi?.toFixed(1)} | 조건: ≤${THRESH.RSI_OVERSOLD}(과매도·롱) 또는 ≥${THRESH.RSI_OVERBOUGHT}(과매수·숏) | 바 가득 = 충족`}
           />
           <CondDot ok={!!rsiPivot1} label='피봇1' detail='RSI 구간 내 첫 번째 가격 피봇 감지' />
           <CondDot ok={!!rsiPivot2} label='피봇2' detail='두 번째 피봇 — 다이버전스 비교 가능' />
@@ -493,36 +437,29 @@ export const SignalThresholdMonitor = memo(({ timeframe, trades }: SignalThresho
       >
         <span className='text-zinc-400 font-medium w-13 shrink-0'>⚡ 돌파</span>
         <div className='flex items-center gap-1.5 flex-1 min-w-0 flex-wrap'>
-          {/* 거래량: ≥2.5× 구간이 진입 존 */}
+          {/* 거래량: 평균 대비 배율 → 2.5×까지 진행도 */}
           <GaugeBar
             name='Vol'
-            value={volumeRatio}
             displayValue={volumeRatio !== null ? `×${volumeRatio.toFixed(1)}` : '—'}
-            min={0} max={5}
-            okZones={[{ from: THRESH.VOL_MULT, to: 5 }]}
+            progress={volProg}
             met={vbVol}
-            tooltip={`거래량 ${volumeRatio?.toFixed(2)}×. 조건: ≥${THRESH.VOL_MULT}× (20봉 평균 대비)`}
+            tooltip={`거래량 ${volumeRatio?.toFixed(2)}×. 조건: ≥${THRESH.VOL_MULT}× (20봉 평균 대비) | 바 가득 = 충족`}
           />
-          {/* ADX: ≥25 구간이 진입 존 */}
+          {/* ADX: 25까지 진행도 */}
           <GaugeBar
             name='ADX'
-            value={adx}
             displayValue={adx?.toFixed(0) ?? '—'}
-            min={0} max={60}
-            okZones={[{ from: THRESH.ADX_TREND, to: 60 }]}
+            progress={adxProg}
             met={vbAdx}
-            tooltip={`ADX ${adx?.toFixed(1)}. 조건: ≥${THRESH.ADX_TREND} (강한 추세)`}
+            tooltip={`ADX ${adx?.toFixed(1)}. 조건: ≥${THRESH.ADX_TREND} (강한 추세) | 바 가득 = 충족`}
           />
-          {/* EMA 거리: ±1% 중앙 존이 진입 가능 */}
+          {/* EMA 거리: 가까울수록 채워짐 (±1% 이내 = 충족) */}
           <GaugeBar
             name='EMA'
-            value={emaDist}
             displayValue={fmtEmaDist}
-            min={-5} max={5}
-            okZones={[{ from: -THRESH.EMA_MAX_DIST, to: THRESH.EMA_MAX_DIST }]}
+            progress={emaProg}
             met={vbEma}
-            centerMark={0}
-            tooltip={`EMA200 거리 ${fmtEmaDist}. 조건: ±${THRESH.EMA_MAX_DIST}% 이내`}
+            tooltip={`EMA200 거리 ${fmtEmaDist}. 조건: ±${THRESH.EMA_MAX_DIST}% 이내 (가까울수록 채워짐) | 바 가득 = 충족`}
           />
           {/* 레짐: 상승=초록, 하락=빨강 */}
           <CondDot
@@ -543,15 +480,14 @@ export const SignalThresholdMonitor = memo(({ timeframe, trades }: SignalThresho
       >
         <span className='text-zinc-400 font-medium w-13 shrink-0'>♻ 평균회귀</span>
         <div className='flex items-center gap-1.5 flex-1 min-w-0'>
-          {/* ATR 백분위: P76 미만이 저변동성 진입 존 */}
+          {/* ATR 백분위: 변동성 낮을수록 채워짐 (P76 미만 = 충족) */}
           <GaugeBar
             name='ATR'
-            value={atrPct}
             displayValue={atrPct !== null ? `P${atrPct}` : '—'}
-            min={0} max={100}
-            okZones={[{ from: 0, to: THRESH.ATR_MAX_PCT, color: 'yellow' }]}
+            progress={atrProg}
             met={mrAtr}
-            tooltip={`ATR 백분위 P${atrPct}. 조건: <P${THRESH.ATR_MAX_PCT} (저변동성)`}
+            color='yellow'
+            tooltip={`ATR 백분위 P${atrPct}. 조건: <P${THRESH.ATR_MAX_PCT} (저변동성, 낮을수록 채워짐) | 바 가득 = 충족`}
           />
           <CondDot
             ok={mrRegime}
