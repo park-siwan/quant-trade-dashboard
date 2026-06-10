@@ -1,4 +1,5 @@
-import { memo, useState, useEffect, useCallback, useMemo } from 'react';
+import { memo, useState, useEffect, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAtomValue } from 'jotai';
 import { balanceDataAtom, tradingStatusAtom, tickerAtom } from '@/stores/socketAtoms';
 import type { TradingStatus } from '@/contexts/SocketContext';
@@ -25,32 +26,45 @@ interface NotificationSettings {
 }
 
 function useNotificationSettings() {
-  const [settings, setSettings] = useState<NotificationSettings | null>(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetch(`${API_CONFIG.BASE_URL}/notification/settings`)
-      .then(r => r.json())
-      .then(setSettings)
-      .catch(() => {});
-  }, []);
+  const { data: settings } = useQuery<NotificationSettings>({
+    queryKey: ['notification-settings'],
+    queryFn: () =>
+      fetch(`${API_CONFIG.BASE_URL}/notification/settings`).then(r => r.json()),
+  });
 
-  const toggle = useCallback(async (key: keyof NotificationSettings) => {
-    if (!settings) return;
-    const newVal = !settings[key];
-    setSettings(s => s ? { ...s, [key]: newVal } : s);
-    try {
-      const res = await fetch(`${API_CONFIG.BASE_URL}/notification/settings`, {
+  const { mutate: toggle } = useMutation<
+    NotificationSettings,
+    Error,
+    keyof NotificationSettings,
+    NotificationSettings | undefined
+  >({
+    mutationFn: (key) => {
+      const current = queryClient.getQueryData<NotificationSettings>(['notification-settings']);
+      if (!current) throw new Error('No settings loaded');
+      return fetch(`${API_CONFIG.BASE_URL}/notification/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [key]: newVal }),
-      });
-      setSettings(await res.json());
-    } catch {
-      setSettings(s => s ? { ...s, [key]: !newVal } : s);
-    }
-  }, [settings]);
+        body: JSON.stringify({ [key]: !current[key] }),
+      }).then(r => r.json());
+    },
+    onMutate: (key) => {
+      const prev = queryClient.getQueryData<NotificationSettings>(['notification-settings']);
+      if (prev) {
+        queryClient.setQueryData<NotificationSettings>(['notification-settings'], { ...prev, [key]: !prev[key] });
+      }
+      return prev;
+    },
+    onError: (_err, _key, prev) => {
+      if (prev) queryClient.setQueryData(['notification-settings'], prev);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['notification-settings'], data);
+    },
+  });
 
-  return { settings, toggle };
+  return { settings: settings ?? null, toggle };
 }
 
 const TIMEFRAMES = [
@@ -183,32 +197,45 @@ export const StatisticsHeader: React.FC<StatisticsHeaderProps> = memo(
 StatisticsHeader.displayName = 'StatisticsHeader';
 
 function useAutoTradeSettings() {
-  const [settings, setSettings] = useState<TradingStatus | null>(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetch(`${API_CONFIG.BASE_URL}/trading/settings`)
-      .then(r => r.json())
-      .then(setSettings)
-      .catch(() => {});
-  }, []);
+  const { data: settings } = useQuery<TradingStatus>({
+    queryKey: ['trading-settings'],
+    queryFn: () =>
+      fetch(`${API_CONFIG.BASE_URL}/trading/settings`).then(r => r.json()),
+  });
 
-  const toggle = useCallback(async () => {
-    if (!settings) return;
-    const newVal = !settings.enabled;
-    setSettings(s => s ? { ...s, enabled: newVal } : s);
-    try {
-      const res = await fetch(`${API_CONFIG.BASE_URL}/trading/settings`, {
+  const { mutate: toggle } = useMutation<
+    TradingStatus,
+    Error,
+    void,
+    TradingStatus | undefined
+  >({
+    mutationFn: () => {
+      const current = queryClient.getQueryData<TradingStatus>(['trading-settings']);
+      if (!current) throw new Error('No settings loaded');
+      return fetch(`${API_CONFIG.BASE_URL}/trading/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: newVal }),
-      });
-      setSettings(await res.json());
-    } catch {
-      setSettings(s => s ? { ...s, enabled: !newVal } : s);
-    }
-  }, [settings]);
+        body: JSON.stringify({ enabled: !current.enabled }),
+      }).then(r => r.json());
+    },
+    onMutate: () => {
+      const prev = queryClient.getQueryData<TradingStatus>(['trading-settings']);
+      if (prev) {
+        queryClient.setQueryData<TradingStatus>(['trading-settings'], { ...prev, enabled: !prev.enabled });
+      }
+      return prev;
+    },
+    onError: (_err, _v, prev) => {
+      if (prev) queryClient.setQueryData(['trading-settings'], prev);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['trading-settings'], data);
+    },
+  });
 
-  return { settings, setSettings, toggle };
+  return { settings: settings ?? null, toggle };
 }
 
 // 레버리지 계산: FIXED_LEVERAGE > 0이면 고정, 아니면 Comfort-Kelly
@@ -244,7 +271,8 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
   const balanceData = useAtomValue(balanceDataAtom);
   const tradingStatus = useAtomValue(tradingStatusAtom);
   const ticker = useAtomValue(tickerAtom);
-  const { settings, setSettings, toggle } = useAutoTradeSettings();
+  const queryClient = useQueryClient();
+  const { settings, toggle } = useAutoTradeSettings();
 
   const [orderState, setOrderState] = useState<'idle' | 'confirm' | 'loading' | 'done' | 'error'>('idle');
   const [orderMsg, setOrderMsg] = useState('');
@@ -252,8 +280,10 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
 
   // WS 상태 업데이트 반영
   useEffect(() => {
-    if (tradingStatus) setSettings(tradingStatus);
-  }, [tradingStatus, setSettings]);
+    if (tradingStatus) {
+      queryClient.setQueryData<TradingStatus>(['trading-settings'], tradingStatus);
+    }
+  }, [tradingStatus, queryClient]);
 
   const recLev = useMemo(() => calcRecLev(openPosition ?? null, winRate, maxConsecLoss), [openPosition, winRate, maxConsecLoss]);
 
@@ -261,11 +291,14 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
   const halfCloseInfo = settings?.halfCloseInfo || tradingStatus?.halfCloseInfo;
   const hasRealPosition = !!(settings?.activePosition || tradingStatus?.activePosition);
 
-  const executeOrder = useCallback(async () => {
-    if (!openPosition || orderState !== 'confirm') return;
-    setOrderState('loading');
-    try {
-      const res = await fetch(`${API_CONFIG.BASE_URL}/trading/manual-order`, {
+  const { mutate: executeOrder } = useMutation<
+    { success: boolean; order?: { side: string }; message?: string },
+    Error,
+    void
+  >({
+    mutationFn: () => {
+      if (!openPosition) throw new Error('No position');
+      return fetch(`${API_CONFIG.BASE_URL}/trading/manual-order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -275,39 +308,43 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
           sl: openPosition.sl,
           leverage: recLev,
         }),
-      });
-      const data = await res.json();
+      }).then(r => r.json());
+    },
+    onMutate: () => setOrderState('loading'),
+    onSuccess: (data) => {
       if (data.success) {
         setOrderState('done');
-        setOrderMsg(`PostOnly ${data.order.side.toUpperCase()} 시도 중...`);
+        setOrderMsg(`PostOnly ${data.order?.side.toUpperCase() ?? ''} 시도 중...`);
       } else {
         setOrderState('error');
         setOrderMsg(data.message || 'Failed');
       }
-    } catch (e: any) {
+    },
+    onError: (e: Error) => {
       setOrderState('error');
       setOrderMsg(e.message);
-    }
-    setTimeout(() => { setOrderState('idle'); setOrderMsg(''); }, 4000);
-  }, [openPosition, orderState, recLev]);
+    },
+    onSettled: () => {
+      setTimeout(() => { setOrderState('idle'); setOrderMsg(''); }, 4000);
+    },
+  });
 
-  const cancelRetry = useCallback(async () => {
-    try { await fetch(`${API_CONFIG.BASE_URL}/trading/cancel`, { method: 'POST' }); } catch {}
-    setOrderState('idle');
-    setOrderMsg('');
-  }, []);
+  const { mutate: cancelRetry } = useMutation({
+    mutationFn: () => fetch(`${API_CONFIG.BASE_URL}/trading/cancel`, { method: 'POST' }),
+    onSettled: () => { setOrderState('idle'); setOrderMsg(''); },
+  });
 
-  const closePosition = useCallback(async () => {
-    try { await fetch(`${API_CONFIG.BASE_URL}/trading/close`, { method: 'POST' }); } catch {}
-  }, []);
+  const { mutate: closePosition } = useMutation({
+    mutationFn: () => fetch(`${API_CONFIG.BASE_URL}/trading/close`, { method: 'POST' }),
+  });
 
-  const halfClose = useCallback(async () => {
-    try { await fetch(`${API_CONFIG.BASE_URL}/trading/half-close`, { method: 'POST' }); } catch {}
-  }, []);
+  const { mutate: halfClose } = useMutation({
+    mutationFn: () => fetch(`${API_CONFIG.BASE_URL}/trading/half-close`, { method: 'POST' }),
+  });
 
-  const cancelHalfClose = useCallback(async () => {
-    try { await fetch(`${API_CONFIG.BASE_URL}/trading/half-close/cancel`, { method: 'POST' }); } catch {}
-  }, []);
+  const { mutate: cancelHalfClose } = useMutation({
+    mutationFn: () => fetch(`${API_CONFIG.BASE_URL}/trading/half-close/cancel`, { method: 'POST' }),
+  });
 
   // 실시간 미실현 PnL 계산 (ticker 가격 기반)
   const liveBalance = useMemo(() => {
@@ -361,7 +398,7 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
             <span className='text-xs text-cyan-400 animate-pulse'>
               {retryInfo.leverage}x 진입 중 ({retryInfo.attempt}/{retryInfo.maxAttempts})
             </span>
-            <button onClick={cancelRetry} className='px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'>취소</button>
+            <button onClick={() => cancelRetry()} className='px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'>취소</button>
           </>
         ) : hasRealPosition ? (
           <>
@@ -370,7 +407,7 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
                 <span className='text-xs text-cyan-400 animate-pulse'>
                   반익 중 ({halfCloseInfo.attempt}/{halfCloseInfo.maxAttempts})
                 </span>
-                <button onClick={cancelHalfClose} className='px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'>취소</button>
+                <button onClick={() => cancelHalfClose()} className='px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'>취소</button>
               </>
             ) : closeConfirm !== 'idle' ? (
               <>
@@ -378,7 +415,7 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
                   {closeConfirm === 'half' ? '반익반본' : closeConfirm === 'full' ? '완익' : '손절'} 실행?
                 </span>
                 <button
-                  onClick={() => { setCloseConfirm('idle'); closeConfirm === 'half' ? halfClose() : closePosition(); }}
+                  onClick={() => { setCloseConfirm('idle'); if (closeConfirm === 'half') halfClose(); else closePosition(); }}
                   className='px-1.5 py-0.5 text-[10px] font-bold rounded bg-yellow-600/40 text-yellow-300 hover:bg-yellow-600/60 border border-yellow-600/50'
                 >확인</button>
                 <button onClick={() => setCloseConfirm('idle')} className='px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'>취소</button>
@@ -409,7 +446,7 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
             {orderState === 'confirm' && (
               <>
                 <span className='text-xs text-yellow-400'>{isLong ? 'LONG' : 'SHORT'} {recLev}x 진입?</span>
-                <button onClick={executeOrder} className='px-1.5 py-0.5 text-[10px] font-bold rounded bg-yellow-600/40 text-yellow-300 hover:bg-yellow-600/60 border border-yellow-600/50'>확인</button>
+                <button onClick={() => executeOrder()} className='px-1.5 py-0.5 text-[10px] font-bold rounded bg-yellow-600/40 text-yellow-300 hover:bg-yellow-600/60 border border-yellow-600/50'>확인</button>
                 <button onClick={() => setOrderState('idle')} className='px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-400 hover:bg-zinc-600'>취소</button>
               </>
             )}
@@ -422,7 +459,7 @@ export const BalanceHeader = memo(({ openPosition, winRate, maxConsecLoss }: Bal
         {/* 자동매매 토글 */}
         {settings?.envEnabled && (
           <button
-            onClick={toggle}
+            onClick={() => toggle()}
             className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold transition-colors ${
               settings.enabled
                 ? 'bg-green-600/30 text-green-400 hover:bg-green-600/50 border border-green-600/50'
