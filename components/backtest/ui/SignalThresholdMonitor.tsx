@@ -3,6 +3,8 @@ import { useAtomValue } from 'jotai';
 import { indicatorSnapshotAtom, signalStatsAtom, tickerAtom } from '@/stores/socketAtoms';
 import type { SignalStats } from '@/contexts/SocketContext';
 import type { TradeResult } from '@/lib/backtest-api';
+import { toSeconds } from '@/lib/utils/timestamp';
+import { SignalVerdict } from './SignalVerdict';
 
 interface SignalThresholdMonitorProps {
   timeframe: string;
@@ -35,6 +37,17 @@ function calcTypeStats(trades: TradeResult[], type: string): TypeStats {
     longWr: longs.length > 0 ? (longWins / longs.length) * 100 : null,
     shortWr: shorts.length > 0 ? (shortWins / shorts.length) * 100 : null,
   };
+}
+
+/** 최근 N거래 승률 (유형별) — 엣지 이동 감지용, 전체 집계와 달리 최신 흐름 반영 */
+function calcRecentWr(trades: TradeResult[], type: string, window = 20): { wr: number | null; count: number } {
+  const filtered = trades
+    .filter(t => t.signalType === type)
+    .sort((a, b) => toSeconds(b.exitTime) - toSeconds(a.exitTime))
+    .slice(0, window);
+  if (filtered.length === 0) return { wr: null, count: 0 };
+  const wins = filtered.filter(t => t.pnl > 0).length;
+  return { wr: (wins / filtered.length) * 100, count: filtered.length };
 }
 
 const THRESH = {
@@ -363,6 +376,15 @@ export const SignalThresholdMonitor = memo(({ timeframe, trades }: SignalThresho
     };
   }, [trades]);
 
+  const recentStats = useMemo(() => {
+    if (!trades || trades.length === 0) return null;
+    return {
+      divergence: calcRecentWr(trades, 'divergence'),
+      breakout: calcRecentWr(trades, 'breakout'),
+      mean_reversion: calcRecentWr(trades, 'mean_reversion'),
+    };
+  }, [trades]);
+
   const snap = indicatorSnapshot?.timeframe === timeframe ? indicatorSnapshot : null;
 
   if (!snap) {
@@ -399,6 +421,37 @@ export const SignalThresholdMonitor = memo(({ timeframe, trades }: SignalThresho
 
   return (
     <div className='mt-1 rounded-lg overflow-hidden space-y-px'>
+      <SignalVerdict
+        edges={[
+          {
+            key: 'divergence',
+            label: '반전',
+            icon: '↩',
+            filled: rdCount,
+            total: 3,
+            recentWr: recentStats?.divergence.wr ?? null,
+            recentCount: recentStats?.divergence.count ?? 0,
+          },
+          {
+            key: 'breakout',
+            label: '돌파',
+            icon: '⚡',
+            filled: vbCount,
+            total: 4,
+            recentWr: recentStats?.breakout.wr ?? null,
+            recentCount: recentStats?.breakout.count ?? 0,
+          },
+          {
+            key: 'mean_reversion',
+            label: '평균회귀',
+            icon: '♻',
+            filled: mrCount,
+            total: 2,
+            recentWr: recentStats?.mean_reversion.wr ?? null,
+            recentCount: recentStats?.mean_reversion.count ?? 0,
+          },
+        ]}
+      />
       <LiveSignalHeader stats={signalStats} />
 
       {/* ↩ 반전매매 — RSI Divergence */}
