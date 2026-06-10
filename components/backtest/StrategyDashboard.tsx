@@ -2,16 +2,15 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
-  createChart,
-  IChartApi,
   CandlestickData,
-  CandlestickSeries,
-  LineSeries,
   SeriesMarker,
   Time,
   createSeriesMarkers,
   LineStyle,
 } from 'lightweight-charts';
+import { useChartInit } from './hooks/useChartInit';
+import { computeRSI } from '@/lib/chart/strategyIndicators';
+import { TradeHistoryPanel } from './ui/TradeHistoryPanel';
 import { useSocket, tickerSharedRef } from '@/contexts/SocketContext';
 import { isConnectedAtom, divergenceDataAtom, divergenceHistoryAtom, wakeUpCounterAtom, tradingStatusAtom, indicatorSnapshotAtom } from '@/stores/socketAtoms';
 import {
@@ -42,8 +41,8 @@ import { SignalThresholdMonitor } from './ui/SignalThresholdMonitor';
 import { StrategyMiniChart } from './ui/StrategyMiniChart';
 import { TRADING } from '@/lib/constants';
 
-const getOrchestratorDefaults = () => getDefaultParams('orchestrator');
 import { getCachedStrategyDisplayName, StrategyType } from '@/lib/backtest-api';
+const getOrchestratorDefaults = () => getDefaultParams('orchestrator');
 import { useAtomValue } from 'jotai';
 import { symbolAtom, symbolIdAtom } from '@/stores/symbolAtom';
 import { toSeconds, formatKST } from '@/lib/utils/timestamp';
@@ -58,217 +57,6 @@ import { useSoundAlerts } from './hooks/useSoundAlerts';
 import { usePositionAlerts } from './hooks/usePositionAlerts';
 import { useMarkerGeneration } from './hooks/useMarkerGeneration';
 // import { useWhyDidYouUpdate } from './hooks/useWhyDidYouUpdate'; // 비활성화
-
-// ── Bollinger Bands 계산 (SMA20 ± 2σ) ──
-function computeBollingerBands(
-  candles: CandlestickData[],
-  period = 20,
-  mult = 2,
-) {
-  const upper: { time: Time; value: number; color?: string }[] = [];
-  const middle: { time: Time; value: number; color?: string }[] = [];
-  const lower: { time: Time; value: number; color?: string }[] = [];
-  const bbwHistory: number[] = [];
-
-  for (let i = period - 1; i < candles.length; i++) {
-    let sum = 0;
-    for (let j = i - period + 1; j <= i; j++) sum += (candles[j] as any).close;
-    const sma = sum / period;
-
-    let sqSum = 0;
-    for (let j = i - period + 1; j <= i; j++) sqSum += ((candles[j] as any).close - sma) ** 2;
-    const std = Math.sqrt(sqSum / period);
-    const bbw = sma > 0 ? (2 * mult * std) / sma : 0;
-    bbwHistory.push(bbw);
-
-    // BBW 백분위: 낮을수록 저변동성 → 평균회귀 유리 → 밝게
-    const lookback = Math.min(bbwHistory.length, 200);
-    const recent = bbwHistory.slice(-lookback);
-    const rank = recent.filter(v => v <= bbw).length / lookback;
-    const alpha = rank < 0.25 ? 0.65 : rank < 0.5 ? 0.35 : 0.12;
-
-    const t = candles[i].time;
-    upper.push({ time: t, value: sma + mult * std, color: `rgba(239, 68, 68, ${alpha})` });
-    middle.push({ time: t, value: sma, color: `rgba(161, 161, 170, ${alpha})` });
-    lower.push({ time: t, value: sma - mult * std, color: `rgba(59, 130, 246, ${alpha})` });
-  }
-  return { upper, middle, lower };
-}
-
-// ── RSI 계산 (Wilder's method, period=14) ──
-function computeRSI(candles: CandlestickData[], period = 14): { time: Time; value: number }[] {
-  const closes = candles.map(c => (c as any).close as number);
-  if (closes.length < period + 1) return [];
-
-  const result: { time: Time; value: number }[] = [];
-  let avgGain = 0;
-  let avgLoss = 0;
-
-  // 초기 평균
-  for (let i = 1; i <= period; i++) {
-    const diff = closes[i] - closes[i - 1];
-    if (diff > 0) avgGain += diff;
-    else avgLoss += -diff;
-  }
-  avgGain /= period;
-  avgLoss /= period;
-
-  const rsiVal = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
-  result.push({ time: candles[period].time, value: rsiVal });
-
-  // Wilder's smoothing
-  for (let i = period + 1; i < closes.length; i++) {
-    const diff = closes[i] - closes[i - 1];
-    avgGain = (avgGain * (period - 1) + (diff > 0 ? diff : 0)) / period;
-    avgLoss = (avgLoss * (period - 1) + (diff < 0 ? -diff : 0)) / period;
-    const v = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
-    result.push({ time: candles[i].time, value: v });
-  }
-  return result;
-}
-
-// ── RSI 피봇 & 다이버전스 감지 ──
-interface Pivot { idx: number; time: Time; price: number; rsi: number; }
-interface DivLine { p1: Pivot; p2: Pivot; type: 'bullish' | 'bearish'; }
-
-function detectDivergences(
-  candles: CandlestickData[],
-  rsiData: { time: Time; value: number }[],
-  pivotLeft = 5, pivotRight = 2,
-  rsiOversold = 30, rsiOverbought = 60,
-  minRsiDiff = 2, minPriceDiffPct = 0.1,
-): { pivotLows: Pivot[]; pivotHighs: Pivot[]; divLines: DivLine[] } {
-  // RSI를 time 기반 map으로 변환
-  const rsiMap = new Map<number, number>();
-  for (const r of rsiData) rsiMap.set(r.time as number, r.value);
-
-  const lows = candles.map(c => (c as any).low as number);
-  const highs = candles.map(c => (c as any).high as number);
-  const n = candles.length;
-
-  // 피봇 Low 감지
-  const pivotLows: Pivot[] = [];
-  for (let i = pivotLeft; i < n - pivotRight; i++) {
-    const val = lows[i];
-    let ok = true;
-    for (let j = i - pivotLeft; j < i; j++) if (lows[j] < val) { ok = false; break; }
-    if (!ok) continue;
-    for (let j = i + 1; j <= i + pivotRight; j++) if (lows[j] < val) { ok = false; break; }
-    if (!ok) continue;
-    const rsi = rsiMap.get(candles[i].time as number);
-    if (rsi !== undefined && rsi <= rsiOversold) {
-      pivotLows.push({ idx: i, time: candles[i].time, price: val, rsi });
-    }
-  }
-
-  // 피봇 High 감지
-  const pivotHighs: Pivot[] = [];
-  for (let i = pivotLeft; i < n - pivotRight; i++) {
-    const val = highs[i];
-    let ok = true;
-    for (let j = i - pivotLeft; j < i; j++) if (highs[j] > val) { ok = false; break; }
-    if (!ok) continue;
-    for (let j = i + 1; j <= i + pivotRight; j++) if (highs[j] > val) { ok = false; break; }
-    if (!ok) continue;
-    const rsi = rsiMap.get(candles[i].time as number);
-    if (rsi !== undefined && rsi >= rsiOverbought) {
-      pivotHighs.push({ idx: i, time: candles[i].time, price: val, rsi });
-    }
-  }
-
-  // 다이버전스 선분 감지
-  const divLines: DivLine[] = [];
-
-  // Bullish: 가격 Lower Low + RSI Higher Low
-  for (let i = 1; i < pivotLows.length; i++) {
-    const prev = pivotLows[i - 1];
-    const curr = pivotLows[i];
-    const priceDiffPct = (prev.price - curr.price) / prev.price * 100;
-    const rsiDiff = curr.rsi - prev.rsi;
-    if (priceDiffPct >= minPriceDiffPct && rsiDiff >= minRsiDiff) {
-      divLines.push({ p1: prev, p2: curr, type: 'bullish' });
-    }
-  }
-
-  // Bearish: 가격 Higher High + RSI Lower High
-  for (let i = 1; i < pivotHighs.length; i++) {
-    const prev = pivotHighs[i - 1];
-    const curr = pivotHighs[i];
-    const priceDiffPct = (curr.price - prev.price) / prev.price * 100;
-    const rsiDiff = prev.rsi - curr.rsi;
-    if (priceDiffPct >= minPriceDiffPct && rsiDiff >= minRsiDiff) {
-      divLines.push({ p1: prev, p2: curr, type: 'bearish' });
-    }
-  }
-
-  return { pivotLows, pivotHighs, divLines };
-}
-
-// ── 돌파 레벨 계산 (20봉 고/저점) + 거래량 백분위 반전 색상 ──
-// 저거래량(하위%) = 못뚫음 = 강한 저항 = 밝게
-// 고거래량(상위%) = 돌파 압력 = 저항 약화 = 희미
-function computeBreakoutLevels(
-  candles: CandlestickData[],
-  period = 20,
-) {
-  const high: { time: Time; value: number; color?: string }[] = [];
-  const low: { time: Time; value: number; color?: string }[] = [];
-  const vrHistory: number[] = [];
-  const alphaHistory: number[] = [];
-  const SMOOTH = 10; // 알파 EMA 스무딩 윈도우
-
-  for (let i = period; i < candles.length; i++) {
-    let maxH = -Infinity;
-    let minL = Infinity;
-    for (let j = i - period; j < i; j++) {
-      const h = (candles[j] as any).high;
-      const l = (candles[j] as any).low;
-      if (h > maxH) maxH = h;
-      if (l < minL) minL = l;
-    }
-
-    // 거래량 비율 (현재 / 20봉 평균)
-    let volSum = 0;
-    for (let j = i - period; j < i; j++) volSum += (candles[j] as any).volume ?? 0;
-    const avgVol = volSum / period;
-    const curVol = (candles[i] as any).volume ?? 0;
-    const vr = avgVol > 0 ? curVol / avgVol : 1;
-    vrHistory.push(vr);
-
-    // 백분위 기반 상대평가 (최근 200봉 내 순위)
-    const lookback = Math.min(vrHistory.length, 200);
-    const recent = vrHistory.slice(-lookback);
-    const rank = recent.filter(v => v <= vr).length / lookback;
-
-    // 세제곱 곡선 + EMA 스무딩 (저거래량=밝고, 고거래량=거의 투명)
-    const t1 = 1 - rank;
-    const rawAlpha = 0.03 + 0.97 * t1 * t1 * t1;
-    const k = 2 / (SMOOTH + 1);
-    const prev = alphaHistory.length > 0 ? alphaHistory[alphaHistory.length - 1] : rawAlpha;
-    const alpha = rawAlpha * k + prev * (1 - k);
-    alphaHistory.push(alpha);
-
-    const t = candles[i].time;
-    high.push({ time: t, value: maxH, color: `rgba(34, 197, 94, ${alpha.toFixed(3)})` });
-    low.push({ time: t, value: minL, color: `rgba(239, 68, 68, ${alpha.toFixed(3)})` });
-  }
-  return { high, low };
-}
-
-function computeZScore(candles: CandlestickData[], period = 20): { time: Time; value: number }[] {
-  const closes = candles.map(c => (c as any).close as number);
-  const result: { time: Time; value: number }[] = [];
-  for (let i = period - 1; i < candles.length; i++) {
-    let sum = 0;
-    for (let j = i - period + 1; j <= i; j++) sum += closes[j];
-    const sma = sum / period;
-    let sqSum = 0;
-    for (let j = i - period + 1; j <= i; j++) sqSum += (closes[j] - sma) ** 2;
-    const std = Math.sqrt(sqSum / period);
-    result.push({ time: candles[i].time, value: std > 0 ? (closes[i] - sma) / std : 0 });
-  }
-  return result;
-}
 
 // 무지개 색상 배열 (빨주노초파보)
 const RAINBOW_COLORS = [
@@ -299,7 +87,7 @@ const getStrategyDisplayName = (strategy: SavedOptimizeResult): string => {
 };
 
 
-function RealtimeChart() {
+function StrategyDashboard() {
   // Performance monitoring
   usePerformanceMonitor('RealtimeChart');
 
@@ -311,22 +99,8 @@ function RealtimeChart() {
   // });
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<any>(null);
-  const priceLinesRef = useRef<any[]>([]); // TP/SL/Entry price lines
-  const seriesMarkersRef = useRef<any>(null); // 마커 인스턴스 재사용 (누적 방지)
-  const bbUpperRef = useRef<any>(null);
-  const bbMiddleRef = useRef<any>(null);
-  const bbLowerRef = useRef<any>(null);
-  const boHighRef = useRef<any>(null);
-  const boLowRef = useRef<any>(null);
   const rsiContainerRef = useRef<HTMLDivElement>(null);
-  const rsiChartRef = useRef<IChartApi | null>(null);
-  const rsiSeriesRef = useRef<any>(null);
   const zscoreContainerRef = useRef<HTMLDivElement>(null);
-  const zscoreChartRef = useRef<IChartApi | null>(null);
-  const zscoreSeriesRef = useRef<any>(null);
-  const isChartDisposedRef = useRef(false);
   // 🎯 핵심 최적화: Context 분리로 불필요한 리렌더 방지
   // - tickerSharedRef: ticker는 re-render 없이 ref로만 접근 (500ms 절약)
   // - KlineContext: kline 데이터만 구독
@@ -515,6 +289,34 @@ function RealtimeChart() {
       refetchBacktestData(true, true);
     }
   }, [applyResult, refetchBacktestData]);
+
+  // ==================== Chart Init ====================
+  const {
+    chartRef,
+    candleSeriesRef,
+    bbUpperRef,
+    bbMiddleRef,
+    bbLowerRef,
+    boHighRef,
+    boLowRef,
+    rsiChartRef,
+    rsiSeriesRef,
+    isChartDisposedRef,
+    seriesMarkersRef,
+    priceLinesRef,
+  } = useChartInit({
+    candles,
+    initialCandlesLoaded,
+    containerRef,
+    rsiContainerRef,
+    zscoreContainerRef,
+    timeframe,
+    chartKey,
+    tradeMapRef,
+    setHoveredTrade,
+    setHoveredSkipped,
+    setTooltipPos,
+  });
 
   // 🔍 리렌더 원인 추적 (개발 모드에서만 활성화) - 비활성화
   // if (process.env.NODE_ENV === 'development') {
@@ -1035,539 +837,6 @@ function RealtimeChart() {
 
     // Note: candles state는 useChartData hook에서 관리됨
   }, [kline, openPosition, selectedStrategy, refetchBacktestData]);
-
-  // 차트 초기 생성 (타임프레임 변경 또는 초기 로드 시에만)
-  useEffect(() => {
-    if (
-      !containerRef.current ||
-      candles.length === 0 ||
-      !initialCandlesLoaded
-    )
-      return;
-
-    // 이전 차트 제거
-    if (chartRef.current) {
-      try {
-        chartRef.current.remove();
-      } catch {
-        // 이미 disposed된 경우 무시
-      }
-      chartRef.current = null;
-      candleSeriesRef.current = null;
-    }
-
-    isChartDisposedRef.current = false;
-
-    const chart = createChart(containerRef.current, {
-      width: containerRef.current.clientWidth,
-      height: containerRef.current.clientHeight || 500,
-      layout: {
-        background: { color: '#18181b' },
-        textColor: '#a1a1aa',
-      },
-      grid: {
-        vertLines: { color: '#27272a' },
-        horzLines: { color: '#27272a' },
-      },
-      crosshair: {
-        mode: 1,
-        horzLine: {
-          color: '#e4e4e7',
-          width: 1,
-          style: 0, // Solid
-          labelBackgroundColor: '#52525b',
-        },
-        vertLine: {
-          color: '#a1a1aa',
-          width: 1,
-          style: 2, // Dashed
-          labelBackgroundColor: '#52525b',
-        },
-      },
-      rightPriceScale: {
-        borderColor: '#3f3f46',
-        scaleMargins: {
-          top: 0.1,    // 상단 10% 여백
-          bottom: 0.1, // 하단 10% 여백
-        },
-        autoScale: true,
-      },
-      timeScale: {
-        borderColor: '#3f3f46',
-        timeVisible: true,
-        rightOffset: 10, // TP/SL 레이블 공간
-        shiftVisibleRangeOnNewBar: true,
-      },
-      localization: {
-        timeFormatter: (time: number) => formatKST(time),  // time은 이미 초 단위
-      },
-    });
-
-    chartRef.current = chart;
-
-    // 캔들 시리즈 (무채색 + 투명도)
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: 'rgba(168, 168, 168, 0.4)',
-      downColor: 'rgba(82, 82, 82, 0.4)',
-      borderUpColor: 'rgba(200, 200, 200, 0.5)',
-      borderDownColor: 'rgba(100, 100, 100, 0.5)',
-      wickUpColor: 'rgba(168, 168, 168, 0.3)',
-      wickDownColor: 'rgba(82, 82, 82, 0.3)',
-      lastValueVisible: true, // 우측 Y축에 현재가 표시
-      priceLineVisible: true, // 현재가 가로선 표시
-      priceLineWidth: 1,
-      priceLineColor: '#71717a',
-      priceLineStyle: LineStyle.Dotted,
-    });
-
-    candleSeries.setData(candles);
-    candleSeriesRef.current = candleSeries;
-
-    // Bollinger Bands (SMA20 ± 2σ)
-    const bbUpper = chart.addSeries(LineSeries, {
-      color: 'rgba(239, 68, 68, 0.25)',
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      lastValueVisible: false,
-      priceLineVisible: false,
-      crosshairMarkerVisible: false,
-    });
-    const bbMiddle = chart.addSeries(LineSeries, {
-      color: 'rgba(161, 161, 170, 0.3)',
-      lineWidth: 1,
-      lineStyle: LineStyle.Dotted,
-      lastValueVisible: false,
-      priceLineVisible: false,
-      crosshairMarkerVisible: false,
-    });
-    const bbLower = chart.addSeries(LineSeries, {
-      color: 'rgba(59, 130, 246, 0.25)',
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      lastValueVisible: false,
-      priceLineVisible: false,
-      crosshairMarkerVisible: false,
-    });
-
-    const bb = computeBollingerBands(candles);
-    bbUpper.setData(bb.upper);
-    bbMiddle.setData(bb.middle);
-    bbLower.setData(bb.lower);
-    bbUpperRef.current = bbUpper;
-    bbMiddleRef.current = bbMiddle;
-    bbLowerRef.current = bbLower;
-
-    // 돌파 레벨 (20봉 고/저점)
-    const boHigh = chart.addSeries(LineSeries, {
-      color: 'rgba(34, 197, 94, 0.4)',  // per-point color의 폴백
-      lineWidth: 1,
-      lineStyle: LineStyle.Solid,
-      lastValueVisible: false,
-      priceLineVisible: false,
-      crosshairMarkerVisible: false,
-      pointMarkersVisible: false,
-    });
-    const boLow = chart.addSeries(LineSeries, {
-      color: 'rgba(239, 68, 68, 0.4)',  // per-point color의 폴백
-      lineWidth: 1,
-      lineStyle: LineStyle.Solid,
-      lastValueVisible: false,
-      priceLineVisible: false,
-      crosshairMarkerVisible: false,
-      pointMarkersVisible: false,
-    });
-
-    const bo = computeBreakoutLevels(candles);
-    boHigh.setData(bo.high);
-    boLow.setData(bo.low);
-    boHighRef.current = boHigh;
-    boLowRef.current = boLow;
-
-    // ── RSI 서브 패널 ──
-    if (rsiContainerRef.current) {
-      // 이전 RSI 차트 제거
-      if (rsiChartRef.current) {
-        try { rsiChartRef.current.remove(); } catch {}
-      }
-
-      const rsiChart = createChart(rsiContainerRef.current, {
-        width: rsiContainerRef.current.clientWidth,
-        height: 120,
-        layout: { background: { color: '#18181b' }, textColor: '#71717a' },
-        grid: { vertLines: { color: '#27272a' }, horzLines: { color: '#27272a' } },
-        crosshair: {
-          mode: 1,
-          horzLine: { color: '#e4e4e7', width: 1, style: 0, labelBackgroundColor: '#52525b' },
-          vertLine: { color: '#a1a1aa', width: 1, style: 2, labelBackgroundColor: '#52525b' },
-        },
-        rightPriceScale: {
-          borderColor: '#3f3f46',
-          scaleMargins: { top: 0.05, bottom: 0.05 },
-          autoScale: false,
-        },
-        timeScale: {
-          borderColor: '#3f3f46',
-          timeVisible: true,
-          visible: false,
-          rightOffset: 20,
-        },
-      });
-
-      // 고정 Y축: 0~100
-      rsiChart.priceScale('right').applyOptions({ autoScale: false });
-
-      // RSI 라인
-      const rsiSeries = rsiChart.addSeries(LineSeries, {
-        color: '#a78bfa',
-        lineWidth: 1,
-        lastValueVisible: true,
-        priceLineVisible: false,
-        crosshairMarkerVisible: true,
-      });
-
-      const rsiData = computeRSI(candles);
-      rsiSeries.setData(rsiData);
-      // Y축 0~100 고정
-      rsiSeries.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
-
-      // 과매도/과매수 임계선
-      const thresholdData = (val: number) => {
-        if (rsiData.length < 2) return [];
-        return [
-          { time: rsiData[0].time, value: val },
-          { time: rsiData[rsiData.length - 1].time, value: val },
-        ];
-      };
-
-      const oversoldLine = rsiChart.addSeries(LineSeries, {
-        color: 'rgba(34, 197, 94, 0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed,
-        lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
-      });
-      oversoldLine.setData(thresholdData(30));
-      oversoldLine.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
-
-      const overboughtLine = rsiChart.addSeries(LineSeries, {
-        color: 'rgba(239, 68, 68, 0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed,
-        lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
-      });
-      overboughtLine.setData(thresholdData(60));
-      overboughtLine.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
-
-      // 다이버전스 감지 & 선분 표시
-      const { pivotLows, pivotHighs, divLines } = detectDivergences(candles, rsiData);
-
-      // 피봇 마커 (◆만 표시, 초록=저점, 빨강=고점)
-      const rsiMarkers: SeriesMarker<Time>[] = [];
-      for (const p of pivotLows) {
-        rsiMarkers.push({
-          time: p.time, position: 'belowBar', color: '#22c55e',
-          shape: 'circle', size: 0, text: '◆',
-        } as SeriesMarker<Time>);
-      }
-      for (const p of pivotHighs) {
-        rsiMarkers.push({
-          time: p.time, position: 'aboveBar', color: '#ef4444',
-          shape: 'circle', size: 0, text: '◆',
-        } as SeriesMarker<Time>);
-      }
-      rsiMarkers.sort((a, b) => (a.time as number) - (b.time as number));
-      if (rsiMarkers.length > 0) {
-        createSeriesMarkers(rsiSeries, rsiMarkers);
-      }
-
-      // 다이버전스 선분 (RSI 차트 + 가격 차트 동시 표시)
-      for (const div of divLines) {
-        // RSI 차트
-        const divRsiSeries = rsiChart.addSeries(LineSeries, {
-          color: div.type === 'bullish' ? '#22c55e' : '#ef4444',
-          lineWidth: 2,
-          lineStyle: LineStyle.Solid,
-          lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
-        });
-        divRsiSeries.setData([
-          { time: div.p1.time, value: div.p1.rsi },
-          { time: div.p2.time, value: div.p2.rsi },
-        ]);
-        divRsiSeries.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
-
-        // 가격 차트 (점선으로 가격 피봇 연결)
-        const divPriceSeries = chart.addSeries(LineSeries, {
-          color: div.type === 'bullish' ? '#22c55e' : '#ef4444',
-          lineWidth: 2,
-          lineStyle: LineStyle.Dashed,
-          lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
-        });
-        divPriceSeries.setData([
-          { time: div.p1.time, value: div.p1.price },
-          { time: div.p2.time, value: div.p2.price },
-        ]);
-      }
-
-      // 타임스케일 동기화 (인덱스 기반 + RSI 오프셋 보정)
-      const rsiOffset = candles.length - rsiData.length;
-      let isSyncing = false;
-      chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-        if (isSyncing || !range || !rsiChartRef.current) return;
-        isSyncing = true;
-        rsiChartRef.current.timeScale().setVisibleLogicalRange({
-          from: range.from - rsiOffset,
-          to: range.to - rsiOffset,
-        });
-        isSyncing = false;
-      });
-      rsiChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-        if (isSyncing || !range || !chartRef.current) return;
-        isSyncing = true;
-        chartRef.current.timeScale().setVisibleLogicalRange({
-          from: range.from + rsiOffset,
-          to: range.to + rsiOffset,
-        });
-        isSyncing = false;
-      });
-
-      // 크로스헤어 동기화 (메인 ↔ RSI)
-      let isCrosshairSyncing = false;
-      chart.subscribeCrosshairMove((param) => {
-        if (isCrosshairSyncing || !rsiChartRef.current || !rsiSeriesRef.current) return;
-        isCrosshairSyncing = true;
-        if (param.time) {
-          const rsiVal = rsiSeriesRef.current.dataByIndex(
-            rsiChartRef.current.timeScale().timeToCoordinate(param.time as any) != null
-              ? Math.round(rsiChartRef.current.timeScale().coordinateToLogical(
-                  rsiChartRef.current.timeScale().timeToCoordinate(param.time as any)!
-                ) ?? 0)
-              : 0
-          );
-          // setCrosshairPosition으로 RSI 차트에 크로스헤어 표시
-          rsiChartRef.current.setCrosshairPosition(rsiVal?.value ?? 50, param.time, rsiSeriesRef.current);
-        } else {
-          rsiChartRef.current.clearCrosshairPosition();
-        }
-        isCrosshairSyncing = false;
-      });
-      rsiChart.subscribeCrosshairMove((param) => {
-        if (isCrosshairSyncing || !chartRef.current || !candleSeriesRef.current) return;
-        isCrosshairSyncing = true;
-        if (param.time) {
-          chartRef.current.setCrosshairPosition(0, param.time, candleSeriesRef.current);
-        } else {
-          chartRef.current.clearCrosshairPosition();
-        }
-        isCrosshairSyncing = false;
-      });
-
-      rsiChartRef.current = rsiChart;
-      rsiSeriesRef.current = rsiSeries;
-
-      // RSI ResizeObserver
-      const rsiResizeObs = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          if (entry.target === rsiContainerRef.current && rsiChartRef.current) {
-            rsiChartRef.current.applyOptions({ width: entry.contentRect.width });
-          }
-        }
-      });
-      rsiResizeObs.observe(rsiContainerRef.current);
-    }
-
-    // ── Z-Score 서브 패널 ──
-    if (zscoreContainerRef.current) {
-      if (zscoreChartRef.current) {
-        try { zscoreChartRef.current.remove(); } catch {}
-      }
-
-      const zscoreChart = createChart(zscoreContainerRef.current, {
-        width: zscoreContainerRef.current.clientWidth,
-        height: 100,
-        layout: { background: { color: '#18181b' }, textColor: '#71717a' },
-        grid: { vertLines: { color: '#27272a' }, horzLines: { color: '#27272a' } },
-        crosshair: {
-          mode: 1,
-          horzLine: { color: '#e4e4e7', width: 1, style: 0, labelBackgroundColor: '#52525b' },
-          vertLine: { color: '#a1a1aa', width: 1, style: 2, labelBackgroundColor: '#52525b' },
-        },
-        rightPriceScale: { borderColor: '#3f3f46', scaleMargins: { top: 0.1, bottom: 0.1 } },
-        timeScale: { borderColor: '#3f3f46', timeVisible: true, visible: false, rightOffset: 20 },
-      });
-
-      const zscoreData = computeZScore(candles);
-      const zOffset = candles.length - zscoreData.length;
-
-      const zSeries = zscoreChart.addSeries(LineSeries, {
-        color: '#34d399',
-        lineWidth: 1,
-        lastValueVisible: true,
-        priceLineVisible: false,
-        crosshairMarkerVisible: true,
-      });
-      zSeries.setData(zscoreData);
-
-      // 진입 임계선 (+2.5 / -2.5 고변동, +1.5 / -1.5 저변동)
-      const thresholdZ = (val: number, color: string) => {
-        if (zscoreData.length < 2) return;
-        const s = zscoreChart.addSeries(LineSeries, {
-          color, lineWidth: 1, lineStyle: LineStyle.Dashed,
-          lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
-        });
-        s.setData([
-          { time: zscoreData[0].time, value: val },
-          { time: zscoreData[zscoreData.length - 1].time, value: val },
-        ]);
-      };
-      thresholdZ(2.5, 'rgba(239,68,68,0.5)');
-      thresholdZ(-2.5, 'rgba(34,197,94,0.5)');
-      thresholdZ(1.5, 'rgba(239,68,68,0.25)');
-      thresholdZ(-1.5, 'rgba(34,197,94,0.25)');
-      // 0선
-      thresholdZ(0, 'rgba(161,161,170,0.3)');
-
-      // 타임스케일 동기화
-      let isZSyncing = false;
-      chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-        if (isZSyncing || !range || !zscoreChartRef.current) return;
-        isZSyncing = true;
-        zscoreChartRef.current.timeScale().setVisibleLogicalRange({ from: range.from - zOffset, to: range.to - zOffset });
-        isZSyncing = false;
-      });
-      zscoreChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-        if (isZSyncing || !range || !chartRef.current) return;
-        isZSyncing = true;
-        chartRef.current.timeScale().setVisibleLogicalRange({ from: range.from + zOffset, to: range.to + zOffset });
-        isZSyncing = false;
-      });
-
-      // 크로스헤어 동기화
-      let isZCrosshairSyncing = false;
-      chart.subscribeCrosshairMove((param) => {
-        if (isZCrosshairSyncing || !zscoreChartRef.current || !zscoreSeriesRef.current) return;
-        isZCrosshairSyncing = true;
-        if (param.time) {
-          zscoreChartRef.current.setCrosshairPosition(0, param.time, zscoreSeriesRef.current);
-        } else {
-          zscoreChartRef.current.clearCrosshairPosition();
-        }
-        isZCrosshairSyncing = false;
-      });
-      zscoreChart.subscribeCrosshairMove((param) => {
-        if (isZCrosshairSyncing || !chartRef.current || !candleSeriesRef.current) return;
-        isZCrosshairSyncing = true;
-        if (param.time) {
-          chartRef.current.setCrosshairPosition(0, param.time, candleSeriesRef.current);
-        } else {
-          chartRef.current.clearCrosshairPosition();
-        }
-        isZCrosshairSyncing = false;
-      });
-
-      zscoreChartRef.current = zscoreChart;
-      zscoreSeriesRef.current = zSeries;
-
-      const zResizeObs = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          if (entry.target === zscoreContainerRef.current && zscoreChartRef.current) {
-            zscoreChartRef.current.applyOptions({ width: entry.contentRect.width });
-          }
-        }
-      });
-      zResizeObs.observe(zscoreContainerRef.current);
-    }
-
-    // 크로스헤어 이동 시 거래 정보 표시 (툴팁)
-    chart.subscribeCrosshairMove((param) => {
-      if (!param.time || !param.point) {
-        setHoveredTrade(null);
-        setHoveredSkipped(null);
-        setTooltipPos(null);
-        return;
-      }
-
-      const time = param.time as number;
-      // 시간 근처의 거래 찾기 (타임프레임에 따라 범위 조정)
-      const tolerance =
-        timeframe === '1m'
-          ? 60
-          : timeframe === '5m'
-            ? 300
-            : timeframe === '15m'
-              ? 900
-              : 3600;
-      let found: {
-        trade?: TradeResult;
-        skipped?: SkippedSignal;
-        type: 'entry' | 'exit' | 'skipped';
-      } | null = null;
-
-      for (const [t, data] of tradeMapRef.current) {
-        if (Math.abs(t - time) < tolerance) {
-          found = data;
-          break;
-        }
-      }
-
-      if (found) {
-        if (found.skipped) {
-          setHoveredSkipped(found.skipped);
-          setHoveredTrade(null);
-        } else if (found.trade) {
-          setHoveredTrade(found.trade);
-          setHoveredSkipped(null);
-        }
-        setTooltipPos({ x: param.point.x, y: param.point.y });
-      } else {
-        setHoveredTrade(null);
-        setHoveredSkipped(null);
-        setTooltipPos(null);
-      }
-    });
-
-    // ResizeObserver로 컨테이너 크기 변화 감지 (레이아웃 변경 대응)
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.target === containerRef.current && chartRef.current) {
-          const { width, height } = entry.contentRect;
-          chartRef.current.applyOptions({ width, height: height || 500 });
-          // 크기 변경 시 가격 스케일 재조정
-          chartRef.current.priceScale('right').applyOptions({ autoScale: true });
-        }
-      }
-    });
-
-    resizeObserver.observe(containerRef.current);
-
-    // 마지막 캔들 기준으로 스크롤 (rightOffset이 적용됨)
-    const lastCandleTime = candles[candles.length - 1].time as number;
-    console.log(
-      '[Chart] Last candle time:',
-      new Date(lastCandleTime * 1000).toLocaleString('ko-KR'),
-    );
-
-    // scrollToRealTime — rightOffset(80봉)이 자동 적용됨
-    requestAnimationFrame(() => {
-      if (chartRef.current) {
-        chartRef.current.timeScale().scrollToRealTime();
-        chartRef.current.priceScale('right').applyOptions({ autoScale: true });
-      }
-    });
-
-    return () => {
-      resizeObserver.disconnect();
-      isChartDisposedRef.current = true;
-      try { chart.remove(); } catch {}
-      try { rsiChartRef.current?.remove(); } catch {}
-      chartRef.current = null;
-      candleSeriesRef.current = null;
-      bbUpperRef.current = null;
-      bbMiddleRef.current = null;
-      bbLowerRef.current = null;
-      boHighRef.current = null;
-      boLowRef.current = null;
-      rsiChartRef.current = null;
-      rsiSeriesRef.current = null;
-      priceLinesRef.current = [];
-      seriesMarkersRef.current = null;
-    };
-  }, [timeframe, chartKey]);
-
   // Note: Marker generation (chart markers and candle coloring) is now handled by useMarkerGeneration hook
 
   // BB/돈치안 라인 밝기: 신호 조건 충족도에 따라 굵기+투명도 조절
@@ -2449,105 +1718,17 @@ function RealtimeChart() {
         )}
       </div>
 
-      {/* 하단: 거래 히스토리 */}
-      <div className='mt-4'>
-        <div className='bg-zinc-900 p-4 rounded-lg'>
-          <h3 className='text-sm font-medium text-zinc-400 mb-3'>
-            거래 히스토리 {isBacktestRunning ? '' : `(${backtestTrades.length})`}
-          </h3>
-          <div className='max-h-[200px] overflow-y-auto space-y-1 custom-scrollbar'>
-            {isBacktestRunning ? (
-              <div className='space-y-2'>
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className='flex items-center justify-between p-2 bg-zinc-800 rounded'>
-                    <div className='flex items-center gap-2'>
-                      <div className='w-6 h-5 bg-zinc-700 rounded animate-pulse' />
-                      <div className='flex flex-col gap-1'>
-                        <div className='w-24 h-3 bg-zinc-700 rounded animate-pulse' />
-                        <div className='w-12 h-2 bg-zinc-700 rounded animate-pulse' />
-                      </div>
-                    </div>
-                    <div className='w-12 h-4 bg-zinc-700 rounded animate-pulse' />
-                  </div>
-                ))}
-              </div>
-            ) : sortedTrades.length > 0 ? (
-              sortedTrades.map((trade, idx) => {
-                  const isSelected =
-                    selectedTrade?.entryTime === trade.entryTime;
-                  const pnlPercent = (trade.pnlPercent ?? 0) * leverage;
-                  const isWin = pnlPercent > 0;
-                  const entryDate = new Date(toSeconds(trade.entryTime) * 1000);
-                  const exitDate = new Date(toSeconds(trade.exitTime) * 1000);
-                  const durationMs = exitDate.getTime() - entryDate.getTime();
-                  const durationHours = Math.floor(
-                    durationMs / (1000 * 60 * 60),
-                  );
-                  const durationMins = Math.floor(
-                    (durationMs % (1000 * 60 * 60)) / (1000 * 60),
-                  );
-                  const durationStr =
-                    durationHours > 0
-                      ? `${durationHours}h ${durationMins}m`
-                      : `${durationMins}m`;
-                  const formatDate = (d: Date) => {
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    const h = String(d.getHours()).padStart(2, '0');
-                    const min = String(d.getMinutes()).padStart(2, '0');
-                    return `${y}-${m}-${day} ${h}:${min}`;
-                  };
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => handleTradeClick(trade)}
-                      className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${
-                        isSelected
-                          ? 'bg-zinc-700'
-                          : 'bg-zinc-800 hover:bg-zinc-750'
-                      }`}
-                    >
-                      <div className='flex items-center gap-2'>
-                        <span
-                          className={`text-xs px-1.5 py-0.5 rounded ${
-                            trade.direction === 'long'
-                              ? 'bg-green-900/50 text-green-400'
-                              : 'bg-red-900/50 text-red-400'
-                          }`}
-                        >
-                          {trade.direction === 'long' ? 'L' : 'S'}
-                        </span>
-                        <div className='flex flex-col'>
-                          <span className='text-xs text-zinc-400'>
-                            {formatDate(exitDate)}
-                          </span>
-                          <span className='text-[10px] text-zinc-500'>
-                            {durationStr}
-                          </span>
-                        </div>
-                      </div>
-                      <span
-                        className={`text-xs font-medium ${isWin ? 'text-green-400' : 'text-red-400'}`}
-                      >
-                        {isWin ? '+' : ''}
-                        {pnlPercent.toFixed(2)}%
-                      </span>
-                    </div>
-                  );
-                })
-            ) : (
-              <div className='text-center text-zinc-500 text-xs py-4'>
-                거래 내역이 없습니다
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <TradeHistoryPanel
+        trades={sortedTrades}
+        isBacktestRunning={isBacktestRunning}
+        leverage={leverage}
+        selectedTrade={selectedTrade}
+        onTradeClick={handleTradeClick}
+      />
     </div>
   );
 }
 
 // React.memo 적용: RealtimeChart는 props가 없고 Context에서 데이터를 가져오므로
 // React.memo는 효과가 제한적입니다. Context 값 변경은 여전히 리렌더를 유발합니다.
-export default React.memo(RealtimeChart);
+export default React.memo(StrategyDashboard);
