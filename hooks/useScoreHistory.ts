@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { API_CONFIG } from '@/lib/config';
 
@@ -58,12 +58,12 @@ export function useScoreHistory(options: UseScoreHistoryOptions = {}) {
     },
   });
 
-  const saveScore = async (entry: Omit<ScoreHistoryEntry, 'id' | 'timestamp'>) => {
+  const saveScore = useCallback(async (entry: Omit<ScoreHistoryEntry, 'id' | 'timestamp'>) => {
     const now = Date.now();
     if (now - lastSaveRef.current < saveInterval) return;
     lastSaveRef.current = now;
     await mutateAsync(entry);
-  };
+  }, [mutateAsync, saveInterval]);
 
   return { history, isLoading, saveScore, refetch };
 }
