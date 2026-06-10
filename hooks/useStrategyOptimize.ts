@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   fetchOptimizationStatus,
   proposeOptimization,
@@ -33,8 +34,11 @@ interface UseStrategyOptimizeReturn {
 }
 
 export function useStrategyOptimize(): UseStrategyOptimizeReturn {
-  const [strategies, setStrategies] = useState<OptimizationStatusItem[]>([]);
-  const [isLoadingStatus, setIsLoadingStatus] = useState(false);
+  const { data: strategies = [], isLoading: isLoadingStatus, refetch } = useQuery({
+    queryKey: ['optimization-status'],
+    queryFn: fetchOptimizationStatus,
+  });
+
   const [optimizingStrategy, setOptimizingStrategy] = useState<string | null>(null);
   const [proposeResult, setProposeResult] = useState<ProposeResult | null>(null);
   const [isApplying, setIsApplying] = useState(false);
@@ -45,24 +49,9 @@ export function useStrategyOptimize(): UseStrategyOptimizeReturn {
   const optimizeQueueRef = useRef<string[]>([]);
   const [optimizeAllProgress, setOptimizeAllProgress] = useState<{ current: number; total: number } | null>(null);
 
-  // 상태 로드
   const refreshStatus = useCallback(async () => {
-    setIsLoadingStatus(true);
-    try {
-      const data = await fetchOptimizationStatus();
-      setStrategies(data);
-      setError(null);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoadingStatus(false);
-    }
-  }, []);
-
-  // 초기 로드
-  useEffect(() => {
-    refreshStatus();
-  }, [refreshStatus]);
+    await refetch();
+  }, [refetch]);
 
   // 큐에서 다음 전략 시작
   const processNextInQueue = useCallback(async () => {

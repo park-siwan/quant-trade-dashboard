@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { API_CONFIG } from '@/lib/config';
 
 export interface ScoreHistoryEntry {
@@ -22,63 +23,47 @@ export interface ScoreHistoryEntry {
 
 interface UseScoreHistoryOptions {
   limit?: number;
-  saveInterval?: number; // ms, 저장 주기 (기본 60초)
+  saveInterval?: number;
 }
 
 export function useScoreHistory(options: UseScoreHistoryOptions = {}) {
   const { limit = 60, saveInterval = 60000 } = options;
-  const [history, setHistory] = useState<ScoreHistoryEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const lastSaveRef = useRef<number>(0);
+  const queryClient = useQueryClient();
 
-  // 히스토리 조회
-  const fetchHistory = useCallback(async () => {
-    try {
+  const { data: history = [], isLoading, refetch } = useQuery<ScoreHistoryEntry[]>({
+    queryKey: ['score-history', limit],
+    queryFn: async () => {
       const res = await fetch(`${API_CONFIG.BASE_URL}/score-history?limit=${limit}`);
-      if (res.ok) {
-        const data = await res.json();
-        setHistory(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch score history:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [limit]);
+      if (!res.ok) throw new Error('Failed to fetch score history');
+      return res.json();
+    },
+  });
 
-  // 점수 저장 (쓰로틀 적용)
-  const saveScore = useCallback(async (entry: Omit<ScoreHistoryEntry, 'id' | 'timestamp'>) => {
-    const now = Date.now();
-    if (now - lastSaveRef.current < saveInterval) {
-      return; // 저장 주기 미충족
-    }
-    lastSaveRef.current = now;
-
-    try {
-      const res = await fetch(`${API_CONFIG.BASE_URL}/score-history`, {
+  const { mutateAsync } = useMutation<
+    ScoreHistoryEntry,
+    Error,
+    Omit<ScoreHistoryEntry, 'id' | 'timestamp'>
+  >({
+    mutationFn: (entry) =>
+      fetch(`${API_CONFIG.BASE_URL}/score-history`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entry),
-      });
+      }).then(r => r.json()),
+    onSuccess: (saved) => {
+      queryClient.setQueryData<ScoreHistoryEntry[]>(['score-history', limit], prev =>
+        [saved, ...(prev ?? [])].slice(0, limit)
+      );
+    },
+  });
 
-      if (res.ok) {
-        const saved = await res.json();
-        setHistory(prev => [saved, ...prev].slice(0, limit));
-      }
-    } catch (err) {
-      console.error('Failed to save score:', err);
-    }
-  }, [limit, saveInterval]);
-
-  // 초기 로드
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
-
-  return {
-    history,
-    isLoading,
-    saveScore,
-    refetch: fetchHistory,
+  const saveScore = async (entry: Omit<ScoreHistoryEntry, 'id' | 'timestamp'>) => {
+    const now = Date.now();
+    if (now - lastSaveRef.current < saveInterval) return;
+    lastSaveRef.current = now;
+    await mutateAsync(entry);
   };
+
+  return { history, isLoading, saveScore, refetch };
 }

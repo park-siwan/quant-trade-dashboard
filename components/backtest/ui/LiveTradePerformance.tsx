@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { fetchLiveTrades, fetchLiveTradeStats, LiveTrade, TradeStats, SourceStats } from '@/lib/backtest-api';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -135,22 +135,15 @@ function TradeRow({ trade }: { trade: LiveTrade }) {
 }
 
 export default function LiveTradePerformance() {
-  const [trades, setTrades] = useState<LiveTrade[]>([]);
-  const [stats, setStats] = useState<TradeStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['live-trades'],
+    queryFn: () => Promise.all([fetchLiveTrades(), fetchLiveTradeStats()]),
+    refetchInterval: 30_000,
+    select: ([t, s]) => ({ trades: t, stats: s }),
+  });
 
-  const refresh = useCallback(async () => {
-    const [t, s] = await Promise.all([fetchLiveTrades(), fetchLiveTradeStats()]);
-    setTrades(t);
-    setStats(s);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    refresh();
-    const iv = setInterval(refresh, 30000); // 30s polling
-    return () => clearInterval(iv);
-  }, [refresh]);
+  const trades = data?.trades ?? [];
+  const stats = data?.stats ?? null;
 
   if (loading) {
     return (
