@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   CandlestickData,
   SeriesMarker,
@@ -21,32 +22,35 @@ import {
   SkippedSignal,
   refreshSingleStrategy,
   refreshAllStrategies,
+  getCachedStrategyDisplayName,
+  StrategyType,
 } from '@/lib/backtest-api';
 import { RefreshCw, Zap } from 'lucide-react';
-import {
-  convertApiParams,
-  getDefaultParams,
-} from '@/lib/strategy-params';
-import MultiStrategyEquityChart from './MultiStrategyEquityChart';
-import WeeklySharpeTimeline from './WeeklySharpeTimeline';
-import AvgSharpeChart from './AvgSharpeChart';
+import { convertApiParams, getDefaultParams } from '@/lib/strategy-params';
 import { ChartLegend } from './ui/ChartLegend';
 import { OpenPositionCard } from './ui/OpenPositionCard';
 import { RecentSignalsPanel } from './ui/RecentSignalsPanel';
 import { SettingsPanel } from './ui/SettingsPanel';
-import { OptimizeComparisonCard } from './ui/OptimizeComparisonCard';
 import { useStrategyOptimize } from '@/hooks/useStrategyOptimize';
 import { StatisticsHeader, BalanceHeader } from './ui/StatisticsHeader';
 import { SignalThresholdMonitor } from './ui/SignalThresholdMonitor';
-import { StrategyMiniChart } from './ui/StrategyMiniChart';
-import { TRADING } from '@/lib/constants';
-
-import { getCachedStrategyDisplayName, StrategyType } from '@/lib/backtest-api';
-const getOrchestratorDefaults = () => getDefaultParams('orchestrator');
-import { useAtomValue } from 'jotai';
+import { StrategyListPanel } from './ui/StrategyListPanel';
+import { StrategyComparisonPanel } from './ui/StrategyComparisonPanel';
 import { symbolAtom, symbolIdAtom } from '@/stores/symbolAtom';
 import { toSeconds, formatKST } from '@/lib/utils/timestamp';
 import { usePerformanceMonitor } from '@/lib/performance-monitor';
+import {
+  timeframeAtom,
+  selectedStrategyAtom,
+  selectedTradeAtom,
+  highlightedStrategyAtom,
+  hoveredTradeAtom,
+  hoveredSkippedAtom,
+  tooltipPosAtom,
+  isSettingsOpenAtom,
+  leverageAtom,
+  nextCandleCountdownAtom,
+} from '@/stores/strategyAtoms';
 
 // ✅ Custom Hooks
 import { useChartData } from './hooks/useChartData';
@@ -57,6 +61,8 @@ import { useSoundAlerts } from './hooks/useSoundAlerts';
 import { usePositionAlerts } from './hooks/usePositionAlerts';
 import { useMarkerGeneration } from './hooks/useMarkerGeneration';
 // import { useWhyDidYouUpdate } from './hooks/useWhyDidYouUpdate'; // 비활성화
+
+const getOrchestratorDefaults = () => getDefaultParams('orchestrator');
 
 // 무지개 색상 배열 (빨주노초파보)
 const RAINBOW_COLORS = [
@@ -123,30 +129,23 @@ function StrategyDashboard() {
   const currentSymbol = useAtomValue(symbolAtom);
   const symbolId = useAtomValue(symbolIdAtom); // 문자열 심볼 ID (BTCUSDT)
 
-  // ==================== Local UI State (not from hooks) ====================
-  const [timeframe, setTimeframe] = useState('5m');
-  const [selectedStrategy, setSelectedStrategy] = useState<SavedOptimizeResult | null>(null);
-  const [selectedTrade, setSelectedTrade] = useState<TradeResult | null>(null);
-  const [highlightedStrategy, setHighlightedStrategy] = useState<number | null>(null);
+  // ==================== Local UI State (atoms) ====================
+  const [timeframe, setTimeframe] = useAtom(timeframeAtom);
+  const [selectedStrategy, setSelectedStrategy] = useAtom(selectedStrategyAtom);
+  const [selectedTrade, setSelectedTrade] = useAtom(selectedTradeAtom);
+  const [highlightedStrategy, setHighlightedStrategy] = useAtom(highlightedStrategyAtom);
 
   // Tooltip 상태
-  const [hoveredTrade, setHoveredTrade] = useState<TradeResult | null>(null);
-  const [hoveredSkipped, setHoveredSkipped] = useState<SkippedSignal | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const [hoveredTrade, setHoveredTrade] = useAtom(hoveredTradeAtom);
+  const [hoveredSkipped, setHoveredSkipped] = useAtom(hoveredSkippedAtom);
+  const [tooltipPos, setTooltipPos] = useAtom(tooltipPosAtom);
   const tradeMapRef = useRef<Map<number, { trade?: TradeResult; skipped?: SkippedSignal; type: 'entry' | 'exit' | 'skipped' }>>(new Map());
 
   // Settings
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  // autoOptimizeEnabled removed — optimization integrated into strategy list
-  const [leverage, setLeverage] = useState<number>(TRADING.FIXED_LEVERAGE || 1);
+  const [isSettingsOpen, setIsSettingsOpen] = useAtom(isSettingsOpenAtom);
+  const [leverage, setLeverage] = useAtom(leverageAtom);
   const leverageAutoSetRef = useRef(false);
-  const [nextCandleCountdown, setNextCandleCountdown] = useState<number>(0);
-
-  // 전략 비교 차트 탭 (null = 숨김, 'equity' = 자산곡선, 'sharpe' = 샤프 타임라인)
-  const [strategyChartTab, setStrategyChartTab] = useState<'equity' | 'sharpe' | 'avg-sharpe' | null>(null);
-
-  // 단일 전략 갱신 중 상태
-  const [refreshingStrategy, setRefreshingStrategy] = useState<string | null>(null);
+  const [nextCandleCountdown, setNextCandleCountdown] = useAtom(nextCandleCountdownAtom);
 
   // Refs for tracking
   const savedStrategyIdRef = useRef<number | null>(null);
@@ -360,7 +359,7 @@ function StrategyDashboard() {
         setTimeframe(savedTf);
       }
     }
-  }, []);
+  }, [timeframe, setTimeframe]);
 
   // 자동 최적화는 OptimizationPanel로 이전됨
 
@@ -435,7 +434,7 @@ function StrategyDashboard() {
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, [timeframe]);
+  }, [timeframe, setNextCandleCountdown]);
 
   // Auto-leverage: Comfort-Kelly 공식 (OpenPositionCard와 동일)
   // NOTE: FIXED_LEVERAGE=20 모드 — 자동 레버리지 계산 비활성화
@@ -466,7 +465,7 @@ function StrategyDashboard() {
       setSelectedStrategy(target);
       console.log('[AutoSelect] Auto-selected:', target.strategy, 'id:', target.id);
     }
-  }, [strategies, selectedStrategy]);
+  }, [strategies, selectedStrategy, setSelectedStrategy]);
 
   // 전략 미리보기 백테스트 실행 (단일 전략)
   // 파라미터를 보내지 않고 Python이 JSON 기본값을 사용하도록 함 (race condition 방지)
@@ -677,12 +676,12 @@ function StrategyDashboard() {
     if (strategy) {
       handleStrategyChange(strategy);
     }
-  }, [highlightedStrategy, strategies, handleStrategyChange]);
+  }, [highlightedStrategy, strategies, handleStrategyChange, setHighlightedStrategy]);
 
   // 설정 토글 핸들러
   const handleSettingsToggle = useCallback(() => {
     setIsSettingsOpen(prev => !prev);
-  }, []);
+  }, [setIsSettingsOpen]);
 
   // 타임프레임 변경 핸들러
   const handleTimeframeChange = useCallback((tf: string) => {
@@ -693,12 +692,12 @@ function StrategyDashboard() {
       localStorage.removeItem('selectedStrategyTimeframe');
     }
     setTimeframe(tf);
-  }, [timeframe]);
+  }, [timeframe, setTimeframe]);
 
   // 거래 선택 핸들러
   const handleTradeClick = useCallback((trade: TradeResult) => {
     setSelectedTrade(prev => (prev === trade ? null : trade));
-  }, []);
+  }, [setSelectedTrade]);
 
   // ==================== useEffects (심볼 변경 시 리셋) ====================
   // Note: loadBacktestTrades, candle loading은 이제 hooks에서 처리됨
@@ -1240,483 +1239,39 @@ function StrategyDashboard() {
       </div>
 
       {/* 우측: 전략 리스트 */}
-      <div className='flex flex-col gap-2 min-w-0 h-full'>
-        <div className='bg-zinc-900 p-3 rounded-lg flex-1 min-h-0 flex flex-col'>
-          <h3 className='text-sm font-medium text-zinc-400 mb-2 shrink-0 flex items-center gap-2'>
-            전략 목록 ({strategies.length})
-            <span className='text-[10px] text-zinc-600 font-normal'>12주 백테스트</span>
-            {isLoadingAllStrategies && (
-              <span className='text-[10px] text-blue-400 flex items-center gap-1'>
-                <span className='w-2 h-2 rounded-full bg-blue-400 animate-pulse' />
-                분석중
-              </span>
-            )}
-            {optimizeAllProgress && (
-              <span className='text-[10px] text-yellow-400'>
-                {optimizeAllProgress.current}/{optimizeAllProgress.total}
-              </span>
-            )}
-            <div className='ml-auto flex items-center gap-0.5'>
-              <button
-                onClick={() => {
-                  const activeStrategies = optimizeStatuses.map(s => s.strategy);
-                  if (activeStrategies.length > 0) startOptimizeAll(activeStrategies);
-                }}
-                disabled={!!optimizingStrategy}
-                className={`p-1 rounded transition-colors ${
-                  optimizingStrategy
-                    ? 'text-yellow-400 animate-pulse'
-                    : 'text-zinc-500 hover:text-yellow-400 hover:bg-zinc-700'
-                }`}
-                title='전체 전략 최적화'
-              >
-                <Zap size={13} />
-              </button>
-              <button
-                onClick={async () => {
-                  if (refreshingStrategy === '__all__') return;
-                  setRefreshingStrategy('__all__');
-                  try {
-                    await refreshAllStrategies(symbolId, timeframe);
-                    refetchBacktestData(true, true);
-                    refetchStrategies();
-                  } catch (err) {
-                    console.error('전체 갱신 실패:', err);
-                  } finally {
-                    setRefreshingStrategy(null);
-                  }
-                }}
-                disabled={refreshingStrategy === '__all__'}
-                className={`p-1 rounded transition-colors ${
-                  refreshingStrategy === '__all__'
-                    ? 'text-blue-400'
-                    : 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-700'
-                }`}
-                title='전체 전략 캐시 재계산'
-              >
-                <RefreshCw size={13} className={refreshingStrategy === '__all__' ? 'animate-spin' : ''} />
-              </button>
-            </div>
-          </h3>
-
-          {/* 최적화 비교 카드 */}
-          {proposeResult && (
-            <div className='mb-2 shrink-0'>
-              <OptimizeComparisonCard
-                result={proposeResult}
-                isApplying={isApplying}
-                onApprove={approveOptimize}
-                onReject={rejectOptimize}
-              />
-            </div>
-          )}
-          {optimizeError && (
-            <div className='mb-2 px-2 py-1 bg-red-500/10 border border-red-500/30 rounded text-[10px] text-red-400 shrink-0'>
-              {optimizeError}
-            </div>
-          )}
-          {applyResult?.success && !proposeResult && (
-            <div className='mb-2 px-2 py-1 bg-green-500/10 border border-green-500/30 rounded text-[10px] text-green-400 shrink-0'>
-              {applyResult.strategy} 최적화 적용 완료
-            </div>
-          )}
-
-          <div className='flex-1 overflow-y-auto space-y-1 min-h-0 custom-scrollbar'>
-            {/* 스켈레톤 로딩 표시 */}
-            {isLoadingAllStrategies && strategies.length === 0 && (
-              <>
-                {[...Array(8)].map((_, i) => (
-                  <div key={`skeleton-${i}`} className='w-full px-2 py-1.5 bg-zinc-800 rounded animate-pulse'>
-                    <div className='flex justify-between items-center'>
-                      <div className='h-3 bg-zinc-700 rounded w-24' />
-                      <div className='h-3 bg-zinc-700 rounded w-12' />
-                    </div>
-                    <div className='flex items-center gap-1 mt-1.5'>
-                      <div className='h-2.5 bg-zinc-700 rounded w-8' />
-                      <div className='h-2.5 bg-zinc-700 rounded w-10' />
-                      <div className='h-2.5 bg-zinc-700 rounded w-6' />
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-            {/* 평균 롤링 샤프 순으로 정렬 (로딩 완료 후) */}
-            {[...strategies].sort((a, b) => {
-              if (rollingSharpeData.size > 0) {
-                const aData = rollingSharpeData.get(a.strategy || 'rsi_div');
-                const bData = rollingSharpeData.get(b.strategy || 'rsi_div');
-                const aAvg = aData && aData.length > 0 ? aData.reduce((s, d) => s + d.sharpe, 0) / aData.length : -Infinity;
-                const bAvg = bData && bData.length > 0 ? bData.reduce((s, d) => s + d.sharpe, 0) / bData.length : -Infinity;
-                return bAvg - aAvg; // 내림차순
-              }
-              return 0;
-            }).slice(0, 30).map((strategy) => {
-              const isRollingResult = strategy.id < 0;
-              const displayName = getStrategyDisplayName(strategy);
-              const isSelected = selectedStrategy?.id === strategy.id;
-              const strategyType = strategy.strategy || 'rsi_div';
-              // 평균 롤링 샤프 계산 (12주 전체 윈도우 평균)
-              const dailySharpeArray = rollingSharpeData.get(strategyType);
-              const avgSharpe = dailySharpeArray && dailySharpeArray.length > 0
-                ? dailySharpeArray.reduce((sum, d) => sum + d.sharpe, 0) / dailySharpeArray.length
-                : null;
-
-              // 최적화 상태에서 TP/SL + 마지막 최적화 시각 가져오기
-              const optStatus = optimizeStatuses.find(s => s.strategy === strategyType);
-              const tpAtr = optStatus?.currentParams?.tp_atr;
-              const slAtr = optStatus?.currentParams?.sl_atr;
-              const lastOpt = optStatus?.lastOptimizedAt;
-              const lastOptRelative = lastOpt ? (() => {
-                const diff = Date.now() - new Date(lastOpt).getTime();
-                const mins = Math.floor(diff / 60000);
-                if (mins < 60) return `${mins}m ago`;
-                const hours = Math.floor(mins / 60);
-                if (hours < 24) return `${hours}h ago`;
-                return `${Math.floor(hours / 24)}d ago`;
-              })() : null;
-
-              return (
-                <div
-                  key={strategy.id}
-                  className={`w-full px-3 py-2.5 text-left rounded-lg transition-colors ${
-                    isSelected
-                      ? 'bg-blue-600/30 border border-blue-500/50'
-                      : 'bg-zinc-800 hover:bg-zinc-700'
-                  }`}
-                >
-                  {/* 1행: 전략명 + 포지션 + SR | 액션 버튼 */}
-                  <div className='flex items-center mb-1.5'>
-                    <button
-                      onClick={() => handleStrategyChange(strategy)}
-                      className='flex items-center gap-1.5 min-w-0 flex-1'
-                    >
-                      <span className='text-zinc-200 text-[13px] font-semibold truncate'>
-                        {displayName}
-                      </span>
-                      {(() => {
-                        const position = isSelected
-                          ? openPosition
-                          : allOpenPositions.get(strategyType);
-                        if (!position) return null;
-                        return (
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
-                            position.direction === 'long'
-                              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                              : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                          }`}>
-                            {position.direction === 'long' ? '롱' : '숏'}
-                          </span>
-                        );
-                      })()}
-                      {avgSharpe !== null && (
-                        <span className={`text-[13px] font-bold shrink-0 ${
-                          avgSharpe >= 2 ? 'text-green-400' :
-                          avgSharpe >= 0 ? 'text-yellow-400' : 'text-red-400'
-                        }`}>
-                          {avgSharpe.toFixed(1)}
-                        </span>
-                      )}
-                    </button>
-                    {/* 액션 버튼 영역 (고정 너비, 우측) */}
-                    <div className='flex items-center gap-1 pl-2 ml-2 border-l border-zinc-700 shrink-0'>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startOptimize(strategyType);
-                        }}
-                        disabled={!!optimizingStrategy}
-                        className={`p-1 rounded transition-colors ${
-                          optimizingStrategy === strategyType
-                            ? 'text-yellow-400 animate-pulse'
-                            : optimizingStrategy
-                              ? 'text-zinc-600 cursor-not-allowed'
-                              : 'text-zinc-500 hover:text-yellow-400 hover:bg-zinc-600/50'
-                        }`}
-                        title='TP/SL 최적화'
-                      >
-                        <Zap size={14} />
-                      </button>
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (refreshingStrategy === strategyType) return;
-                          setRefreshingStrategy(strategyType);
-                          try {
-                            await refreshSingleStrategy(symbolId, timeframe, strategyType);
-                            refetchBacktestData(true);
-                          } catch (err) {
-                            console.error('갱신 실패:', err);
-                          } finally {
-                            setRefreshingStrategy(null);
-                          }
-                        }}
-                        disabled={refreshingStrategy === strategyType}
-                        className={`p-1 rounded transition-colors ${
-                          refreshingStrategy === strategyType
-                            ? 'text-blue-400 animate-spin'
-                            : 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-600/50'
-                        }`}
-                        title='전략 캐시 갱신'
-                      >
-                        <RefreshCw size={14} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleStrategyChange(strategy)}
-                    className='w-full text-left'
-                  >
-
-                    {/* 2행: WR | PnL | 거래수 | MDD */}
-                    <div className='flex items-center gap-1.5 mb-1'>
-                      {(() => {
-                        const stats = allStrategyStats.get(strategyType);
-                        if (!stats || stats.totalTrades === 0) {
-                          return <span className='text-zinc-600 text-[10px]'>—</span>;
-                        }
-                        const equityCurve = allStrategiesEquityCurves.get(strategy.id) || [];
-                        // 최대 연속 손실 계산
-                        const trades = allTradesMap.get(strategyType) || [];
-                        let maxConsecLoss = 0;
-                        let curStreak = 0;
-                        for (const t of trades) {
-                          if (t.pnlPercent < 0) { curStreak++; maxConsecLoss = Math.max(maxConsecLoss, curStreak); }
-                          else { curStreak = 0; }
-                        }
-                        // 복리 레버리지 계산 (미니 차트와 동일)
-                        let levPnl = stats.totalPnlPercent * leverage;
-                        let levDD = 0;
-                        if (equityCurve.length > 1 && leverage > 1) {
-                          const start = equityCurve[0].equity;
-                          let lev = start;
-                          let peak = start;
-                          let maxDd = 0;
-                          for (let i = 1; i < equityCurve.length; i++) {
-                            const r = (equityCurve[i].equity - equityCurve[i - 1].equity) / equityCurve[i - 1].equity;
-                            lev *= (1 + r * leverage);
-                            lev = Math.max(lev, start * 0.01);
-                            peak = Math.max(peak, lev);
-                            const dd = peak > 0 ? ((peak - lev) / peak) * 100 : 0;
-                            maxDd = Math.max(maxDd, dd);
-                          }
-                          levPnl = ((lev - start) / start) * 100;
-                          levDD = maxDd;
-                        } else if (equityCurve.length > 0) {
-                          levDD = Math.max(...equityCurve.map(p => p.drawdown || 0)) * leverage;
-                        }
-                        return (
-                          <>
-                            <span className={`text-[11px] font-medium ${stats.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                              {stats.winRate.toFixed(0)}%
-                            </span>
-                            <span className='text-zinc-600 text-[10px]'>|</span>
-                            <span className={`text-[11px] font-medium ${levPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {levPnl >= 0 ? '+' : ''}{levPnl.toFixed(1)}%
-                            </span>
-                            <span className='text-zinc-600 text-[10px]'>|</span>
-                            <span className='text-zinc-400 text-[11px]'>
-                              {stats.totalTrades}회
-                            </span>
-                            <span className='text-zinc-600 text-[10px]'>|</span>
-                            <span className='text-zinc-500 text-[11px]'>
-                              일{(stats.totalTrades / 84).toFixed(1)}
-                            </span>
-                            {levDD > 0 && (
-                              <>
-                                <span className='text-zinc-600 text-[10px]'>|</span>
-                                <span className={`text-[11px] font-medium ${
-                                  levDD <= 3 ? 'text-orange-400' :
-                                  levDD <= 5 ? 'text-red-400' : 'text-red-500'
-                                }`}>
-                                  DD-{levDD.toFixed(1)}%
-                                </span>
-                                {levDD >= 100 && <span className='text-red-500 text-[10px] ml-0.5'>청산</span>}
-                              </>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-
-                    {/* 3행: 연패 확률 */}
-                    {(() => {
-                      const trades = allTradesMap.get(strategyType) || [];
-                      const st = allStrategyStats.get(strategyType);
-                      if (!st || trades.length === 0) return null;
-                      let maxCL = 0, cur = 0;
-                      for (const t of trades) { if (t.pnlPercent < 0) { cur++; maxCL = Math.max(maxCL, cur); } else { cur = 0; } }
-                      if (maxCL === 0) return null;
-                      const q = 1 - st.winRate / 100;
-                      return (
-                        <div className='flex items-center gap-1 text-[10px] flex-wrap'>
-                          {Array.from({ length: maxCL }, (_, i) => {
-                            const n = i + 1;
-                            const prob = Math.pow(q, n) * 100;
-                            return (
-                              <span key={n} className={
-                                n === maxCL ? 'text-red-400 font-medium' :
-                                prob < 5 ? 'text-orange-400' : 'text-zinc-500'
-                              }>
-                                {n}패({prob < 1 ? prob.toFixed(1) : prob.toFixed(0)}%)
-                              </span>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
-
-                    {/* 4행: 미니 에쿼티 차트 (전체 폭) */}
-                    <div className='w-full mb-1'>
-                      <StrategyMiniChart equityCurve={allStrategiesEquityCurves.get(strategy.id) || []} leverage={leverage} />
-                    </div>
-
-                    {/* 3행: TP/SL + 마지막 최적화 시각 */}
-                    <div className='flex items-center gap-1.5 text-[10px]'>
-                      {tpAtr != null && slAtr != null && (
-                        <span className='text-zinc-500'>
-                          TP:{tpAtr} SL:{slAtr}
-                        </span>
-                      )}
-                      {lastOptRelative && (
-                        <span className='text-zinc-600'>
-                          {lastOptRelative}
-                        </span>
-                      )}
-                    </div>
-
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <StrategyListPanel
+        strategies={strategies}
+        rollingSharpeData={rollingSharpeData}
+        allStrategyStats={allStrategyStats}
+        allStrategiesEquityCurves={allStrategiesEquityCurves}
+        allOpenPositions={allOpenPositions}
+        allTradesMap={allTradesMap}
+        openPosition={openPosition}
+        isLoadingAllStrategies={isLoadingAllStrategies}
+        optimizeStatuses={optimizeStatuses}
+        proposeResult={proposeResult}
+        isApplying={isApplying}
+        optimizeError={optimizeError}
+        applyResult={applyResult}
+        optimizingStrategy={optimizingStrategy}
+        optimizeAllProgress={optimizeAllProgress}
+        onStrategyChange={handleStrategyChange}
+        startOptimize={startOptimize}
+        startOptimizeAll={startOptimizeAll}
+        approveOptimize={approveOptimize}
+        rejectOptimize={rejectOptimize}
+        refetchBacktestData={refetchBacktestData}
+        refetchStrategies={refetchStrategies}
+      />
       </div>
 
-      {/* 전략 비교 차트 탭 */}
-      <div className="bg-zinc-900 rounded-lg overflow-hidden">
-        {/* 탭 헤더 */}
-        <div className="flex border-b border-zinc-800">
-          <button
-            onClick={() => setStrategyChartTab(strategyChartTab === 'equity' ? null : 'equity')}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              strategyChartTab === 'equity'
-                ? 'text-blue-400 border-b-2 border-blue-400 bg-zinc-800/50'
-                : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/30'
-            }`}
-          >
-            📈 자산 곡선
-          </button>
-          <button
-            onClick={() => setStrategyChartTab(strategyChartTab === 'sharpe' ? null : 'sharpe')}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              strategyChartTab === 'sharpe'
-                ? 'text-purple-400 border-b-2 border-purple-400 bg-zinc-800/50'
-                : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/30'
-            }`}
-          >
-            📊 샤프 타임라인
-          </button>
-          <button
-            onClick={() => setStrategyChartTab(strategyChartTab === 'avg-sharpe' ? null : 'avg-sharpe')}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              strategyChartTab === 'avg-sharpe'
-                ? 'text-cyan-400 border-b-2 border-cyan-400 bg-zinc-800/50'
-                : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/30'
-            }`}
-          >
-            📉 평균 샤프
-          </button>
-          {strategyChartTab && (
-            <button
-              onClick={() => setStrategyChartTab(null)}
-              className="ml-auto px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300"
-            >
-              ✕ 닫기
-            </button>
-          )}
-        </div>
-
-        {/* 탭 콘텐츠 - 선택된 탭만 렌더링 */}
-        {strategyChartTab === 'equity' && (
-          (isLoadingAllStrategies || isLoadingEquityCurves) ? (
-            <div className="p-4 animate-pulse">
-              <div className="w-full h-[400px] bg-zinc-800 rounded flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                  <div className="text-sm text-zinc-400">차트 로딩 중...</div>
-                </div>
-              </div>
-            </div>
-          ) : allStrategiesEquityCurves.size > 0 ? (
-            <MultiStrategyEquityChart
-              strategies={chartStrategies}
-              highlightedStrategyId={highlightedStrategy}
-              leverage={leverage}
-              onStrategyClick={handleStrategyClickMemo}
-            />
-          ) : (
-            <div className="p-8 text-center text-zinc-500 text-sm">
-              전략 데이터가 없습니다
-            </div>
-          )
-        )}
-
-        {strategyChartTab === 'sharpe' && (
-          (isLoadingAllStrategies || isLoadingEquityCurves) ? (
-            <div className="p-4 animate-pulse">
-              <div className="w-full h-[300px] bg-zinc-800 rounded flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                  <div className="text-sm text-zinc-400">샤프 계산 중...</div>
-                </div>
-              </div>
-            </div>
-          ) : allStrategiesEquityCurves.size > 0 ? (
-            <WeeklySharpeTimeline
-              strategies={chartStrategies}
-              highlightedStrategyId={highlightedStrategy}
-              leverage={leverage}
-              onStrategyClick={handleStrategyClickMemo}
-            />
-          ) : (
-            <div className="p-8 text-center text-zinc-500 text-sm">
-              전략 데이터가 없습니다
-            </div>
-          )
-        )}
-
-        {strategyChartTab === 'avg-sharpe' && (
-          (isLoadingAllStrategies || isLoadingEquityCurves) ? (
-            <div className="p-4 animate-pulse">
-              <div className="w-full h-[300px] bg-zinc-800 rounded flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                  <div className="text-sm text-zinc-400">평균 샤프 계산 중...</div>
-                </div>
-              </div>
-            </div>
-          ) : allStrategiesEquityCurves.size > 0 ? (
-            <AvgSharpeChart
-              strategies={chartStrategies}
-              highlightedStrategyId={highlightedStrategy}
-              onStrategyClick={handleStrategyClickMemo}
-            />
-          ) : (
-            <div className="p-8 text-center text-zinc-500 text-sm">
-              전략 데이터가 없습니다
-            </div>
-          )
-        )}
-
-        {/* 탭 미선택시 안내 */}
-        {!strategyChartTab && (
-          <div className="p-4 text-center text-zinc-600 text-xs">
-            위 탭을 클릭하여 전략 비교 차트를 확인하세요
-          </div>
-        )}
-      </div>
+      <StrategyComparisonPanel
+        chartStrategies={chartStrategies}
+        isLoadingAllStrategies={isLoadingAllStrategies}
+        isLoadingEquityCurves={isLoadingEquityCurves}
+        hasData={allStrategiesEquityCurves.size > 0}
+        onStrategyClick={handleStrategyClickMemo}
+      />
 
       <TradeHistoryPanel
         trades={sortedTrades}
