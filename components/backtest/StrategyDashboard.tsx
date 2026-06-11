@@ -290,6 +290,25 @@ function StrategyDashboard() {
   }, [applyResult, refetchBacktestData]);
 
   // ==================== Chart Init ====================
+  // 다이버전스 오버레이 파라미터: 선택된 전략의 실제 값 우선, 없으면 rsi_div JSON 기본값
+  // (차트 표시와 실제 진입 로직 일치 — 고정 기본값 사용 시 진입 시점과 표시가 어긋남)
+  const divergenceParams = useMemo(() => {
+    const d = getDefaultParams('rsi_div') as Record<string, number | undefined>;
+    const pos = (v?: number) => (v && v > 0 ? v : undefined);
+    const s = selectedStrategy;
+    const pivotLeft = pos(s?.pivotLeft) ?? pos(d.pivotLeft);
+    return {
+      rsiPeriod: pos(s?.rsiPeriod) ?? pos(d.rsiPeriod) ?? 14,
+      // Python 전략 기본: pivot_left 미지정 시 [14, 50] 멀티 스캔
+      pivotLefts: pivotLeft ? [pivotLeft] : [14, 50],
+      pivotRight: pos(s?.pivotRight) ?? pos(d.pivotRight) ?? 1,
+      rsiOversold: pos(s?.rsiOversold) ?? pos(d.rsiOversold) ?? 30,
+      rsiOverbought: pos(s?.rsiOverbought) ?? pos(d.rsiOverbought) ?? 60,
+      minRsiDiff: pos(s?.minRsiDiff) ?? pos(d.minRsiDiff) ?? 2,
+      minPriceDiffPct: pos(s?.minDivPct) ?? pos(d['min_price_diff_pct']) ?? 0.1,
+    };
+  }, [selectedStrategy]);
+
   const {
     chartRef,
     candleSeriesRef,
@@ -311,6 +330,7 @@ function StrategyDashboard() {
     zscoreContainerRef,
     timeframe,
     chartKey,
+    divergenceParams,
     tradeMapRef,
     setHoveredTrade,
     setHoveredSkipped,
@@ -823,9 +843,9 @@ function StrategyDashboard() {
       }
     }
 
-    // RSI 실시간 업데이트
-    if (rsiSeriesRef.current && candlesRef.current.length >= 15) {
-      const rsiUpdate = computeRSI(candlesRef.current.slice(-30));
+    // RSI 실시간 업데이트 (차트 패널과 동일한 전략 기간 사용, Wilder 수렴 위해 기간×10 윈도우)
+    if (rsiSeriesRef.current && candlesRef.current.length >= divergenceParams.rsiPeriod + 1) {
+      const rsiUpdate = computeRSI(candlesRef.current.slice(-divergenceParams.rsiPeriod * 10), divergenceParams.rsiPeriod);
       if (rsiUpdate.length > 0) {
         const last = rsiUpdate[rsiUpdate.length - 1];
         try {
@@ -835,7 +855,7 @@ function StrategyDashboard() {
     }
 
     // Note: candles state는 useChartData hook에서 관리됨
-  }, [kline, openPosition, selectedStrategy, refetchBacktestData]);
+  }, [kline, openPosition, selectedStrategy, refetchBacktestData, divergenceParams]);
   // Note: Marker generation (chart markers and candle coloring) is now handled by useMarkerGeneration hook
 
   // BB/돈치안 라인 밝기: 신호 조건 충족도에 따라 굵기+투명도 조절

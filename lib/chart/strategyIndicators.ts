@@ -142,6 +142,45 @@ export function detectDivergences(
   return { pivotLows, pivotHighs, divLines };
 }
 
+// ── 전략 파라미터 기반 다이버전스 감지 (멀티 피봇 길이) ──
+export interface DivergenceParams {
+  rsiPeriod: number;
+  /** Python 전략과 동일하게 복수 피봇 길이 스캔 (기본 [14, 50]) */
+  pivotLefts: number[];
+  pivotRight: number;
+  rsiOversold: number;
+  rsiOverbought: number;
+  minRsiDiff: number;
+  minPriceDiffPct: number;
+}
+
+/** 여러 피봇 길이로 감지 후 중복 제거 병합 — 실제 전략(rsi_divergence.py)의 멀티 길이 스캔 미러링 */
+export function detectDivergencesMulti(
+  candles: CandlestickData[],
+  rsiData: { time: Time; value: number }[],
+  p: DivergenceParams,
+): { pivotLows: Pivot[]; pivotHighs: Pivot[]; divLines: DivLine[] } {
+  const lowMap = new Map<number, Pivot>();
+  const highMap = new Map<number, Pivot>();
+  const lineMap = new Map<string, DivLine>();
+
+  for (const left of p.pivotLefts) {
+    const r = detectDivergences(
+      candles, rsiData, left, p.pivotRight,
+      p.rsiOversold, p.rsiOverbought, p.minRsiDiff, p.minPriceDiffPct,
+    );
+    for (const pv of r.pivotLows) lowMap.set(pv.idx, pv);
+    for (const pv of r.pivotHighs) highMap.set(pv.idx, pv);
+    for (const ln of r.divLines) lineMap.set(`${ln.type}:${ln.p1.idx}-${ln.p2.idx}`, ln);
+  }
+
+  return {
+    pivotLows: [...lowMap.values()].sort((a, b) => a.idx - b.idx),
+    pivotHighs: [...highMap.values()].sort((a, b) => a.idx - b.idx),
+    divLines: [...lineMap.values()],
+  };
+}
+
 // ── 돌파 레벨 계산 (20봉 고/저점) + 거래량 백분위 반전 색상 ──
 export function computeBreakoutLevels(candles: CandlestickData[], period = 20) {
   const high: { time: Time; value: number; color?: string }[] = [];

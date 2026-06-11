@@ -17,7 +17,8 @@ import {
   computeRSI,
   computeBreakoutLevels,
   computeZScore,
-  detectDivergences,
+  detectDivergencesMulti,
+  type DivergenceParams,
 } from '@/lib/chart/strategyIndicators';
 import { formatKST } from '@/lib/utils/timestamp';
 import type { TradeResult, SkippedSignal } from '@/lib/backtest-api';
@@ -30,6 +31,8 @@ interface UseChartInitParams {
   zscoreContainerRef: React.RefObject<HTMLDivElement | null>;
   timeframe: string;
   chartKey: number;
+  /** RSI 패널·다이버전스 오버레이에 사용할 전략 파라미터 (실제 진입 로직과 표시 일치) */
+  divergenceParams: DivergenceParams;
   tradeMapRef: React.MutableRefObject<Map<number, {
     trade?: TradeResult;
     skipped?: SkippedSignal;
@@ -63,6 +66,7 @@ export function useChartInit({
   zscoreContainerRef,
   timeframe,
   chartKey,
+  divergenceParams,
   tradeMapRef,
   setHoveredTrade,
   setHoveredSkipped,
@@ -82,6 +86,9 @@ export function useChartInit({
   const zscoreChartRef = useRef<IChartApi | null>(null);
   const zscoreSeriesRef = useRef<any>(null);
   const isChartDisposedRef = useRef(false);
+
+  // 다이버전스 파라미터 변경 감지용 안정 키
+  const divKey = JSON.stringify(divergenceParams);
 
   useEffect(() => {
     if (!containerRef.current || candles.length === 0 || !initialCandlesLoaded) return;
@@ -213,11 +220,11 @@ export function useChartInit({
         color: '#a78bfa', lineWidth: 1,
         lastValueVisible: true, priceLineVisible: false, crosshairMarkerVisible: true,
       });
-      const rsiData = computeRSI(candles);
+      const rsiData = computeRSI(candles, divergenceParams.rsiPeriod);
       rsiSeries.setData(rsiData);
       rsiSeries.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
 
-      // 과매도/과매수 임계선
+      // 과매도/과매수 임계선 (전략 파라미터)
       const thresholdData = (val: number) => {
         if (rsiData.length < 2) return [];
         return [
@@ -229,18 +236,18 @@ export function useChartInit({
         color: 'rgba(34, 197, 94, 0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed,
         lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
       });
-      oversoldLine.setData(thresholdData(30));
+      oversoldLine.setData(thresholdData(divergenceParams.rsiOversold));
       oversoldLine.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
 
       const overboughtLine = rsiChart.addSeries(LineSeries, {
         color: 'rgba(239, 68, 68, 0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed,
         lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
       });
-      overboughtLine.setData(thresholdData(60));
+      overboughtLine.setData(thresholdData(divergenceParams.rsiOverbought));
       overboughtLine.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
 
-      // 다이버전스 감지 & 선분 표시
-      const { pivotLows, pivotHighs, divLines } = detectDivergences(candles, rsiData);
+      // 다이버전스 감지 & 선분 표시 — 실제 전략과 동일한 파라미터/멀티 피봇 길이 사용
+      const { pivotLows, pivotHighs, divLines } = detectDivergencesMulti(candles, rsiData, divergenceParams);
 
       const rsiMarkers: SeriesMarker<Time>[] = [];
       for (const p of pivotLows) {
@@ -504,7 +511,8 @@ export function useChartInit({
       priceLinesRef.current = [];
       seriesMarkersRef.current = null;
     };
-  }, [timeframe, chartKey]); // eslint-disable-line react-hooks/exhaustive-deps
+    // divKey: 전략 변경으로 다이버전스 파라미터가 바뀌면 차트 재생성 (RSI 기간·임계선·피봇 갱신)
+  }, [timeframe, chartKey, divKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     chartRef,
