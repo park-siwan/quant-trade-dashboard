@@ -34,35 +34,38 @@ function useNotificationSettings() {
       fetch(`${API_CONFIG.BASE_URL}/notification/settings`).then(r => r.json()),
   });
 
-  const { mutate: toggle } = useMutation<
+  // 주의: onMutate가 mutationFn보다 먼저 실행되므로, mutationFn에서 캐시를 읽어 반전하면
+  // 이미 낙관적으로 뒤집힌 값을 또 반전해 원래 값을 전송하게 됨 → 목표 값을 변수로 명시 전달
+  const { mutate } = useMutation<
     NotificationSettings,
     Error,
-    keyof NotificationSettings,
+    { key: keyof NotificationSettings; value: boolean },
     NotificationSettings | undefined
   >({
-    mutationFn: (key) => {
-      const current = queryClient.getQueryData<NotificationSettings>(['notification-settings']);
-      if (!current) throw new Error('No settings loaded');
-      return fetch(`${API_CONFIG.BASE_URL}/notification/settings`, {
+    mutationFn: ({ key, value }) =>
+      fetch(`${API_CONFIG.BASE_URL}/notification/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [key]: !current[key] }),
-      }).then(r => r.json());
-    },
-    onMutate: (key) => {
+        body: JSON.stringify({ [key]: value }),
+      }).then(r => r.json()),
+    onMutate: ({ key, value }) => {
       const prev = queryClient.getQueryData<NotificationSettings>(['notification-settings']);
       if (prev) {
-        queryClient.setQueryData<NotificationSettings>(['notification-settings'], { ...prev, [key]: !prev[key] });
+        queryClient.setQueryData<NotificationSettings>(['notification-settings'], { ...prev, [key]: value });
       }
       return prev;
     },
-    onError: (_err, _key, prev) => {
+    onError: (_err, _vars, prev) => {
       if (prev) queryClient.setQueryData(['notification-settings'], prev);
     },
     onSuccess: (data) => {
       queryClient.setQueryData(['notification-settings'], data);
     },
   });
+
+  const toggle = (key: keyof NotificationSettings) => {
+    if (settings) mutate({ key, value: !settings[key] });
+  };
 
   return { settings: settings ?? null, toggle };
 }
