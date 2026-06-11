@@ -443,7 +443,7 @@ export const SignalThresholdMonitor = memo(({ timeframe, trades }: SignalThresho
             displayValue={volumeRatio !== null ? `×${volumeRatio.toFixed(1)}` : '—'}
             progress={volProg}
             met={vbVol}
-            tooltip={`거래량 ${volumeRatio?.toFixed(2)}×. 조건: ≥${THRESH.VOL_MULT}× (20봉 평균 대비) | 바 가득 = 충족`}
+            tooltip={`거래량 ${volumeRatio?.toFixed(2)}×. 조건: ≥${THRESH.VOL_MULT}× (20봉 평균 대비, 형성중 캔들은 진행률 보정) | 바 가득 = 충족`}
           />
           {/* ADX: 25까지 진행도 */}
           <GaugeBar
