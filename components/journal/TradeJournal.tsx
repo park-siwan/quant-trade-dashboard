@@ -35,7 +35,7 @@ interface JournalTrade {
   closeTime: number;
 }
 
-const base = API_CONFIG.BASE_URL;
+const base = API_CONFIG.BOT_URL; // 저널은 항상 켜진 봇 서버에서 제공
 const usd = (v: number) => `${v >= 0 ? '+' : ''}$${v.toFixed(2)}`;
 const pct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
 const col = (v: number) => (v >= 0 ? 'text-green-400' : 'text-red-400');
